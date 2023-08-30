@@ -1,0 +1,18 @@
+# Code owners file.
+# This file controls who is tagged for review for any given pull request.
+# Each line is a file pattern followed by one or more owners.
+#
+# For syntax help see:
+# https://help.github.com/en/github/creating-cloning-and-archiving-repositories/about-code-owners#codeowners-syntax
+
+# Default owners, unless a later match takes precedence
+*                           @anantdamle @halvards
+
+# Shared files
+/.github/                   @anantdamle @halvards
+/.kokoro/                   @anantdamle @halvards
+/docs/                      @anantdamle @halvards
+/*                          @anantdamle @halvards
+
+# Workshops
+/grpc-xds-workshop/         @halvards @anantdamle
