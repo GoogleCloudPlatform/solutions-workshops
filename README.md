@@ -1,14 +1,15 @@
-# Solutions Workshops
+# Solutions workshops
 
 Resources for workshops developed by Google Cloud's
 [Solutions Architecture team](https://www.gcppodcast.com/post/episode-116-solution-architects-with-miles-ward-and-grace-mollison/).
 
+## Workshops
+
+- [gRPC xDS](grpc-xds-workshop): Sample implementations of
+  [xDS](https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/operations/dynamic_configuration)
+  control plane management servers for gRPC applications running on Kubernetes
+  clusters.
+
 ## Disclaimer
 
-This repository and its contents are not officially supported Google products.
-
-## License
-
-All resources within this repository are provided under the
-[Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) license. Please see
-the [LICENSE](/LICENSE) file for more detailed terms and conditions.
+This is not an officially supported Google product.
