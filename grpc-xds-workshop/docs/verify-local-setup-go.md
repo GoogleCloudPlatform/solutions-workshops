@@ -1,4 +1,4 @@
-# Verify local development setup
+# Verify local development setup using Go
 
 Follow the instructions in this document to verify your local workstation
 setup prior to the workshop.
@@ -23,68 +23,41 @@ Deploy a sample workload using the toolchain that you will use in the workshop.
       https://github.com/GoogleContainerTools/skaffold
     ```
     
-2.  Create a sparse checkout that contains the `jib-gradle` example:
+2.  Create a sparse checkout that contains the `ko` example:
 
     ```shell
     cd skaffold
     git sparse-checkout init --cone
-    git sparse-checkout set examples/jib-gradle
+    git sparse-checkout set examples/ko
     git checkout @
-    cd examples/jib-gradle
+    cd examples/ko
     ```
 
-3.  Update the example to use Java 17, and to remove the base image
-    configuration setting:
-
-    ```shell
-    sed -i.new 's/"11"/"17"/;/jib\.from\.image/d' build.gradle
-    ```
-
-    If no base image is configured, Jib uses its
-    [default base image](https://github.com/GoogleContainerTools/jib/blob/v3.3.2-gradle/docs/default_base_image.md)
-
-4.  If you use a remote cluster (e.g., GKE), set the `SKAFFOLD_DEFAULT_REPO`
-    environment variable to point to your container image registry.
-
-    For instance, if you use
-    [Artifact Registry](https://cloud.google.com/artifact-registry/docs):
-
-    ```shell
-    export SKAFFOLD_DEFAULT_REPO=LOCATION-docker.pkg.dev/PROJECT_ID/REPOSITORY
-    ```
-
-    Replace the following:
-
-    - `LOCATION`: the 
-      [location](https://cloud.google.com/artifact-registry/docs/repositories/repo-locations)
-      of your Artifact Registry container image repository.
-    - `PROJECT_ID`: your Google Cloud
-      [project ID](https://cloud.google.com/resource-manager/docs/creating-managing-projects).
-    - `REPOSITORY`: the name of your Artifact Registry
-      [container image repository](https://cloud.google.com/artifact-registry/docs/docker).
+3.  If you use a remote cluster (e.g., GKE), set the `SKAFFOLD_DEFAULT_REPO`
+    environment variable as documented in the [`README.md`](../README.md).
 
     Skaffold uses this environment variable to
     [determine the full container image name, and to know where to push container images](https://skaffold.dev/docs/environment/image-registries/)
-    if you use a remote cluster and a container image registry.
+    if you use a remote cluster.
 
-    If you use a kind cluster, you can skip this step.
+    You can skip this step if you use [kind](kind.md).
 
-5.  Build the container image for the `jib-gradle` example, populate the full
+4.  Build the container image for the `ko` example, populate the full
     image name in the Kubernetes resource manifests in the `k8s` directory,
     apply the manifests to your cluster, set up port forwarding to the
     Kubernetes Service resource, and tail the container logs:
 
     ```shell
-    skaffold run --port-forward --tail
+    skaffold run --port-forward --skip-tests --tail
     ```
 
-6.  In another terminal window, send a HTTP request to the example application:
+5.  In another terminal window, send a HTTP request to the example application:
 
     ```shell
-    curl -s localhost:8080
+    curl -s localhost:4503
     ```
 
-    The output is `Hello World`.
+    The output is `Hello, World!`.
 
 ## Troubleshooting
 

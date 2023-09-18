@@ -11,14 +11,44 @@ Follow the instructions below to create a multi-node Kubernetes cluster using
 [zone labels (`topology.kubernetes.io/zone`)](https://kubernetes.io/docs/reference/labels-annotations-taints/#topologykubernetesiozone)
 for simulating a cluster with nodes across multiple cloud provider zones.
 
-This sample uses [`jib`](https://github.com/GoogleContainerTools/jib) to
-build container images. When using a local Kubernetes cluster,
-`jib` requires that the
-[`docker` command](https://docs.docker.com/get-started/overview/#the-docker-client)
-is available on the `PATH`. If you use podman, you can create a symlink called
-`docker` pointing to the `podman` executable.
+## Docker Desktop setup
 
-1.  If you use podman on macOS, verify that the default Docker socket location
+1.  If you want to use kind with Docker Desktop, increase the virtual machine
+    CPU and memory allocation, so that the Kubernetes cluster will have
+    sufficient capacity.
+
+    Refer to the
+    [official documentation](https://docs.docker.com/desktop/settings/mac/#resources)
+    for instructions on changing the resource limits.
+
+## Podman setup
+
+If you want to use kind with podman, follow the steps in this section.
+
+1.  Increase the virtual machine CPU and memory allocation, so that the
+    Kubernetes cluster will have sufficient capacity.
+
+    For podman, use the
+    [`podman machine set` command](https://docs.podman.io/en/latest/markdown/podman-machine-set.1.html)
+    to update your existing virtual machine:
+
+    ```shell
+    podman machine set --cpus 2 --memory 4096
+    ```
+
+    Verify the settings by inspecting the machine:
+
+    ```shell
+    podman machine inspect
+    ```
+
+2.  Create a symlink called `docker` that points to the `podman` executable:
+
+    ```shell
+    ln -s $(which podman) /usr/local/bin/docker
+    ```
+
+3.  If you use podman on macOS, verify that the default Docker socket location
     (`/var/run/docker.sock`) redirects to the podman socket location in your
     home directory:
 
@@ -33,38 +63,22 @@ is available on the `PATH`. If you use podman, you can create a symlink called
     ```
 
     If this isn't the case (e.g., you installed podman using `brew` rather
-    than the `.pkg` installer), then use the
+    than the `.pkg` installer), use the
     [`podman-mac-helper` tool](https://podman-desktop.io/docs/migrating-from-docker/using-podman-mac-helper)
     to set up the redirection.
 
-2.  Increase the podman or Docker Desktop virtual machine CPU and memory
-    allocation, so that the Kubernetes cluster will have sufficient capacity.
-
-    For podman, you can use the
-    [`podman machine set` command](https://docs.podman.io/en/latest/markdown/podman-machine-set.1.html)
-    to update your existing virtual machine:
-
-    ```shell
-    podman machine set --cpus 2 --memory 4096
-    ```
-
-    Verify the settings by inspecting the machine:
-    
-    ```shell
-    podman machine inspect
-    ```
-
-    If you use Docker Desktop, refer to the
-    [official documentation](https://docs.docker.com/desktop/settings/mac/#resources)
-    for instructions on changing the resource limits.
-
-3.  If you use podman, configure kind to use it:
+4.  Configure kind to use podman by defining and exporting an environment
+    variable:
 
     ```shell
     export KIND_EXPERIMENTAL_PROVIDER=podman
     ```
 
-4.  Create a kind configuration file for a Kubernetes cluster with fake
+    Remember to run this command again if you open a new terminal.
+
+## Creating the kind cluster
+
+1.  Create a kind configuration file for a Kubernetes cluster with fake
     [zone labels](https://kubernetes.io/docs/reference/labels-annotations-taints/#topologykubernetesiozone):
 
     ```shell
@@ -83,13 +97,13 @@ is available on the `PATH`. If you use podman, you can create a symlink called
     EOF
     ```
 
-5.  Create the Kubernetes cluster:
+2.  Create the kind Kubernetes cluster:
 
     ```shell
     kind create cluster --config=kind-cluster-config.yaml
     ```
 
-6.  You may find it useful to set the namespace of your current kubeconfig
+3.  You may find it useful to set the namespace of your current kubeconfig
     context, so you don't need to specify the `xds` namespace for all
     `kubectl` commands:
 
@@ -97,10 +111,9 @@ is available on the `PATH`. If you use podman, you can create a symlink called
     kubectl config set-context --current --namespace=xds
     ```
 
-7.  Deploy the resources by following the
-    [instructions](../README.md#running-the-sample).
+## Cleaning up
 
-8.  When you are done, delete the kind cluster:
+1.  When you are done, delete the kind Kubernetes cluster:
 
     ```shell
     kind delete cluster --name grpc-xds-workshop

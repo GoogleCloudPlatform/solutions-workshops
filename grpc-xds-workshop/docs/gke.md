@@ -72,7 +72,7 @@ information, see [Clean up](#clean-up).
     gcloud auth configure-docker LOCATION-docker.pkg.dev
     ```
 
-## Google Kubernetes Engine (GKE) setup
+## Creating the Google Kubernetes Engine (GKE) cluster
 
 1.  Create a GKE cluster with a single-zone control plane:
 
@@ -111,7 +111,15 @@ information, see [Clean up](#clean-up).
       --master-ipv4-cidr "172.16.0.64/28"
     ```
 
-## Clean up
+2.  You may find it useful to set the namespace of your current kubeconfig
+    context, so you don't need to specify the `xds` namespace for all
+    `kubectl` commands:
+
+    ```shell
+    kubectl config set-context --current --namespace=xds
+    ```
+
+## Cleaning up
 
 1.  Delete the GKE cluster:
 
