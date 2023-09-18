@@ -69,7 +69,7 @@ Deploy a sample workload using the toolchain that you will use in the workshop.
     Pod resource:
 
     ```shell
-    kubectl describe $(kubectl get pod --output name --selector 'app=web')
+    kubectl describe $(kubectl get pod --output name --selector 'app=ko')
     ```
 
 3.  For other issues, see the Kubernetes documentation on

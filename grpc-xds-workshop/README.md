@@ -36,7 +36,7 @@ service provider zone of the underlying compute node.
 The intermediary service (`greeter-intermediary`) forwards the request to the
 next hop, which is another `helloworld.Greeter` service implementation. Upon
 receiving a response from the next hop (defined by the `NEXT_HOP` environment
-variable, the intermediary service appends its own host name and zone, before
+variable), the intermediary service appends its own host name and zone, before
 returning the response to the client.
 
 The [`k8s`](k8s) directory contains Kubernetes manifests and patches that are
