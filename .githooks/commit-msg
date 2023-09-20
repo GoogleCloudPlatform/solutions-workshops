@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+#
+# Copyright 2023 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Enforces Conventional Commits, with both type (intent) and scope.
+# See https://www.conventionalcommits.org/en/v1.0.0/
+
+set -Eeufo pipefail
+
+max_length=72
+types=(build chore ci docs feat fix perf refactor style test)
+
+commit_title=$(head -n1 "$1")
+
+commit_title_length=${#commit_title}
+if [[ $commit_title_length -gt $max_length ]]; then
+  >&2 echo "Commit message title is too long, length=${commit_title_length}, max_length=${max_length}"
+  exit 1
+fi
+
+regexp='^(Revert: "?)?('
+for type in "${types[@]}"; do
+  regexp="${regexp}${type}|"
+done
+regexp="${regexp%?})\([a-z][0-9a-z_-]+\)!?: [^ ].*"
+
+if [[ ! $commit_title =~ $regexp ]]; then
+  >&2 echo "Commit message title does not follow Conventional Commits style, see https://github.com/GoogleCloudPlatform/solutions-workshops/docs/development.md"
+  >&2 echo "Regular expression: ${regexp}"
+  exit 1
+fi
