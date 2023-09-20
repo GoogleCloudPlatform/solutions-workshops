@@ -1,0 +1,29 @@
+{
+  "xds_servers": [
+    {
+      "server_uri": "localhost:50053",
+      "channel_creds": [
+        {
+          "type": "insecure"
+        }
+      ],
+      "server_features": [
+        "xds_v3"
+      ]
+    }
+  ],
+  "node": {
+    "id": "baca3842-75ae-4357-ac01-2713ddc442a7~10.0.0.3",
+    "cluster": "myapp",
+    "metadata": {
+      "INSTANCE_IP": "10.0.0.3",
+      "TRAFFICDIRECTOR_GCP_PROJECT_NUMBER": "123456789012",
+      "TRAFFICDIRECTOR_NETWORK_NAME": "default",
+      "XDS_STREAM_TYPE": "ADS"
+    },
+    "locality": {
+      "zone": "us-central1-b"
+    }
+  },
+  "server_listener_resource_name_template": "grpc/server?xds.resource.listening_address=%s"
+}

@@ -1,0 +1,91 @@
+// Copyright 2023 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+buildscript {
+    repositories {
+        maven {
+            url 'https://maven-central.storage-download.googleapis.com/maven2/'
+        }
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
+plugins {
+    id 'idea'
+
+    id 'com.dorongold.task-tree' version '2.1.1' apply false
+    id 'com.github.ben-manes.versions' version '0.44.0' apply false
+    id 'com.github.spotbugs' version '5.0.13' apply false
+}
+
+repositories {
+    maven {
+        url 'https://maven-central.storage-download.googleapis.com/maven2/'
+    }
+    mavenCentral()
+}
+
+idea {
+    module {
+        downloadJavadoc = false
+        downloadSources = true
+    }
+}
+
+subprojects {
+    buildscript {
+        repositories {
+            maven {
+                url 'https://maven-central.storage-download.googleapis.com/maven2/'
+            }
+            gradlePluginPortal()
+            mavenCentral()
+        }
+    }
+
+    repositories {
+        maven {
+            url 'https://maven-central.storage-download.googleapis.com/maven2/'
+        }
+        mavenCentral()
+    }
+
+    // https://github.com/spotbugs/spotbugs-gradle-plugin
+    apply plugin: 'com.github.spotbugs'
+    spotbugs {
+        effort = 'max'
+        ignoreFailures = false
+        reportLevel = 'high'
+    }
+    dependencies {
+        spotbugsSlf4j 'org.slf4j:slf4j-nop:2.0.7' // prevent classpath warnings when running SpotBugs tasks
+    }
+
+    // https://github.com/dorongold/gradle-task-tree
+    apply plugin: 'com.dorongold.task-tree'
+    tasks.taskTree {
+        description = 'Displays task dependencies as a tree.'
+        group = 'Help'
+    }
+
+    // 'com.github.ben-manes.versions'
+    apply plugin: 'com.github.ben-manes.versions'
+    tasks.named("dependencyUpdates").configure {
+        checkBuildEnvironmentConstraints = true
+        checkConstraints = true
+        checkForGradleUpdate = true
+        gradleReleaseChannel = 'current'
+    }
+}

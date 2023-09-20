@@ -1,0 +1,132 @@
+# Copyright 2023 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Patch to add an init container that creates a gRPC xDS bootstrap config file.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: greeter
+spec:
+  template:
+    spec:
+      containers:
+      - name: app
+        env:
+        - name: GRPC_XDS_BOOTSTRAP
+          value: /etc/grpc-xds/bootstrap.json
+        - name: GRPC_LOG_XDS_NODE_ID # Why do we even have this lever?
+          value: "true"
+        # Selectively enable and disable experiments
+        - name: GRPC_XDS_EXPERIMENTAL_ENABLE_RING_HASH
+          value: "true"
+        - name: GRPC_XDS_EXPERIMENTAL_SECURITY_SUPPORT
+          value: "false"
+        - name: GRPC_XDS_EXPERIMENTAL_ENABLE_AGGREGATE_AND_LOGICAL_DNS_CLUSTER
+          value: "true"
+        - name: GRPC_XDS_EXPERIMENTAL_RBAC
+          value: "false"
+        - name: GRPC_EXPERIMENTAL_ENABLE_OUTLIER_DETECTION
+          value: "true"
+        - name: GRPC_EXPERIMENTAL_XDS_FEDERATION
+          value: "true"
+        - name: GRPC_EXPERIMENTAL_XDS_RLS_LB
+          value: "true"
+        - name: GRPC_EXPERIMENTAL_XDS_CUSTOM_LB_CONFIG
+          value: "true"
+        volumeMounts:
+        - name: grpc-xds-conf
+          mountPath: /etc/grpc-xds
+          readOnly: true
+      initContainers:
+      - name: grpc-xds-init
+        image: busybox
+        command:
+        - /bin/sh
+        - -c
+        - |
+          #
+          # Create the gRPC xDS bootstrap configuration file and populate it
+          # with values from the Pod environment and the GKE metadata server:
+          #
+          cat << EOF > /etc/grpc-xds/bootstrap.json
+          {
+            "xds_servers": [
+              {
+                "server_uri": "control-plane.xds:50051",
+                "channel_creds": [
+                  {
+                    "type": "insecure"
+                  }
+                ],
+                "server_features": [
+                  "xds_v3"
+                ]
+              }
+            ],
+            "node": {
+              "id": "$(cat /proc/sys/kernel/random/uuid)~$(hostname -i)",
+              "cluster": "$(cat /etc/podinfo/label-app-name)",
+              "metadata": {
+                "INSTANCE_IP": "$(hostname -i)",
+                "GCE_VM_ID": "$(wget --header Metadata-Flavor:Google -qO- http://metadata.google.internal/computeMetadata/v1/instance/id)",
+                "GCE_VM_NAME": "$(wget --header Metadata-Flavor:Google -qO- http://metadata.google.internal/computeMetadata/v1/instance/hostname | cut -d. -f1)",
+                "GCP_PROJECT_NUMBER": "$(wget --header Metadata-Flavor:Google -qO- http://metadata.google.internal/computeMetadata/v1/project/numeric-project-id)",
+                "GKE_CLUSTER_NAME": "$(wget --header Metadata-Flavor:Google -qO- http://metadata.google.internal/computeMetadata/v1/instance/attributes/cluster-name)",
+                "GKE_CLUSTER_LOCATION": "$(wget --header Metadata-Flavor:Google -qO- http://metadata.google.internal/computeMetadata/v1/instance/attributes/cluster-location)",
+                "K8S_NAMESPACE": "$(cat /etc/podinfo/namespace)",
+                "K8S_POD": "$(hostname -s)",
+                "XDS_STREAM_TYPE": "ADS"
+              },
+              "locality": {
+                "zone": "$(wget --header Metadata-Flavor:Google -qO- http://metadata.google.internal/computeMetadata/v1/instance/zone | cut -d/ -f4)"
+              }
+            },
+            "server_listener_resource_name_template": "grpc/server?xds.resource.listening_address=%s"
+          }
+          EOF
+          #
+          # Set `locality.zone` from a file if the metadata server is not available,
+          # e.g., when running on a local kind cluster:
+          #
+          wget --header Metadata-Flavor:Google --spider http://metadata.google.internal/computeMetadata/v1/instance/zone \
+            || sed -i "s/\"zone\": \".*\"$/\"zone\": \"$(cat /etc/nodeinfo/zone)\"/" /etc/grpc-xds/bootstrap.json
+        resources:
+          requests:
+            cpu: 10m
+            memory: 100Mi
+        volumeMounts:
+        - name: grpc-xds-conf
+          mountPath: /etc/grpc-xds
+        - name: nodeinfo
+          mountPath: /etc/nodeinfo
+          readOnly: true
+        - name: podinfo
+          mountPath: /etc/podinfo
+          readOnly: true
+      volumes:
+      - name: grpc-xds-conf
+        emptyDir: {}
+      - name: nodeinfo
+        emptyDir: {}
+      - name: podinfo
+        downwardAPI:
+          # Used when creating the xDS bootstrap file.
+          items:
+          - path: label-app-name
+            fieldRef:
+              fieldPath: metadata.labels['app.kubernetes.io/name']
+          - path: namespace
+            fieldRef:
+              fieldPath: metadata.namespace

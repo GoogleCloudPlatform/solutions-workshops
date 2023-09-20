@@ -89,11 +89,195 @@ Follow the steps in the documents
 [Verify local development setup using Java](docs/verify-local-setup-java.md)
 to ensure that your cluster and the prerequisite tools are set up correctly.
 
-To be continued...
+## Remote cluster and image registry setup
+
+If you use a remote Kubernetes cluster and container image registry, e.g.,
+GKE and Artifact Registry, create and export an environment variable
+called `SKAFFOLD_DEFAULT_REPO` to point to your container image registry.
+
+If you use a kind cluster, you can skip this step.
+
+For instance, if you use
+[Artifact Registry](https://cloud.google.com/artifact-registry/docs):
+
+```shell
+export SKAFFOLD_DEFAULT_REPO=LOCATION-docker.pkg.dev/PROJECT_ID/REPOSITORY
+```
+
+Replace the following:
+
+- `LOCATION`: the 
+  [location](https://cloud.google.com/artifact-registry/docs/repositories/repo-locations)
+  of your Artifact Registry container image repository.
+- `PROJECT_ID`: your Google Cloud
+  [project ID](https://cloud.google.com/resource-manager/docs/creating-managing-projects).
+- `REPOSITORY`: the name of your Artifact Registry
+  [container image repository](https://cloud.google.com/artifact-registry/docs/docker).
+
+## Running the sample
+
+1.  Build the container images for the control plane and the greeter
+    service, render the Kubernetes resource manifests, apply them to the
+    Kubernetes cluster, and set up port forwarding.
+
+    Using the Go implementations:
+
+    ```shell
+    make run-go
+    ```
+
+    Using the Java implementations:
+
+    ```shell
+    make run-java
+    ```
+
+    Leave Skaffold running so that port forwarding keeps working.
+
+2.  In a new terminal, tail the control plane logs:
+
+    ```shell
+    kubectl logs --all-containers --follow --namespace=xds deployment/control-plane
+    ```
+
+3.  In another new terminal, tail the greeter-intermediary logs:
+
+    ```shell
+    kubectl logs --all-containers --follow --namespace=xds deployment/greeter-intermediary
+    ```
+
+4.  In yet another new terminal, tail the greeter-leaf logs:
+
+    ```shell
+    kubectl logs --all-containers --follow --namespace=xds deployment/greeter-leaf
+    ```
+
+5.  Send a request to the `greeter-leaf` server:
+
+    ```shell
+    grpcurl -plaintext -d '{"name": "World"}' localhost:50057 helloworld.Greeter/SayHello
+    ```
+
+6.  Send a request to the `greeter-intermediary` server:
+
+    ```shell
+    grpcurl -plaintext -d '{"name": "World"}' localhost:50055 helloworld.Greeter/SayHello
+    ```
+
+7.  Observe the control plane logs as you scale the greeter service
+    deployments. For instance, you can scale the `greeter-leaf` deployment:
+
+    ```shell
+    kubectl scale deployment/greeter-leaf --namespace=xds --replicas=2
+    ```
+
+8.  To explore the cluster resources, you may find it convenient to set the
+    namespace for your current kubeconfig context entry:
+
+    ```shell
+    kubectl config set-context --current --namespace=xds
+    ```
+
+See the [`Makefile`](Makefile) for examples of other commands you can run.
+
+## Development
+
+Set up a local file watch that automatically rebuilds and redeploys the
+applications on code changes:
+
+Using Go:
+
+```shell
+make dev-go
+```
+
+Using Java:
+
+```shell
+make dev-java
+```
+
+## Remote debugging
+
+Set up remote debugging by exposing and port-forwarding to the delve (for Go)
+or the JDWP agent (for Java):
+
+Using Go:
+
+```shell
+make debug-go
+```
+
+Using Java:
+
+```shell
+make debug-java
+ ```
+
+## Troubleshooting
+
+1.  Create a pod in the Kubernetes cluster with various tools available to
+    troubleshoot issues.
+
+    ```shell
+    make run-bastion
+    ```
+
+    This takes a few minutes, as the pod installs a number of tools.
+
+2.  Open an interactive shell in the pod's container:
+
+    ```shell
+    make troubleshoot
+    ```
+
+Some troubleshooting commands:
+
+- View the operating xDS configuration of a server using
+  [Client Status Discovery Service (CSDS)](https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/status/v3/csds.proto):
+
+  ```shell
+  grpcurl -plaintext POD_IP:50051 envoy.service.status.v3.ClientStatusDiscoveryService/FetchClientStatus | yq --prettyPrint
+  ```
+
+  Replace `POD_IP` with the IP address of the Kubernetes pod.
+
+- View the operating xDS configuration of a server using `grpcdebug`:
+
+  ```shell
+  grpcdebug POD_IP:50051 xds config | yq --prettyPrint
+  ```
+
+- View the Listener Discovery Service (LDS) configuration of a server using
+  `grpcdebug`:
+
+  ```shell
+  grpcdebug POD_IP:50051 xds config --type LDS | yq --input-format=json --prettyPrint
+  ```
+
+- Call the `greeter-leaf` service using xDS:
+
+  ```shell
+  grpcurl -plaintext -d '{"name": "World"}' xds:///greeter-leaf helloworld.Greeter/SayHello
+  ```
+
+- Call the `greeter-intermediary` service using xDS:
+
+  ```shell
+  grpcurl -plaintext -d '{"name": "World"}' xds:///greeter-intermediary helloworld.Greeter/SayHello
+  ```
+
+## Cleaning up
+
+Delete the resources in the Kubernetes cluster:
+
+```shell
+make clean
+```
 
 ## Kubernetes references
 
-- [Kubernetes API Concepts](https://kubernetes.io/docs/reference/using-api/api-concepts/)
+- [API Concepts](https://kubernetes.io/docs/reference/using-api/api-concepts/)
 - [Headless Services](https://kubernetes.io/docs/concepts/services-networking/service/#headless-services)
 - [EndpointSlices](https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/)
 

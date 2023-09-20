@@ -15,7 +15,7 @@ for simulating a cluster with nodes across multiple cloud provider zones.
 
 1.  If you want to use kind with Docker Desktop, increase the virtual machine
     CPU and memory allocation, so that the Kubernetes cluster will have
-    sufficient capacity.
+    sufficient capacity. Set CPUs to 2 (or more), and memory to 4 GB (or more).
 
     Refer to the
     [official documentation](https://docs.docker.com/desktop/settings/mac/#resources)
@@ -102,6 +102,13 @@ If you want to use kind with podman, follow the steps in this section.
     ```shell
     kind create cluster --config=kind-cluster-config.yaml
     ```
+
+    This command also creates a
+    [kubeconfig context](https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/#context)
+    called `kind-grpc-xds-workshop`.
+
+    The manifest rendering process assumes that the kubeconfig context name is
+    either `kind-grpc-xds-workhop` or `kind-kind`, if you use a kind cluster.
 
 3.  You may find it useful to set the namespace of your current kubeconfig
     context, so you don't need to specify the `xds` namespace for all

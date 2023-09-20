@@ -1,0 +1,63 @@
+# Copyright 2023 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: skaffold/v3
+kind: Config
+metadata:
+  name: control-plane-go
+  annotations:
+    config.kubernetes.io/local-config: "true"
+build:
+  artifacts:
+  # https://skaffold.dev/docs/builders/builder-types/ko/
+  - image: control-plane
+    ko:
+      # Using a base image with a shell (`debug`) to enable exec-ing to containers,
+      # since this is a sample implementation created for learning purposes.
+      fromImage: gcr.io/distroless/static-debian11:debug-nonroot
+      dependencies:
+        paths: ["cmd", "pkg", "third_party", "go.mod", "main.go"]
+  tagPolicy:
+    gitCommit: {}
+deploy:
+  kubectl: {}
+manifests:
+  kustomize:
+    buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+    paths: ["k8s/base"]
+portForward:
+- resourceType: Service
+  resourceName: control-plane
+  namespace: xds # kpt-set: ${control-plane-namespace}
+  localPort: 50053
+  port: 50051 # serving port
+profiles:
+# Alter the Skaffold config when running `skaffold debug`.
+- name: debug # the name is not important
+  activation:
+  - command: debug
+  patches:
+  # Use a different base image.
+  - op: replace
+    path: /build/artifacts/0/ko/fromImage
+    value: gcr.io/distroless/base-debian11:debug
+  # Add port forwarding to the debug port.
+  - op: add
+    path: /portForward/-
+    value:
+      resourceType: Deployment
+      resourceName: control-plane
+      namespace: xds # kpt-set: ${control-plane-namespace}
+      localPort: 56270
+      port: 56268 # delve debug port
