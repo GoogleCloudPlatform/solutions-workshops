@@ -22,7 +22,7 @@ require (
 	github.com/go-logr/logr v1.2.4
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.0.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230822172742-b8732ec3820d
-	google.golang.org/grpc v1.57.0
+	google.golang.org/grpc v1.57.1
 	google.golang.org/grpc/examples v0.0.0-20230901190056-8eb4ac4c1514
 	google.golang.org/protobuf v1.31.0
 	k8s.io/client-go v0.28.1
