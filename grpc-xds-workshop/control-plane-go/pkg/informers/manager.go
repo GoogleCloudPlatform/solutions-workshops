@@ -141,35 +141,56 @@ func (m *Manager) handleEndpointSliceEvent(ctx context.Context, event string, ob
 	}
 	var apps []xds.GRPCApplication
 	for _, informer := range m.informers {
-		for _, eps := range informer.GetIndexer().List() {
-			endpointSlice, err := validateEndpointSlice(eps)
-			if err != nil {
-				m.logger.Error(err, "Skipping EndpointSlice")
-				continue
-			}
-			k8sServiceName := endpointSlice.GetObjectMeta().GetLabels()[discoveryv1.LabelServiceName]
-			k8sServiceNamespace := endpointSlice.GetObjectMeta().GetNamespace()
-			// TODO: Handle more than one port?
-			port := uint32(*endpointSlice.Ports[0].Port)
-			var appEndpoints []xds.GRPCApplicationEndpoints
-			for _, endpoint := range endpointSlice.Endpoints {
-				if *endpoint.Conditions.Ready {
-					appEndpoints = append(appEndpoints, xds.NewGRPCApplicationEndpoints(*endpoint.NodeName, *endpoint.Zone, endpoint.Addresses))
-				}
-			}
-			m.logger.V(4).Info("Ready endpoints for service", "name", k8sServiceName, "namespace", k8sServiceNamespace, "appEndpoints", appEndpoints)
-			apps = append(apps, xds.NewGRPCApplication(k8sServiceName, port, appEndpoints))
-		}
+		appsForInformer := getAppsForInformer(m.logger, informer)
+		apps = append(apps, appsForInformer...)
 	}
-	snapshot, err := xds.NewSnapshotBuilder().AddGRPCApplications(apps...).Build()
+	snapshotBuilder, err := xds.NewSnapshotBuilder().AddGRPCApplications(apps...)
 	if err != nil {
 		// Can't propagate this error, and we probably shouldn't end the goroutine anyway.
-		m.logger.Error(err, "Could not create a new xDS resource snapshot", "apps", apps)
+		m.logger.Error(err, "Could not add gRPC application configuration to a new xDS resource snapshot", "apps", apps)
 	}
-	if err := m.xdsCache.SetSnapshot(ctx, snapshot); err != nil {
+	if err := m.xdsCache.SetSnapshot(ctx, snapshotBuilder); err != nil {
 		// Can't propagate this error, and we probably shouldn't end the goroutine anyway.
-		m.logger.Error(err, "Could not update the xDS snapshot cache", "snapshot", snapshot)
+		m.logger.Error(err, "Could not update the xDS snapshot cache", "snapshotBuilder", snapshotBuilder)
 	}
+}
+
+func getAppsForInformer(logger logr.Logger, informer informercache.SharedIndexInformer) []xds.GRPCApplication {
+	var apps []xds.GRPCApplication
+	for _, eps := range informer.GetIndexer().List() {
+		endpointSlice, err := validateEndpointSlice(eps)
+		if err != nil {
+			logger.Error(err, "Skipping EndpointSlice")
+			continue
+		}
+		k8sServiceName := endpointSlice.GetObjectMeta().GetLabels()[discoveryv1.LabelServiceName]
+		k8sServiceNamespace := endpointSlice.GetObjectMeta().GetNamespace()
+		// TODO: Handle more than one port?
+		port := uint32(*endpointSlice.Ports[0].Port)
+		appEndpoints := getReadyApplicationEndpoints(endpointSlice)
+		logger.V(4).Info("Ready endpoints for service", "name", k8sServiceName, "namespace", k8sServiceNamespace, "appEndpoints", appEndpoints)
+		apps = append(apps, xds.NewGRPCApplication(k8sServiceName, port, appEndpoints))
+	}
+	return apps
+}
+
+// getReadyApplicationEndpoints filters the k8s endpoints in the EndpointSlice to only include `Ready` endpoints.
+// The function returns the endpoints as `GRPCApplicationEndpoints`.
+func getReadyApplicationEndpoints(endpointSlice *discoveryv1.EndpointSlice) []xds.GRPCApplicationEndpoints {
+	var appEndpoints []xds.GRPCApplicationEndpoints
+	for _, endpoint := range endpointSlice.Endpoints {
+		if endpoint.Conditions.Ready != nil && *endpoint.Conditions.Ready {
+			var k8sNode, zone string
+			if endpoint.NodeName != nil {
+				k8sNode = *endpoint.NodeName
+			}
+			if endpoint.Zone != nil {
+				zone = *endpoint.Zone
+			}
+			appEndpoints = append(appEndpoints, xds.NewGRPCApplicationEndpoints(k8sNode, zone, endpoint.Addresses))
+		}
+	}
+	return appEndpoints
 }
 
 // validateEndpointSlice ensures that the EndpointSlice contains the fields

@@ -97,6 +97,10 @@ If you want to use kind with podman, follow the steps in this section.
     EOF
     ```
 
+    If you use Linux on ChromeOS ("Crostini"), follow these
+    [additional steps](https://kind.sigs.k8s.io/docs/user/known-issues/#chrome-os)
+    to enable nested containers and the `KubeletInUserNamespace` feature gate.
+
 2.  Create the kind Kubernetes cluster:
 
     ```shell

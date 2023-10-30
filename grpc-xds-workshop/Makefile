@@ -73,6 +73,26 @@ tail-greeter-intermediary: check-kubectl
 tail-greeter-leaf: check-kubectl
 	kubectl logs --all-containers --follow --namespace=xds deployment/greeter-leaf
 
+# xds-status-intermediary shows the current xDS resources ACKed by greeter-intermediary
+.PHONY: xds-status-intermediary
+xds-status-intermediary: check-grpcdebug
+	grpcdebug localhost:50055 xds status
+
+# xds-status-leaf shows the current xDS resources ACKed by greeter-leaf
+.PHONY: xds-status-leaf
+xds-status-leaf: check-grpcdebug
+	grpcdebug localhost:50057 xds status
+
+# xds-config-intermediary dumps the current xDS configuration of greeter-intermediary
+.PHONY: xds-config-intermediary
+xds-config-intermediary: check-grpcdebug check-yq
+	grpcdebug localhost:50055 xds config | yq --input-format=json --prettyPrint
+
+# xds-config-leaf dumps the current xDS configuration of greeter-leaf
+.PHONY: xds-config-leaf
+xds-config-leaf: check-grpcdebug check-yq
+	grpcdebug localhost:50057 xds config | yq --input-format=json --prettyPrint
+
 # run-bastion deploys a bastion Pod with troubleshooting tools.
 .PHONY: run-bastion
 run-bastion: check-skaffold
@@ -86,12 +106,14 @@ troubleshoot: check-kubectl
 # delete-control-plane deletes the Services and Deployments for control-plane-[go|java].
 .PHONY: delete-control-plane
 delete-control-plane:
-	kubectl delete --ignore-not-found --namespace=xds {deployment,service}/control-plane
+	kubectl delete --ignore-not-found --namespace=xds deployment control-plane
+	kubectl delete --ignore-not-found --namespace=xds service control-plane
 
 # delete-greeter deletes the Services and Deployments for greeter-[intermediary|leaf].
 .PHONY: delete-greeter
 delete-greeter:
-	kubectl delete --ignore-not-found --namespace=xds {deployment,service}/greeter-{intermediary,leaf}
+	kubectl delete --ignore-not-found --namespace=xds deployment greeter-intermediary greeter-leaf
+	kubectl delete --ignore-not-found --namespace=xds service greeter-intermediary greeter-leaf
 
 # delete deletes the Services and Deployments for control-plane and greeter-[intermediary|leaf],
 # but leaves the bastion Pod running.
@@ -109,6 +131,13 @@ clean:
 check-go:
 	@if ! which go > /dev/null; then \
 		echo "error: go is not installed: https://go.dev/doc/install" >&2; \
+		exit 1; \
+	fi
+
+.PHONY: check-grpcdebug
+check-grpcdebug:
+	@if ! which grpcdebug > /dev/null; then \
+		echo "error: grpcdebug is not installed: https://github.com/grpc-ecosystem/grpcdebug#installation" >&2; \
 		exit 1; \
 	fi
 
@@ -144,5 +173,12 @@ check-kustomize:
 check-skaffold: check-kubectl check-kustomize
 	@if ! which skaffold > /dev/null; then \
 		echo "error: skaffold is not installed: https://skaffold.dev/docs/install/" >&2; \
+		exit 1; \
+	fi
+
+.PHONY: check-yq
+check-yq:
+	@if ! which yq > /dev/null; then \
+		echo "error: yq is not installed: https://github.com/mikefarah/yq#install" >&2; \
 		exit 1; \
 	fi

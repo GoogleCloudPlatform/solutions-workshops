@@ -19,8 +19,8 @@ import com.google.examples.xds.controlplane.informers.InformerConfig;
 import com.google.examples.xds.controlplane.informers.InformerManager;
 import com.google.examples.xds.controlplane.interceptors.LoggingServerInterceptor;
 import com.google.examples.xds.controlplane.xds.XdsSnapshotCache;
+import io.envoyproxy.controlplane.cache.NodeGroup;
 import io.envoyproxy.controlplane.server.V3DiscoveryServer;
-import io.envoyproxy.envoy.config.core.v3.Node;
 import io.grpc.BindableService;
 import io.grpc.ServerInterceptors;
 import io.grpc.ServerServiceDefinition;
@@ -41,9 +41,12 @@ public class Server {
 
   private static final Logger LOG = LoggerFactory.getLogger(Server.class);
 
+  /** Fixed node hash, so all xDS clients access the same cache snapshot. */
+  private static final NodeGroup<String> FIXED_HASH = node -> "default";
+
   /** Runs the server. */
   public void run(@NotNull ServerConfig config) throws Exception {
-    var xdsCache = new XdsSnapshotCache<>(Node::getId);
+    var xdsCache = new XdsSnapshotCache<>(FIXED_HASH);
     InformerManager<String> informers = setupInformers(xdsCache, config.informers());
     informers.start();
     Runtime.getRuntime().addShutdownHook(new Thread(informers::stop));

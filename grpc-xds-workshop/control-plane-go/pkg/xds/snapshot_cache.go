@@ -18,6 +18,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"strconv"
+	"strings"
+	"sync"
 
 	cachev3 "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
 	"github.com/envoyproxy/go-control-plane/pkg/server/stream/v3"
@@ -26,57 +30,55 @@ import (
 	"github.com/googlecloudplatform/solutions-workshops/grpc-xds-workshop/control-plane-go/pkg/logging"
 )
 
-const (
-	envoyHTTPConnectionManagerName = "envoy.http_connection_manager"
-	envoyFilterHTTPFaultName       = "envoy.filters.http.fault"
-	envoyFilterHTTPRouterName      = "envoy.filters.http.router"
-	// serverListenerAddressIPv4 is the IPv4 listener address for xDS clients that serve gRPC services.
-	serverListenerAddressIPv4 = "0.0.0.0"
-	// serverListenerAddressIPv6 is the IPv6 listener address for xDS clients that serve gRPC services.
-	serverListenerAddressIPv6 = "[::]"
-	// serverListenerPort is the listener port for the server listener.
-	// In the current implementations, gRPC server Pods must listen on this hardcoded port for the services they provide.
-	serverListenerPort = 50051
-	// serverListenerResourceNameTemplate uses the address and port above. Must match the template in the gRPC xDS bootstrap file, see
-	// [gRFC A36: xDS-Enabled Servers]: https://github.com/grpc/proposal/blob/fd10c1a86562b712c2c5fa23178992654c47a072/A36-xds-for-servers.md#xds-protocol
-	// Using the sample name from the gRPC-Go unit tests, but this is not important.
-	serverListenerResourceNameTemplate = "grpc/server?xds.resource.listening_address=%s"
-	// serverListenerRouteConfigName uses the same route configuration serviceName as Traffic Director, but this is not important.
-	serverListenerRouteConfigName = "inbound|default_inbound_config-50051"
+var (
+	serverListenerNamePrefix = strings.SplitAfter(serverListenerResourceNameTemplate, "=")[0]
 )
 
 // SnapshotCache stores snapshots of xDS resources in a delegate cache.
 //
-// It handles the initial server listener and route configuration request by intercepting
-// Listener stream creation, see `CreateWatch()`.
+// It handles server listener requests by intercepting Listener stream creation, see `CreateWatch()`.
+// Server listeners addresses from these requests are kept in a map, keyed by the node hash,
+// and with a set of addresses per node hash.
 //
-// It also handles propagating snapshots to all node groups in the cache. This is currently
-// done naively, by using the same snapshot for all node groups.
+// It also handles propagating snapshots to all node hashes in the cache.
 type SnapshotCache struct {
-	logger   logr.Logger
-	delegate cachev3.SnapshotCache
-	hash     cachev3.NodeHash
+	ctx                        context.Context
+	logger                     logr.Logger
+	delegate                   cachev3.SnapshotCache
+	hash                       cachev3.NodeHash
+	serverListenerAddresses    map[string]map[EndpointAddress]bool
+	serverListenerAddressesMux *sync.RWMutex
 }
 
-// NewSnapshotCache creates an xDS resource cache for the provided node group mapping (`hash`).
+// NewSnapshotCache creates an xDS resource cache for the provided node hash function.
 //
 // If `allowPartialRequests` is true, the DiscoveryServer will respond to requests for a resource
-// type even thouh not all resources of that type in the snapshot are named in the request.
+// type even if some resources in the snapshot are not named in the request.
 func NewSnapshotCache(ctx context.Context, allowPartialRequests bool, hash cachev3.NodeHash) *SnapshotCache {
 	return &SnapshotCache{
-		logger:   logging.FromContext(ctx),
-		delegate: cachev3.NewSnapshotCache(!allowPartialRequests, hash, logging.SnapshotCacheLogger(ctx)),
-		hash:     hash,
+		ctx:                        ctx,
+		logger:                     logging.FromContext(ctx),
+		delegate:                   cachev3.NewSnapshotCache(!allowPartialRequests, hash, logging.SnapshotCacheLogger(ctx)),
+		hash:                       hash,
+		serverListenerAddresses:    make(map[string]map[EndpointAddress]bool),
+		serverListenerAddressesMux: &sync.RWMutex{},
 	}
 }
 
-// SetSnapshot naively sets the provided snapshot for all node groups in the cache.
-func (c *SnapshotCache) SetSnapshot(ctx context.Context, snapshot cachev3.ResourceSnapshot) error {
+// SetSnapshot creates a new snapshot for each node hash in the cache, based on the provided snapshot builder,
+// with the addition of server listeners and their associated route configurations.
+func (c *SnapshotCache) SetSnapshot(ctx context.Context, snapshotBuilder *SnapshotBuilder) error {
 	var errs []error
-	for _, nodeID := range c.delegate.GetStatusKeys() {
-		err := c.delegate.SetSnapshot(ctx, nodeID, snapshot)
+	for _, nodeHash := range c.delegate.GetStatusKeys() {
+		serverListenerAddresses := c.getServerListenerAddressesForNode(nodeHash)
+		snapshotForNodeHash, err := snapshotBuilder.
+			AddServerListenerAddresses(serverListenerAddresses...).
+			Build()
 		if err != nil {
-			errs = append(errs, fmt.Errorf("could not set snapshot for nodeID=%s: %w", nodeID, err))
+			errs = append(errs, fmt.Errorf("could not create snapshot with server Listeners for nodeHash=%s: %w", nodeHash, err))
+		}
+		if err = c.delegate.SetSnapshot(ctx, nodeHash, snapshotForNodeHash); err != nil {
+			errs = append(errs, fmt.Errorf("could not set snapshot for nodeHash=%s: %w", nodeHash, err))
 		}
 	}
 	if len(errs) > 0 {
@@ -85,19 +87,41 @@ func (c *SnapshotCache) SetSnapshot(ctx context.Context, snapshot cachev3.Resour
 	return nil
 }
 
-// CreateWatch intercepts stream creation, and if it is a new Listener stream,
-// creates a snapshot with the server listener and associated route configuration.
+func (c *SnapshotCache) getServerListenerAddressesForNode(nodeHash string) []EndpointAddress {
+	c.serverListenerAddressesMux.RLock()
+	defer c.serverListenerAddressesMux.RUnlock()
+	serverListenerAddresses := make([]EndpointAddress, len(c.serverListenerAddresses[nodeHash]))
+	i := 0
+	for address := range c.serverListenerAddresses[nodeHash] {
+		serverListenerAddresses[i] = address
+		i++
+	}
+	return serverListenerAddresses
+}
+
+// CreateWatch intercepts stream creation before delegating, and if it is a new Listener stream, does the following:
+//
+//   - Extracts addresses and ports of any server listeners in the request and adds them to the
+//     set of known server listener socket addresses for the node hash.
+//   - If there is no existing snapshot, or if the request contained new and previously unseen
+//     server listener addresses the node hash, creates a new snapshot for that node hash,
+//     with the server listeners and associated route configuration.
 //
 // This solves (in a slightly hacky way) bootstrapping of xDS-enabled gRPC servers.
 func (c *SnapshotCache) CreateWatch(request *cachev3.Request, state stream.StreamState, responses chan cachev3.Response) (cancel func()) {
 	// TODO: Should also look for the server listener in the resource names of the request.
-	if request != nil && request.GetTypeUrl() == "type.googleapis.com/envoy.config.listener.v3.Listener" {
-		nodeID := c.hash.ID(request.GetNode())
-		_, err := c.delegate.GetSnapshot(nodeID)
+	if request != nil && len(request.ResourceNames) > 0 && request.GetTypeUrl() == "type.googleapis.com/envoy.config.listener.v3.Listener" {
+		nodeHash := c.hash.ID(request.GetNode())
+		addressesFromRequest, err := findServerListenerAddresses(request.ResourceNames)
 		if err != nil {
-			c.logger.Info("Missing snapshot, creating a snapshot with server listener and route configuration", "nodeID", nodeID)
-			if err := c.createSnapshotWithServerListener(nodeID); err != nil {
-				c.logger.Error(err, "Could not create xDS resource snapshot", "nodeID", nodeID)
+			c.logger.Error(err, "Problem encountered when looking for server listener addresses in new Listener stream request", "nodeHash", nodeHash)
+			return func() {}
+		}
+		addressesAdded := c.addServerListenerAddressForNode(nodeHash, addressesFromRequest)
+		oldSnapshot, err := c.delegate.GetSnapshot(nodeHash)
+		if err != nil || addressesAdded {
+			if err := c.createNewSnapshotForNode(nodeHash, oldSnapshot, addressesFromRequest); err != nil {
+				c.logger.Error(err, "Could not set new xDS resource snapshot", "nodeHash", nodeHash, "oldSnapshot", oldSnapshot, "serverListenerAddressesFromRequest", addressesFromRequest)
 				return func() {}
 			}
 		}
@@ -105,20 +129,69 @@ func (c *SnapshotCache) CreateWatch(request *cachev3.Request, state stream.Strea
 	return c.delegate.CreateWatch(request, state, responses)
 }
 
-func (c *SnapshotCache) createSnapshotWithServerListener(node string) error {
-	c.logger.V(1).Info("Missing snapshot, creating a snapshot with server listener and route configuration", "node", node)
-	snapshot, err := NewSnapshotBuilder().Build()
+// createNewSnapshotForNode sets a new snapshot for the provided `nodeHash`,
+// based on the previous `oldSnapshot` (can be nil), and a slice of new server Listener addresses.
+func (c *SnapshotCache) createNewSnapshotForNode(nodeHash string, oldSnapshot cachev3.ResourceSnapshot, newServerListenerAddresses []EndpointAddress) error {
+	c.logger.Info("Creating a new snapshot", "nodeHash", nodeHash, "serverListenerAddressesFromRequest", newServerListenerAddresses)
+	newSnapshot, err := NewSnapshotBuilder().
+		AddSnapshot(oldSnapshot).
+		AddServerListenerAddresses(newServerListenerAddresses...).
+		Build()
 	if err != nil {
-		return err
+		return fmt.Errorf("could not create new xDS resource snapshot for nodeHash=%s: %w", nodeHash, err)
 	}
-	err = c.delegate.SetSnapshot(context.Background(), node, snapshot)
-	if err != nil {
-		return err
+	if err := c.delegate.SetSnapshot(c.ctx, nodeHash, newSnapshot); err != nil {
+		return fmt.Errorf("could not set new xDS resource snapshot for nodeHash=%s: %w", nodeHash, err)
 	}
 	return nil
 }
 
-// CreateDeltaWatch just delegates, since delta xDS is not supported by this control plane implementation.
+// findServerListenerAddresses looks for server Listener names in the provided
+// slice and extracts the address and port for each server Listener found.
+func findServerListenerAddresses(names []string) ([]EndpointAddress, error) {
+	var addresses []EndpointAddress
+	for _, name := range names {
+		if strings.HasPrefix(name, serverListenerNamePrefix) && len(name) > len(serverListenerNamePrefix) {
+			hostPort := strings.SplitAfter(name, serverListenerNamePrefix)[1]
+			host, portStr, err := net.SplitHostPort(hostPort)
+			if err != nil {
+				return nil, fmt.Errorf("could not extract host and port from server Listener name=%s: %w", name, err)
+			}
+			port, err := strconv.ParseUint(portStr, 10, 32)
+			if err != nil {
+				return nil, fmt.Errorf("could not extract port from server Listener name: %w", err)
+			}
+			addresses = append(addresses, EndpointAddress{
+				host: host,
+				port: uint32(port),
+			})
+		}
+	}
+	return addresses, nil
+}
+
+// addServerListenerAddressForNode returns true if the provided `newAddresses` slice
+// contains server Listener addresses not previously recorded for the provided `nodeHash`.
+func (c *SnapshotCache) addServerListenerAddressForNode(nodeHash string, newAddresses []EndpointAddress) bool {
+	c.serverListenerAddressesMux.Lock()
+	defer c.serverListenerAddressesMux.Unlock()
+	addressesForNode := c.serverListenerAddresses[nodeHash]
+	if addressesForNode == nil {
+		addressesForNode = make(map[EndpointAddress]bool, len(newAddresses))
+		c.serverListenerAddresses[nodeHash] = addressesForNode
+	}
+	numAddressesBefore := len(addressesForNode)
+	for _, address := range newAddresses {
+		addressesForNode[address] = true
+	}
+	numAddressesAfter := len(addressesForNode)
+	// Since we never remove server Listener addresses for a node hash,
+	// we can just check if the set grew.
+	return numAddressesAfter > numAddressesBefore
+}
+
+// CreateDeltaWatch just delegates, since gRPC does not support delta/incremental xDS currently.
+// TODO: Handle request for gRPC server Listeners once gRPC implementation support delta/incremental xDS.
 func (c *SnapshotCache) CreateDeltaWatch(request *cachev3.DeltaRequest, state stream.StreamState, responses chan cachev3.DeltaResponse) (cancel func()) {
 	return c.delegate.CreateDeltaWatch(request, state, responses)
 }

@@ -41,7 +41,7 @@ Deploy a sample workload using the toolchain that you will use in the workshop.
     ```
 
     If no base image is configured, Jib uses its
-    [default base image](https://github.com/GoogleContainerTools/jib/blob/v3.3.2-gradle/docs/default_base_image.md)
+    [default base image](https://github.com/GoogleContainerTools/jib/blob/v3.4.0-gradle/docs/default_base_image.md)
 
 4.  If you use a remote cluster (e.g., GKE), set the `SKAFFOLD_DEFAULT_REPO`
     environment variable as documented in the [`README.md`](../README.md).

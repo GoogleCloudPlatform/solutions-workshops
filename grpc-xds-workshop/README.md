@@ -6,12 +6,12 @@ control planes for gRPC services running on Kubernetes.
 
 The goal of the control plane implementations is to provide a practical
 understanding of xDS, beyond the API specifications and the
-[pithy](https://github.com/grpc/grpc-go/tree/v1.58.0/examples/features/xds)
-[examples](https://github.com/grpc/grpc-java/tree/v1.58.0/examples/example-xds).
+[pithy](https://github.com/grpc/grpc-go/tree/v1.59.0/examples/features/xds)
+[examples](https://github.com/grpc/grpc-java/tree/v1.59.0/examples/example-xds).
 
 This directory also contains accompanying sample applications implemented in
 Go and Java. The sample applications implement the
-[`helloworld.Greeter`](https://github.com/grpc/grpc-go/blob/v1.58.0/examples/helloworld/helloworld/helloworld.proto)
+[`helloworld.Greeter`](https://github.com/grpc/grpc-go/blob/v1.59.0/examples/helloworld/helloworld/helloworld.proto)
 gRPC service.
 
 The code in this repository in not recommended for production deployments, and
@@ -88,6 +88,15 @@ Follow the steps in the documents
 [Verify local development setup using Go](docs/verify-local-setup-go.md) or
 [Verify local development setup using Java](docs/verify-local-setup-java.md)
 to ensure that your cluster and the prerequisite tools are set up correctly.
+
+## Local cluster setup
+
+If you use a kind Kubernetes cluster,
+[create a multi-node cluster](docs/kind.md) with fake
+[zone labels (`topology.kubernetes.io/zone`)](https://kubernetes.io/docs/reference/labels-annotations-taints/#topologykubernetesiozone).
+
+The multi-node configuration and the zone labels enable you to simulate a
+Kubernetes cluster with nodes across multiple cloud provider zones.
 
 ## Remote cluster and image registry setup
 
@@ -199,8 +208,8 @@ make dev-java
 
 ## Remote debugging
 
-Set up remote debugging by exposing and port-forwarding to the delve (for Go)
-or the JDWP agent (for Java):
+Set up remote debugging by exposing and port-forwarding to delve (for Go) or
+the JDWP agent (for Java):
 
 Using Go:
 
@@ -223,7 +232,7 @@ make debug-java
     make run-bastion
     ```
 
-    This takes a few minutes, as the pod installs a number of tools.
+    This takes a few minutes, as an init container installs a number of tools.
 
 2.  Open an interactive shell in the pod's container:
 

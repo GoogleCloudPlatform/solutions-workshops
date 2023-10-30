@@ -27,7 +27,7 @@ build:
       project: greeter
       # Using a base image with a shell (`debug`) to enable exec-ing to containers,
       # since this is a sample implementation created for learning purposes.
-      fromImage: gcr.io/distroless/java17-debian11:debug-nonroot
+      fromImage: gcr.io/distroless/java17-debian12:debug-nonroot
   tagPolicy:
     gitCommit: {}
 deploy:
@@ -56,7 +56,7 @@ profiles:
   # Use a different base image.
   - op: replace
     path: /build/artifacts/0/jib/fromImage
-    value: gcr.io/distroless/java17-debian11:debug
+    value: gcr.io/distroless/java17-debian12:debug
   # Add port forwarding to the debug ports.
   - op: add
     path: /portForward/-

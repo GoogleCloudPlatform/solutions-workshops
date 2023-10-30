@@ -35,6 +35,26 @@ requires:
 apiVersion: skaffold/v3
 kind: Config
 metadata:
+  name: java-go
+  annotations:
+    config.kubernetes.io/local-config: "true"
+requires:
+- path: control-plane-java
+- path: greeter-go
+---
+apiVersion: skaffold/v3
+kind: Config
+metadata:
+  name: go-java
+  annotations:
+    config.kubernetes.io/local-config: "true"
+requires:
+- path: control-plane-go
+- path: greeter-java
+---
+apiVersion: skaffold/v3
+kind: Config
+metadata:
   name: troubleshoot
   annotations:
     config.kubernetes.io/local-config: "true"

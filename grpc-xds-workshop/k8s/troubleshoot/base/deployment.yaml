@@ -23,6 +23,7 @@ metadata:
   labels:
     app.kubernetes.io/component: troubleshoot
 spec:
+  progressDeadlineSeconds: 300
   replicas: 1
   selector:
     matchLabels:

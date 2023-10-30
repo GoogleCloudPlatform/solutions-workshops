@@ -58,12 +58,34 @@ import io.envoyproxy.envoy.extensions.filters.network.http_connection_manager.v3
 import io.envoyproxy.envoy.extensions.transport_sockets.tls.v3.Secret;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 /** Builds xDS resource snapshots for the cache. */
 public class XdsSnapshotBuilder {
+
+  /**
+   * Listener name template used xDS clients that are gRPC servers.
+   *
+   * <p>Must match the value of <code>server_listener_resource_name_template</code> in the gRPC xDS
+   * bootstrap configuration.
+   *
+   * <p>Using the template value from gRPC-Java unit tests, and the <a
+   * href="https://github.com/GoogleCloudPlatform/traffic-director-grpc-bootstrap/blob/v0.15.0/main.go#L300">Traffic
+   * Director gRPC bootstrap utility</a>, but this is not important.
+   *
+   * @see <a
+   *     href="https://github.com/grpc/proposal/blob/fd10c1a86562b712c2c5fa23178992654c47a072/A36-xds-for-servers.md#xds-protocol">gRFC
+   *     A36: xDS-Enabled Servers</a>
+   */
+  static final String SERVER_LISTENER_RESOURCE_NAME_TEMPLATE =
+      "grpc/server?xds.resource.listening_address=%s";
+
   /** Copied from {@link io.envoyproxy.controlplane.cache.Resources}. */
   private static final String ENVOY_HTTP_CONNECTION_MANAGER = "envoy.http_connection_manager";
 
@@ -73,57 +95,47 @@ public class XdsSnapshotBuilder {
   private static final String ENVOY_FILTER_HTTP_FAULT = "envoy.filters.http.fault";
 
   /**
-   * Listener name template used xDS clients that are gRPC servers.
+   * Used for the RouteConfiguration pointed to by server Listeners.
    *
-   * <p>Must match the value of <code>server_listener_resource_name_template</code> in the gRPC xDS
-   * bootstrap configuration.
-   *
-   * <p>Using the template value from gRPC-Java unit tests, but this is not important.
-   *
-   * @see <a
-   *     href="https://github.com/grpc/proposal/blob/fd10c1a86562b712c2c5fa23178992654c47a072/A36-xds-for-servers.md#xds-protocol">gRFC
-   *     A36: xDS-Enabled Servers</a>
+   * <p>Different server Listeners can point to the same RouteConfiguration, since the
+   * RouteConfiguration does not contain the listening address or port.
    */
-  private static final String SERVER_LISTENER_RESOURCE_NAME_TEMPLATE =
-      "grpc/server?xds.resource.listening_address=%s";
-
-  /** The IPv4 listener address for xDS clients that serve gRPC services. */
-  private static final String SERVER_LISTENER_ADDRESS_IPV4 = "0.0.0.0";
-
-  /** The IPv6 listener address for xDS clients that serve gRPC services. */
-  private static final String SERVER_LISTENER_ADDRESS_IPV6 = "[::]";
-
-  /**
-   * The listener port that will be pushed to the xDS clients for serving gRPC services. Must match
-   * the local port used by the xDS client's server. TODO: Improve this so servers can listen on
-   * other ports.
-   */
-  private static final int SERVER_LISTENER_PORT = 50051;
-
-  /** Using the same route configuration name as Traffic Director, but this is not important. */
-  private static final String SERVER_LISTENER_ROUTE_CONFIG_NAME =
-      "inbound|default_inbound_config-50051";
+  private static final String SERVER_LISTENER_ROUTE_CONFIG_NAME = "default_inbound_config";
 
   private final Map<String, Listener> listeners = new HashMap<>();
   private final Map<String, RouteConfiguration> routeConfigurations = new HashMap<>();
   private final Map<String, Cluster> clusters = new HashMap<>();
   private final Map<String, ClusterLoadAssignment> clusterLoadAssignments = new HashMap<>();
 
+  /** Addresses for server listeners to be added to the snapshot. */
+  private final Set<EndpointAddress> serverListenerAddresses = new HashSet<>();
+
   /** Creates a builder for an xDS resource cache snapshot. */
-  public XdsSnapshotBuilder() {
-    // The server listeners and accompanying route configuration must always be present so that
-    // xDS clients that serve gRPC services can bootstrap their server listeners.
-    Listener serverListenerIpv4 =
-        createServerListener(
-            SERVER_LISTENER_ADDRESS_IPV4, SERVER_LISTENER_PORT, SERVER_LISTENER_ROUTE_CONFIG_NAME);
-    listeners.put(serverListenerIpv4.getName(), serverListenerIpv4);
-    Listener serverListenerIpv6 =
-        createServerListener(
-            SERVER_LISTENER_ADDRESS_IPV6, SERVER_LISTENER_PORT, SERVER_LISTENER_ROUTE_CONFIG_NAME);
-    listeners.put(serverListenerIpv6.getName(), serverListenerIpv6);
-    RouteConfiguration routeConfigForServerListener =
-        createRouteConfigForServerListener(SERVER_LISTENER_ROUTE_CONFIG_NAME);
-    routeConfigurations.put(routeConfigForServerListener.getName(), routeConfigForServerListener);
+  public XdsSnapshotBuilder() {}
+
+  /**
+   * Add the Listener, RouteConfiguration, Cluster, and ClusterLoadAssignment resources from the
+   * provided snapshot to the builder.
+   */
+  @SuppressWarnings("UnusedReturnValue")
+  @NotNull
+  public XdsSnapshotBuilder addSnapshot(@Nullable Snapshot snapshot) {
+    if (snapshot == null) {
+      return this;
+    }
+    if (snapshot.listeners() != null && snapshot.listeners().resources() != null) {
+      listeners.putAll(snapshot.listeners().resources());
+    }
+    if (snapshot.routes() != null && snapshot.routes().resources() != null) {
+      routeConfigurations.putAll(snapshot.routes().resources());
+    }
+    if (snapshot.clusters() != null && snapshot.clusters().resources() != null) {
+      clusters.putAll(snapshot.clusters().resources());
+    }
+    if (snapshot.endpoints() != null && snapshot.endpoints().resources() != null) {
+      clusterLoadAssignments.putAll(snapshot.endpoints().resources());
+    }
+    return this;
   }
 
   /**
@@ -135,6 +147,7 @@ public class XdsSnapshotBuilder {
    * @param apps configuration for gRPC applications
    */
   @SuppressWarnings("UnusedReturnValue")
+  @NotNull
   public XdsSnapshotBuilder addGrpcApplications(GrpcApplication... apps) {
     for (GrpcApplication app : apps) {
       Listener listener = createApiListener(app.listenerName(), app.routeName());
@@ -152,10 +165,27 @@ public class XdsSnapshotBuilder {
     return this;
   }
 
+  @NotNull
+  @SuppressWarnings("UnusedReturnValue")
+  public XdsSnapshotBuilder addServerListenerAddresses(
+      @NotNull Collection<EndpointAddress> addresses) {
+    serverListenerAddresses.addAll(addresses);
+    return this;
+  }
+
   /** Builds an xDS resource snapshot. */
+  @NotNull
   public Snapshot build() {
-    String version = String.valueOf(System.nanoTime());
+    for (EndpointAddress address : serverListenerAddresses) {
+      Listener serverListener = createServerListener(address.ipAddress(), address.port());
+      listeners.put(serverListener.getName(), serverListener);
+    }
+    if (!serverListenerAddresses.isEmpty()) {
+      RouteConfiguration routeConfigForServerListener = createRouteConfigForServerListener();
+      routeConfigurations.put(routeConfigForServerListener.getName(), routeConfigForServerListener);
+    }
     ImmutableList<Secret> secrets = ImmutableList.of();
+    String version = String.valueOf(System.nanoTime());
     return Snapshot.create(
         clusters.values(),
         clusterLoadAssignments.values(),
@@ -215,7 +245,7 @@ public class XdsSnapshotBuilder {
    *
    * @return a Listener, using RDS for the RouteConfiguration
    */
-  private Listener createServerListener(String address, int port, String routeConfigName) {
+  private Listener createServerListener(String address, int port) {
     var httpConnectionManager =
         HttpConnectionManager.newBuilder()
             .setCodecType(CodecType.AUTO)
@@ -227,7 +257,7 @@ public class XdsSnapshotBuilder {
                             .setResourceApiVersion(ApiVersion.V3)
                             .setAds(AggregatedConfigSource.getDefaultInstance())
                             .build())
-                    .setRouteConfigName(routeConfigName)
+                    .setRouteConfigName(SERVER_LISTENER_ROUTE_CONFIG_NAME)
                     .build())
             .addHttpFilters(
                 HttpFilter.newBuilder()
@@ -247,7 +277,7 @@ public class XdsSnapshotBuilder {
     String listenerName = SERVER_LISTENER_RESOURCE_NAME_TEMPLATE.formatted(address + ":" + port);
     var socketAddressAddress = address;
     if (address.startsWith("[") && address.endsWith("]")) {
-      // Special IPv6 address handling ("[::]" -> "::"):
+      // Special IPv6 ipAddress handling ("[::]" -> "::"):
       socketAddressAddress = address.substring(1, address.length() - 1);
     }
 
@@ -307,19 +337,22 @@ public class XdsSnapshotBuilder {
         .build();
   }
 
-  /** Route configuration for the server listener(s). */
-  private RouteConfiguration createRouteConfigForServerListener(String routeConfigName) {
+  /** Route configuration for the server listeners. */
+  private RouteConfiguration createRouteConfigForServerListener() {
     return RouteConfiguration.newBuilder()
-        .setName(routeConfigName)
+        .setName(SERVER_LISTENER_ROUTE_CONFIG_NAME)
         .addVirtualHosts(
             VirtualHost.newBuilder()
-                .setName("inbound|default_inbound_config-50051")
+                // The VirtualHost name _doesn't_ have to match the RouteConfiguration name.
+                .setName(SERVER_LISTENER_ROUTE_CONFIG_NAME)
                 .addDomains("*")
                 .addRoutes(
                     Route.newBuilder()
                         .setMatch(RouteMatch.newBuilder().setPrefix("/").build())
                         .setDecorator(
-                            Decorator.newBuilder().setOperation("default_inbound_config/*").build())
+                            Decorator.newBuilder()
+                                .setOperation(SERVER_LISTENER_ROUTE_CONFIG_NAME + "/*")
+                                .build())
                         .setNonForwardingAction(NonForwardingAction.getDefaultInstance())
                         .build())
                 .build())

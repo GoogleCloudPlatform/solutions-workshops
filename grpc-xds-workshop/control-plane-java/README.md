@@ -1,11 +1,11 @@
-# control-plane-go
+# control-plane-java
 
 Sample xDS control plane management server for gRPC applications running on
-Kubernetes, implemented in Go.
+Kubernetes, implemented in Java.
 
 The goal of this implementation is to provide a practical understanding of xDS,
 beyond the API specifications and the
-[pithy examples](https://github.com/grpc/grpc-go/tree/v1.59.0/examples/features/xds).
+[pithy examples](https://github.com/grpc/grpc-java/tree/v1.59.0/examples/example-xds).
 
 This sample implementation is not recommended for production deployments, and
 there are no plans to make it production-ready. Instead, we recommend
@@ -13,9 +13,8 @@ there are no plans to make it production-ready. Instead, we recommend
 
 ## References
 
-- [gRPC xDS example](https://github.com/grpc/grpc-go/tree/v1.59.0/examples/features/xds)
-- [Example xDS Server](https://github.com/envoyproxy/go-control-plane/tree/v0.11.1/internal/example)
-- [Example Envoy control plane](https://github.com/envoyproxy/go-control-plane/tree/v0.11.1/examples/dyplomat)
+- [gRPC xDS example](https://github.com/grpc/grpc-java/tree/v1.59.0/examples/example-xds)
+- [Example xDS Server](https://github.com/envoyproxy/java-control-plane/blob/v1.0.39/server/src/test/java/io/envoyproxy/controlplane/server/TestMain.java)
 
 ## Disclaimer
 

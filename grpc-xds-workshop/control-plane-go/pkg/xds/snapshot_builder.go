@@ -16,8 +16,8 @@ package xds
 
 import (
 	"fmt"
+	"net"
 	"strconv"
-	"strings"
 	"time"
 
 	clusterv3 "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
@@ -36,63 +36,137 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
+const (
+	envoyHTTPConnectionManagerName = "envoy.http_connection_manager"
+	envoyFilterHTTPFaultName       = "envoy.filters.http.fault"
+	envoyFilterHTTPRouterName      = "envoy.filters.http.router"
+	// serverListenerResourceNameTemplate uses the address and port above. Must match the template in the gRPC xDS bootstrap file, see
+	// [gRFC A36: xDS-Enabled Servers]: https://github.com/grpc/proposal/blob/fd10c1a86562b712c2c5fa23178992654c47a072/A36-xds-for-servers.md#xds-protocol
+	// Using the sample name from the gRPC-Go unit tests, but this is not important.
+	serverListenerResourceNameTemplate = "grpc/server?xds.resource.listening_address=%s"
+	// serverListenerRouteConfigName is used for the RouteConfiguration pointed to by server Listeners.
+	serverListenerRouteConfigName = "default_inbound_config"
+)
+
 // SnapshotBuilder builds xDS resource snapshots for the cache.
 type SnapshotBuilder struct {
-	apps []GRPCApplication
+	listeners               map[string]types.Resource
+	routeConfigs            map[string]types.Resource
+	clusters                map[string]types.Resource
+	clusterLoadAssignments  map[string]types.Resource
+	serverListenerAddresses map[EndpointAddress]bool
 }
 
 // NewSnapshotBuilder initializes the builder.
 func NewSnapshotBuilder() *SnapshotBuilder {
-	return &SnapshotBuilder{}
+	return &SnapshotBuilder{
+		listeners:               make(map[string]types.Resource),
+		routeConfigs:            make(map[string]types.Resource),
+		clusters:                make(map[string]types.Resource),
+		clusterLoadAssignments:  make(map[string]types.Resource),
+		serverListenerAddresses: make(map[EndpointAddress]bool),
+	}
 }
 
-// AddGRPCApplications adds the provided application configurations to the xDS resource snapshot.
-//
-// TODO: There can be more than one EndpointSlice for a k8s Service. Check if there's already an application with the same name and merge.
-func (b *SnapshotBuilder) AddGRPCApplications(apps ...GRPCApplication) *SnapshotBuilder {
-	b.apps = append(b.apps, apps...)
+// AddSnapshot adds Listener, RouteConfiguration, Cluster, and
+// ClusterLoadAssignment resources from the provided snapshot to the builder.
+func (b *SnapshotBuilder) AddSnapshot(snapshot cachev3.ResourceSnapshot) *SnapshotBuilder {
+	if snapshot == nil {
+		return b
+	}
+	for name, listener := range snapshot.GetResources(resource.ListenerType) {
+		b.listeners[name] = listener
+	}
+	for name, routeConfig := range snapshot.GetResources(resource.RouteType) {
+		b.routeConfigs[name] = routeConfig
+	}
+	for name, cluster := range snapshot.GetResources(resource.ClusterType) {
+		b.clusters[name] = cluster
+	}
+	for name, clusterLoadAssignment := range snapshot.GetResources(resource.EndpointType) {
+		b.clusterLoadAssignments[name] = clusterLoadAssignment
+	}
 	return b
 }
 
-// Build adds the server listeners and route configuration for IPv4 and IPv6, on hardcoded ports,
-// and the builds the snapshot.
-func (b *SnapshotBuilder) Build() (*cachev3.Snapshot, error) {
-	// The listeners (IPv4 and IPv6) and route configuration for xDS clients must always be present so that the clients can bootstrap.
-	serverListenerIPv4, err := createServerListener(serverListenerAddressIPv4, serverListenerPort, serverListenerRouteConfigName)
-	if err != nil {
-		return nil, fmt.Errorf("could not create LDS IPv4 listener for receiving xDS configuration via ADS from the control plane management server: %w", err)
-	}
-	serverListenerIPv6, err := createServerListener(serverListenerAddressIPv6, serverListenerPort, serverListenerRouteConfigName)
-	if err != nil {
-		return nil, fmt.Errorf("could not create LDS IPv6 listener for receiving xDS configuration via ADS from the control plane management server: %w", err)
-	}
-	routeConfiguration := createRouteConfigurationForServerListener(serverListenerRouteConfigName)
-	resources := map[resource.Type][]types.Resource{
-		resource.ListenerType: {
-			serverListenerIPv4,
-			serverListenerIPv6,
-		},
-		resource.RouteType: {
-			routeConfiguration,
-		},
-		resource.ClusterType:  {},
-		resource.EndpointType: {},
-	}
-	for _, app := range b.apps {
+// AddGRPCApplications adds the provided application configurations to the xDS
+// resource snapshot.
+//
+// TODO: There can be more than one EndpointSlice for a k8s Service.
+// Check if there's already an application with the same name and merge,
+// instead of just blindly overwriting.
+func (b *SnapshotBuilder) AddGRPCApplications(apps ...GRPCApplication) (*SnapshotBuilder, error) {
+	for _, app := range apps {
 		apiListener, err := createAPIListener(app.listenerName(), app.routeConfigName())
 		if err != nil {
 			return nil, fmt.Errorf("could not create LDS API listener for gRPC application %+v: %w", app, err)
 		}
-		resources[resource.ListenerType] = append(resources[resource.ListenerType], apiListener)
-		routeConfiguration := createRouteConfiguration(app.routeConfigName(), app.listenerName(), app.PathPrefix, app.clusterName())
-		resources[resource.RouteType] = append(resources[resource.RouteType], routeConfiguration)
+		b.listeners[apiListener.Name] = apiListener
+		routeConfig := createRouteConfig(app.routeConfigName(), app.listenerName(), app.PathPrefix, app.clusterName())
+		b.routeConfigs[routeConfig.Name] = routeConfig
 		cluster := createCluster(app.clusterName())
-		resources[resource.ClusterType] = append(resources[resource.ClusterType], cluster)
+		b.clusters[cluster.Name] = cluster
 		clusterLoadAssignment := createClusterLoadAssignment(app.clusterName(), app.Port, app.Endpoints)
-		resources[resource.EndpointType] = append(resources[resource.EndpointType], clusterLoadAssignment)
+		b.clusterLoadAssignments[clusterLoadAssignment.ClusterName] = clusterLoadAssignment
 	}
+	return b, nil
+}
+
+// AddServerListenerAddresses adds server listeners and associated route
+// configurations with the provided IP addresses and ports to the snapshot.
+func (b *SnapshotBuilder) AddServerListenerAddresses(addresses ...EndpointAddress) *SnapshotBuilder {
+	for _, address := range addresses {
+		b.serverListenerAddresses[address] = true
+	}
+	return b
+}
+
+// Build adds the server listeners and route configuration for the node hash, and then builds the snapshot.
+func (b *SnapshotBuilder) Build() (cachev3.ResourceSnapshot, error) {
+	for address := range b.serverListenerAddresses {
+		serverListener, err := createServerListener(address.host, address.port, serverListenerRouteConfigName)
+		if err != nil {
+			return nil, fmt.Errorf("could not create server Listener for address %s:%d: %w", address.host, address.port, err)
+		}
+		b.listeners[serverListener.Name] = serverListener
+	}
+	if len(b.serverListenerAddresses) > 0 {
+		routeConfigForServerListener := createRouteConfigForServerListener(serverListenerRouteConfigName)
+		b.routeConfigs[routeConfigForServerListener.Name] = routeConfigForServerListener
+	}
+
+	listeners := make([]types.Resource, len(b.listeners))
+	i := 0
+	for _, listener := range b.listeners {
+		listeners[i] = listener
+		i++
+	}
+	routeConfigs := make([]types.Resource, len(b.routeConfigs))
+	i = 0
+	for _, routeConfig := range b.routeConfigs {
+		routeConfigs[i] = routeConfig
+		i++
+	}
+	clusters := make([]types.Resource, len(b.clusters))
+	i = 0
+	for _, cluster := range b.clusters {
+		clusters[i] = cluster
+		i++
+	}
+	clusterLoadAssignments := make([]types.Resource, len(b.clusterLoadAssignments))
+	i = 0
+	for _, clusterLoadAssignment := range b.clusterLoadAssignments {
+		clusterLoadAssignments[i] = clusterLoadAssignment
+		i++
+	}
+
 	version := strconv.FormatInt(time.Now().UnixNano(), 10)
-	return cachev3.NewSnapshot(version, resources)
+	return cachev3.NewSnapshot(version, map[resource.Type][]types.Resource{
+		resource.ListenerType: listeners,
+		resource.RouteType:    routeConfigs,
+		resource.ClusterType:  clusters,
+		resource.EndpointType: clusterLoadAssignments,
+	})
 }
 
 // createAPIListener returns an LDS API listener
@@ -155,7 +229,7 @@ func createAPIListener(name string, routeConfigName string) (*listenerv3.Listene
 }
 
 // createServerListener returns a listener for xDS clients that serve gRPC services.
-func createServerListener(address string, port uint32, routeConfigName string) (*listenerv3.Listener, error) {
+func createServerListener(host string, port uint32, routeConfigName string) (*listenerv3.Listener, error) {
 	routerTypedConfig, err := anypb.New(&routerv3.Router{})
 	if err != nil {
 		return nil, fmt.Errorf("could not marshall Router typedConfig into Any instance: %w", err)
@@ -165,20 +239,18 @@ func createServerListener(address string, port uint32, routeConfigName string) (
 	if err != nil {
 		return nil, fmt.Errorf("could not marshall HttpConnectionManager +%v into Any instance: %w", httpConnectionManager, err)
 	}
-	// Awkward nested `fmt.Sprintf()` statement, but it enables
-	// `serverListenerResourceNameTemplate` to be an exact match of
-	// `server_listener_resource_name_template` from the gRPC xDS
-	// bootstrap configuration. See
+
+	// Relying on `serverListenerResourceNameTemplate` being an exact match of
+	// `server_listener_resource_name_template` from the gRPC xDS bootstrap configuration. See
 	// [gRFC A36: xDS-Enabled Servers]: https://github.com/grpc/proposal/blob/fd10c1a86562b712c2c5fa23178992654c47a072/A36-xds-for-servers.md#xds-protocol
-	listenerName := fmt.Sprintf(serverListenerResourceNameTemplate, fmt.Sprintf("%s:%d", address, port))
-	// Special IPv6 handling ("[::]" -> "::"):
-	socketAddressAddress := strings.TrimPrefix(strings.TrimSuffix(address, "]"), "[")
+	listenerName := fmt.Sprintf(serverListenerResourceNameTemplate, net.JoinHostPort(host, strconv.Itoa(int(port))))
+
 	return &listenerv3.Listener{
 		Name: listenerName,
 		Address: &corev3.Address{
 			Address: &corev3.Address_SocketAddress{
 				SocketAddress: &corev3.SocketAddress{
-					Address: socketAddressAddress,
+					Address: host,
 					PortSpecifier: &corev3.SocketAddress_PortValue{
 						PortValue: port,
 					},
@@ -206,18 +278,23 @@ func createServerListener(address string, port uint32, routeConfigName string) (
 func createHTTPConnectionManagerForServerListener(routeConfigName string, routerTypedConfig *anypb.Any) *hcmv3.HttpConnectionManager {
 	return &hcmv3.HttpConnectionManager{
 		CodecType:  hcmv3.HttpConnectionManager_AUTO,
-		StatPrefix: "default_inbound_config",
-		RouteSpecifier: &hcmv3.HttpConnectionManager_Rds{
-			Rds: &hcmv3.Rds{
-				ConfigSource: &corev3.ConfigSource{
-					ConfigSourceSpecifier: &corev3.ConfigSource_Ads{
-						Ads: &corev3.AggregatedConfigSource{},
-					},
-					ResourceApiVersion: corev3.ApiVersion_V3,
-				},
-				RouteConfigName: routeConfigName,
-			},
+		StatPrefix: routeConfigName,
+		// Inline RouteConfiguration for server listeners:
+		RouteSpecifier: &hcmv3.HttpConnectionManager_RouteConfig{
+			RouteConfig: createRouteConfigForServerListener(routeConfigName),
 		},
+		// RouteConfiguration via RDS for server listeners:
+		// RouteSpecifier: &hcmv3.HttpConnectionManager_Rds{
+		// 	Rds: &hcmv3.Rds{
+		// 		ConfigSource: &corev3.ConfigSource{
+		// 			ConfigSourceSpecifier: &corev3.ConfigSource_Ads{
+		// 				Ads: &corev3.AggregatedConfigSource{},
+		// 			},
+		// 			ResourceApiVersion: corev3.ApiVersion_V3,
+		// 		},
+		// 		RouteConfigName: routeConfigName,
+		// 	},
+		// },
 		HttpFilters: []*hcmv3.HttpFilter{
 			{
 				// Router must be the last filter.
@@ -241,13 +318,13 @@ func createHTTPConnectionManagerForServerListener(routeConfigName string, router
 	}
 }
 
-// createRouteConfiguration returns an RDS route configuration for a gRPC
+// createRouteConfig returns an RDS route configuration for a gRPC
 // application with one virtual host and one route for that virtual host.
 //
 // The virtual host Name is not used for routing.
 // The virtual host domain must match the request `:authority`
-// For the routePrefix parameter, use either `/` or `/[package].[service]/`.
-func createRouteConfiguration(name string, virtualHostName string, routePrefix string, clusterName string) *routev3.RouteConfiguration {
+// Te routePrefix parameter can be an empty string.
+func createRouteConfig(name string, virtualHostName string, routePrefix string, clusterName string) *routev3.RouteConfiguration {
 	return &routev3.RouteConfiguration{
 		Name: name,
 		VirtualHosts: []*routev3.VirtualHost{
@@ -275,13 +352,14 @@ func createRouteConfiguration(name string, virtualHostName string, routePrefix s
 	}
 }
 
-// createRouteConfigurationForServerListener returns an RDS route configuration for the server listener(s).
-func createRouteConfigurationForServerListener(name string) *routev3.RouteConfiguration {
+// createRouteConfigForServerListener returns an RDS route configuration for the server listeners.
+func createRouteConfigForServerListener(name string) *routev3.RouteConfiguration {
 	return &routev3.RouteConfiguration{
 		Name: name,
 		VirtualHosts: []*routev3.VirtualHost{
 			{
-				Name:    "inbound|default_inbound_config-50051",
+				// The VirtualHost name _doesn't_ have to match the RouteConfiguration name.
+				Name:    name,
 				Domains: []string{"*"},
 				Routes: []*routev3.Route{
 					{
@@ -294,7 +372,7 @@ func createRouteConfigurationForServerListener(name string) *routev3.RouteConfig
 							NonForwardingAction: &routev3.NonForwardingAction{},
 						},
 						Decorator: &routev3.Decorator{
-							Operation: "default_inbound_config/*",
+							Operation: name + "/*",
 						},
 					},
 				},

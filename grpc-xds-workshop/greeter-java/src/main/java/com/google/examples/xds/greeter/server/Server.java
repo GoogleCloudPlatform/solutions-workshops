@@ -44,6 +44,8 @@ public class Server {
   private static final Logger LOG = LoggerFactory.getLogger(Server.class);
 
   /**
+   * Channelz page size.
+   *
    * @see io.grpc.services.AdminInterface#DEFAULT_CHANNELZ_MAX_PAGE_SIZE
    */
   private static final int DEFAULT_CHANNELZ_MAX_PAGE_SIZE = 100;

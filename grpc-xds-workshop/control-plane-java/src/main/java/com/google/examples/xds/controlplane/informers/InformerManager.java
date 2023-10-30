@@ -148,7 +148,7 @@ public class InformerManager<T> {
         .filter(this::isValid)
         .map(this::toGrpcApplication)
         .forEach(snapshotBuilder::addGrpcApplications);
-    cache.setSnapshot(snapshotBuilder.build());
+    cache.setSnapshot(snapshotBuilder);
   }
 
   @SuppressWarnings("DataFlowIssue")

@@ -27,7 +27,6 @@ import (
 	routev3 "github.com/envoyproxy/go-control-plane/envoy/service/route/v3"
 	runtimev3 "github.com/envoyproxy/go-control-plane/envoy/service/runtime/v3"
 	secretv3 "github.com/envoyproxy/go-control-plane/envoy/service/secret/v3"
-	cachev3 "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
 	serverv3 "github.com/envoyproxy/go-control-plane/pkg/server/v3"
 	"github.com/go-logr/logr"
 	"google.golang.org/grpc"
@@ -71,8 +70,13 @@ func Run(ctx context.Context, port int, informerConfigs []informers.Config) erro
 	defer cleanup()
 	reflection.Register(server)
 
-	xdsCache := xds.NewSnapshotCache(ctx, true, cachev3.IDHash{})
-	xdsServer := serverv3.NewServer(ctx, xdsCache, nil)
+	xdsCache := xds.NewSnapshotCache(ctx, true, xds.FixedHash{})
+	xdsServer := serverv3.NewServer(ctx, xdsCache, serverv3.CallbackFuncs{
+		StreamRequestFunc: func(_ int64, request *discoveryv3.DiscoveryRequest) error {
+			logger.Info("StreamRequest", "type", request.GetTypeUrl(), "resourceNames", request.ResourceNames)
+			return nil
+		},
+	})
 
 	registerXDSServices(server, xdsServer)
 	informerManager, err := informers.NewManager(ctx, xdsCache)

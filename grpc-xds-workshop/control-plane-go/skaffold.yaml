@@ -25,7 +25,7 @@ build:
     ko:
       # Using a base image with a shell (`debug`) to enable exec-ing to containers,
       # since this is a sample implementation created for learning purposes.
-      fromImage: gcr.io/distroless/static-debian11:debug-nonroot
+      fromImage: gcr.io/distroless/static-debian12:debug-nonroot
       dependencies:
         paths: ["cmd", "pkg", "third_party", "go.mod", "main.go"]
   tagPolicy:
@@ -51,7 +51,7 @@ profiles:
   # Use a different base image.
   - op: replace
     path: /build/artifacts/0/ko/fromImage
-    value: gcr.io/distroless/base-debian11:debug
+    value: gcr.io/distroless/base-debian12:debug
   # Add port forwarding to the debug port.
   - op: add
     path: /portForward/-

@@ -120,7 +120,7 @@ func Run(ctx context.Context, c Config) error {
 }
 
 func serverOptions(logger logr.Logger, useXDSCredentials bool) ([]grpc.ServerOption, error) {
-	// https://github.com/grpc/grpc-go/blob/v1.57.0/xds/server.go#L230
+	// https://github.com/grpc/grpc-go/blob/v1.59.0/xds/server.go#L145
 	serverCredentials := insecure.NewCredentials()
 	if useXDSCredentials {
 		logger.V(1).Info("Using xDS server-side credentials, with insecure as fallback")

@@ -53,10 +53,31 @@ tail-intermediary:
 tail-leaf:
 	kubectl logs --all-containers --follow --namespace=xds deployment/greeter-leaf
 
+# xds-status-intermediary shows the current xDS resources ACKed by greeter-intermediary
+.PHONY: xds-status-intermediary
+xds-status-intermediary:
+	grpcdebug localhost:50055 xds status
+
+# xds-status-leaf shows the current xDS resources ACKed by greeter-leaf
+.PHONY: xds-status-leaf
+xds-status-leaf:
+	grpcdebug localhost:50057 xds status
+
+# xds-config-intermediary dumps the current xDS configuration of greeter-intermediary
+.PHONY: xds-config-intermediary
+xds-config-intermediary:
+	grpcdebug localhost:50055 xds config | yq --input-format=json --prettyPrint
+
+# xds-config-leaf dumps the current xDS configuration of greeter-leaf
+.PHONY: xds-config-leaf
+xds-config-leaf:
+	grpcdebug localhost:50057 xds config | yq --input-format=json --prettyPrint
+
 # delete the greeter-intermediary and greeter-leaf Deployment and Service resources from the k8s cluster.
 .PHONY: delete
 delete:
-	kubectl delete --ignore-not-found --namespace=xds {deployment,service}/greeter-{intermediary,leaf}
+	kubectl delete --ignore-not-found --namespace=xds deployment greeter-intermediary greeter-leaf
+	kubectl delete --ignore-not-found --namespace=xds service greeter-intermediary greeter-leaf
 
 .PHONY: build
 build:

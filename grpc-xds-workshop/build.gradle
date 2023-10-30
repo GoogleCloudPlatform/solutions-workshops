@@ -26,8 +26,8 @@ plugins {
     id 'idea'
 
     id 'com.dorongold.task-tree' version '2.1.1' apply false
-    id 'com.github.ben-manes.versions' version '0.44.0' apply false
-    id 'com.github.spotbugs' version '5.0.13' apply false
+    id 'com.github.ben-manes.versions' version '0.49.0' apply false
+    id 'com.github.spotbugs' version '5.2.1' apply false
 }
 
 repositories {
@@ -42,6 +42,13 @@ idea {
         downloadJavadoc = false
         downloadSources = true
     }
+}
+
+// https://github.com/ben-manes/gradle-versions-plugin#rejectversionsif-and-componentselection
+def isNonStable = { String version ->
+  def stableKeyword = ['RELEASE', 'FINAL', 'GA'].any { it -> version.toUpperCase().contains(it) }
+  def regex = /^[0-9,.v-]+(-r)?$/
+  return !stableKeyword && !(version ==~ regex)
 }
 
 subprojects {
@@ -87,5 +94,8 @@ subprojects {
         checkConstraints = true
         checkForGradleUpdate = true
         gradleReleaseChannel = 'current'
+        rejectVersionIf {
+            isNonStable(it.candidate.version) && !isNonStable(it.currentVersion)
+        }
     }
 }

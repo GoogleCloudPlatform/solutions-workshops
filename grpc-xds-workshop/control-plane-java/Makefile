@@ -41,23 +41,24 @@ tail:
 # delete the xds control plane Deployment and Service resources from the k8s cluster.
 .PHONY: delete
 delete:
-	kubectl delete --ignore-not-found --namespace=xds {deployment,service}/control-plane
+	kubectl delete --ignore-not-found --namespace=xds deployment control-plane
+	kubectl delete --ignore-not-found --namespace=xds service control-plane
 
 .PHONY: build
 build:
-	./gradlew assembleDist
+	../gradlew assembleDist
 
 .PHONY: clean
 clean:
-	./gradlew clean
+	../gradlew clean
 
 .PHONY: depupdates
-updatedeps:
-	./gradlew dependencyUpdates
+depupdates:
+	../gradlew dependencyUpdates
 
 .PHONY: format
 format:
-	./gradlew googleJavaFormat
+	../gradlew googleJavaFormat
 
 .PHONY: image
 image:
@@ -65,11 +66,11 @@ image:
 
 .PHONY: imagejib
 imageko:
-	./gradlew jibDockerBuild
+	../gradlew jibDockerBuild
 
 .PHONY: lint
 lint: format
-	./gradlew verifyGoogleJavaFormat checkstyleMain spotbugsMain
+	../gradlew verifyGoogleJavaFormat checkstyleMain spotbugsMain
 
 .PHONY: manifests
 manifests:
@@ -77,8 +78,8 @@ manifests:
 
 .PHONY: proto
 proto:
-	./gradlew generateProto
+	../gradlew generateProto
 
 .PHONY: test
 test:
-	./gradlew test
+	../gradlew test

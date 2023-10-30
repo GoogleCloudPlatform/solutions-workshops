@@ -41,7 +41,8 @@ tail:
 # delete the xds control plane Deployment and Service resources from the k8s cluster.
 .PHONY: delete
 delete:
-	kubectl delete --ignore-not-found --namespace=xds {deployment,service}/control-plane
+	kubectl delete --ignore-not-found --namespace=xds deployment control-plane
+	kubectl delete --ignore-not-found --namespace=xds service control-plane
 
 .PHONY: build
 build:

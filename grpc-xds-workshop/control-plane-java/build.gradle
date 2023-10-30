@@ -31,7 +31,7 @@ plugins {
     id 'java'
 
     id 'com.github.sherter.google-java-format' version '0.9'
-    id 'com.google.cloud.tools.jib' version '3.3.2'
+    id 'com.google.cloud.tools.jib' version '3.4.0'
     id 'com.google.protobuf' version '0.9.4'
 }
 
@@ -71,11 +71,11 @@ tasks.withType(Checkstyle) {
     }
 }
 
-def grpcVersion = '1.58.0'
+def grpcVersion = '1.59.0'
 def javaControlPlaneVersion = '1.0.39'
 def junitJupiterVersion = '5.10.0'
 def kubernetesClientJavaVersion = '18.0.1'
-def protobufVersion = '3.24.3'
+def protobufVersion = '3.24.4'
 def slf4jVersion = '2.0.9'
 
 dependencies {
@@ -92,7 +92,7 @@ dependencies {
     }
     implementation("io.kubernetes:client-java:${kubernetesClientJavaVersion}")
     implementation("io.kubernetes:client-java-extended:${kubernetesClientJavaVersion}")
-    implementation("org.apache.logging.log4j:log4j-to-slf4j:2.20.0")
+    implementation("org.apache.logging.log4j:log4j-to-slf4j:2.21.1")
     implementation("org.slf4j:jcl-over-slf4j:${slf4jVersion}")
     implementation("org.slf4j:slf4j-jdk14:${slf4jVersion}")
     implementation("org.snakeyaml:snakeyaml-engine:2.7")
@@ -109,7 +109,7 @@ dependencies {
 
     testCompileOnly("junit:junit:4.13.2")
 
-    testRuntimeOnly("org.junit.vintage:junit-vintage-engine")
+    testRuntimeOnly("org.junit.vintage:junit-vintage-engine:${junitJupiterVersion}")
 }
 
 jar {
