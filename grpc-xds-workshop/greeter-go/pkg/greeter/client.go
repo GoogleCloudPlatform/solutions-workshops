@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -40,55 +39,37 @@ const (
 )
 
 type Client struct {
-	mu        sync.Mutex
-	clientCtx context.Context
-	logger    logr.Logger
-	nextHop   string
-	dialOpts  []grpc.DialOption
-	client    helloworldpb.GreeterClient
+	logger  logr.Logger
+	nextHop string
+	client  helloworldpb.GreeterClient
 }
 
 func NewClient(ctx context.Context, nextHop string, useXDSCredentials bool) (*Client, error) {
-	dialOpts, err := dialOptions(logging.FromContext(ctx), useXDSCredentials)
+	logger := logging.FromContext(ctx)
+	dialOpts, err := dialOptions(logger, useXDSCredentials)
 	if err != nil {
 		return nil, fmt.Errorf("could not configure greeter client connection dial options: %w", err)
 	}
+	dialCtx, dialCancel := context.WithTimeout(ctx, grpcClientDialTimeout)
+	defer dialCancel()
+	clientConn, err := grpc.DialContext(dialCtx, nextHop, dialOpts...)
+	if err != nil {
+		return nil, fmt.Errorf("could not create a virtual connection to target=%s: %w", nextHop, err)
+	}
+	addClientConnectionCloseBehavior(ctx, logger, clientConn)
 	return &Client{
-		clientCtx: ctx,
-		logger:    logging.FromContext(ctx),
-		nextHop:   nextHop,
-		dialOpts:  dialOpts,
+		client:  helloworldpb.NewGreeterClient(clientConn),
+		logger:  logger,
+		nextHop: nextHop,
 	}, nil
 }
 
 func (c *Client) SayHello(requestCtx context.Context, name string) (string, error) {
-	err := c.createClientIfRequired(requestCtx)
-	if err != nil {
-		return "", fmt.Errorf("could not create greeter client: %w", err)
-	}
 	resp, err := c.client.SayHello(requestCtx, &helloworldpb.HelloRequest{Name: name}, grpc.WaitForReady(true))
 	if err != nil {
 		return "", fmt.Errorf("could not greet name=%s at target=%s: %w", name, c.nextHop, err)
 	}
 	return resp.GetMessage(), nil
-}
-
-// nolint: contextcheck
-func (c *Client) createClientIfRequired(requestCtx context.Context) error {
-	if c.client != nil {
-		return nil
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	dialCtx, dialCancel := context.WithTimeout(requestCtx, grpcClientDialTimeout)
-	defer dialCancel()
-	clientConn, err := grpc.DialContext(dialCtx, c.nextHop, c.dialOpts...)
-	if err != nil {
-		return fmt.Errorf("could not create a virtual connection to target=%s: %w", c.nextHop, err)
-	}
-	addClientConnectionCloseBehavior(c.clientCtx, c.logger, clientConn)
-	c.client = helloworldpb.NewGreeterClient(clientConn)
-	return nil
 }
 
 // dialOptions sets parameters for client connection establishment.
@@ -114,9 +95,9 @@ func dialOptions(logger logr.Logger, useXDSCredentials bool) ([]grpc.DialOption,
 	}, nil
 }
 
-func addClientConnectionCloseBehavior(clientCtx context.Context, logger logr.Logger, clientConn *grpc.ClientConn) {
+func addClientConnectionCloseBehavior(ctx context.Context, logger logr.Logger, clientConn *grpc.ClientConn) {
 	go func(cc *grpc.ClientConn) {
-		<-clientCtx.Done()
+		<-ctx.Done()
 		logger.Info("Closing the greeter client connection")
 		err := cc.Close()
 		if err != nil {
