@@ -65,7 +65,7 @@ func Run(ctx context.Context, port int, informerConfigs []informers.Config) erro
 	healthpb.RegisterHealthServer(server, healthServer)
 	cleanup, err := admin.Register(server)
 	if err != nil {
-		return fmt.Errorf("could not register Channelz and CSDS admin services: %w", err)
+		return fmt.Errorf("could not register gRPC Channelz and CSDS admin services: %w", err)
 	}
 	defer cleanup()
 	reflection.Register(server)
@@ -81,11 +81,11 @@ func Run(ctx context.Context, port int, informerConfigs []informers.Config) erro
 	registerXDSServices(server, xdsServer)
 	informerManager, err := informers.NewManager(ctx, xdsCache)
 	if err != nil {
-		return fmt.Errorf("could not create the informer manager: %w", err)
+		return fmt.Errorf("could not create the Kubernetes informer manager: %w", err)
 	}
 	for _, informerConfig := range informerConfigs {
 		if err := informerManager.AddEndpointSliceInformer(ctx, informerConfig); err != nil {
-			return fmt.Errorf("could not create informer for %+v: %w", informerConfig, err)
+			return fmt.Errorf("could not create Kubernetes informer for %+v: %w", informerConfig, err)
 		}
 	}
 

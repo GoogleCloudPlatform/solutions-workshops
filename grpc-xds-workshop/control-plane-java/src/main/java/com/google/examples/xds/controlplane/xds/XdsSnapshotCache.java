@@ -25,14 +25,9 @@ import io.envoyproxy.controlplane.cache.Response;
 import io.envoyproxy.controlplane.cache.Watch;
 import io.envoyproxy.controlplane.cache.XdsRequest;
 import io.envoyproxy.controlplane.cache.v3.SimpleCache;
-import io.envoyproxy.controlplane.cache.v3.Snapshot;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArraySet;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -59,15 +54,22 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
 
   private static final Logger LOG = LoggerFactory.getLogger(XdsSnapshotCache.class);
 
-  /** Used to extract the ipAddress (IPv4 or IPv6) and port from server listener names. */
-  private static final Pattern SERVER_LISTENER_NAME_PATTERN;
-
-  /** Used to look for server listeners when creating new listeners streams. */
+  /**
+   * Prefix used to look for server listeners when creating new listeners streams. Server listener
+   * resource names use templates such as `grpc/server?xds.resource.listening_address=%s`.
+   * SERVER_LISTENER_NAME_PREFIX is the part up to and including the `=` sign.
+   */
   private static final String SERVER_LISTENER_NAME_PREFIX;
+
+  /**
+   * Regex pattern used to extract the ipAddress (IPv4 or IPv6) and port from server listener names.
+   */
+  private static final Pattern SERVER_LISTENER_NAME_PATTERN;
 
   static {
     SERVER_LISTENER_NAME_PREFIX =
         Strings.split(XdsSnapshotBuilder.SERVER_LISTENER_RESOURCE_NAME_TEMPLATE, '=')[0] + "=";
+
     SERVER_LISTENER_NAME_PATTERN =
         Pattern.compile(Pattern.quote(SERVER_LISTENER_NAME_PREFIX) + "([0-9a-f:.]*):([0-9]{1,5})");
   }
@@ -78,10 +80,21 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
   /** Hash function used to determine node hash from node proto. */
   private final NodeGroup<T> nodeHashFn;
 
-  /** Tracks server listener addresses by node hash. */
-  private final ConcurrentHashMap<T, Set<EndpointAddress>> serverListenerAddresses;
+  /**
+   * appsCache stores the most recent gRPC application configuration information from k8s cluster
+   * EndpointSlices. The appsCache is used to populate new entries (previously unseen `nodeHash`es
+   * in the xDS resource snapshot cache, so that the new subscribers don't have to wait for an
+   * EndpointSlice update before they can receive xDS resource.
+   */
+  private final GrpcApplicationCache appsCache;
 
-  private final ReadWriteLock serverListenerAddressesLock;
+  /**
+   * serverListenerCache stores known server listener names for each snapshot cache key
+   * (`nodeHash`). These names are captured when new Listener streams are created, see
+   * `CreateWatch()`. The server listener names are added to xDS resource snapshots, to be included
+   * in LDS responded for xDS-enabled gRPC servers.
+   */
+  private final ServerListenerCache<T> serverListenerCache;
 
   /**
    * Create an xDS resource cache for the provided node hash function (<code>NodeGroup</code>).
@@ -91,31 +104,8 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
   public XdsSnapshotCache(@NotNull NodeGroup<T> nodeHashFn) {
     this.delegate = new SimpleCache<>(nodeHashFn);
     this.nodeHashFn = nodeHashFn;
-    this.serverListenerAddresses = new ConcurrentHashMap<>();
-    this.serverListenerAddressesLock = new ReentrantReadWriteLock();
-  }
-
-  /**
-   * For each node hash in the cache, create a new snapshot based on the provided snapshot, with the
-   * addition of server listeners per group.
-   */
-  public void setSnapshot(@NotNull XdsSnapshotBuilder snapshotBuilder) {
-    delegate
-        .groups()
-        .forEach(
-            nodeHash -> {
-              if (serverListenerAddressesLock.readLock().tryLock()) {
-                try {
-                  Snapshot snapshotForNodeHash =
-                      snapshotBuilder
-                          .addServerListenerAddresses(serverListenerAddresses.get(nodeHash))
-                          .build();
-                  delegate.setSnapshot(nodeHash, snapshotForNodeHash);
-                } finally {
-                  serverListenerAddressesLock.readLock().unlock();
-                }
-              }
-            });
+    this.appsCache = new GrpcApplicationCache();
+    this.serverListenerCache = new ServerListenerCache<>();
   }
 
   /**
@@ -139,34 +129,19 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
       Consumer<Response> responseConsumer,
       boolean hasClusterChanged,
       boolean allowDefaultEmptyEdsUpdate) {
-    if (request != null
-        && request.v3Request() != null
-        && request.getResourceType() == ResourceType.LISTENER) {
+    if (isListenerRequest(request)) {
       T nodeHash = nodeHashFn.hash(request.v3Request().getNode());
-      if (serverListenerAddressesLock.writeLock().tryLock()) {
-        try {
-          Set<EndpointAddress> addressesBefore =
-              serverListenerAddresses.computeIfAbsent(nodeHash, g -> new CopyOnWriteArraySet<>());
-          Set<EndpointAddress> newAddresses =
-              getServerListenerAddresses(request.getResourceNamesList());
-          serverListenerAddresses.get(nodeHash).addAll(newAddresses);
-          Set<EndpointAddress> addressesAfter = serverListenerAddresses.get(nodeHash);
-          Snapshot oldSnapshot = delegate.getSnapshot(nodeHash);
-          if (oldSnapshot == null || addressesAfter.size() > addressesBefore.size()) {
-            Snapshot newSnapshot =
-                new XdsSnapshotBuilder()
-                    .addSnapshot(oldSnapshot)
-                    .addServerListenerAddresses(addressesAfter)
-                    .build();
-            LOG.info(
-                "Creating a new snapshot with serverListenerAddresses={} for nodeHash={}",
-                addressesAfter,
-                nodeHash);
-            delegate.setSnapshot(nodeHash, newSnapshot);
-          }
-        } finally {
-          serverListenerAddressesLock.writeLock().unlock();
-        }
+      Set<EndpointAddress> listenerAddressesFromRequest =
+          getServerListenerAddresses(request.getResourceNamesList());
+      boolean isAdded = serverListenerCache.add(nodeHash, listenerAddressesFromRequest);
+      if (isAdded) {
+        var snapshot =
+            new XdsSnapshotBuilder()
+                .addGrpcApplications(appsCache.get())
+                .addServerListenerAddresses(serverListenerCache.get(nodeHash))
+                .build();
+        LOG.info("Creating a new snapshot for nodeHash={}", nodeHash);
+        delegate.setSnapshot(nodeHash, snapshot);
       }
     }
     return delegate.createWatch(
@@ -176,6 +151,12 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
         responseConsumer,
         hasClusterChanged,
         allowDefaultEmptyEdsUpdate);
+  }
+
+  private boolean isListenerRequest(@Nullable XdsRequest request) {
+    return request != null
+        && request.v3Request() != null
+        && request.getResourceType() == ResourceType.LISTENER;
   }
 
   @NotNull
@@ -196,6 +177,23 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
                   new EndpointAddress(matcher.group(1), Integer.parseInt(matcher.group(2))));
             })
         .collect(Collectors.toUnmodifiableSet());
+  }
+
+  /**
+   * For each node group (hash) in the cache, create a new snapshot based on the provided snapshot,
+   * with the addition of server listeners per group.
+   */
+  public void setSnapshot(@NotNull XdsSnapshotBuilder snapshotBuilder) {
+    delegate
+        .groups()
+        .forEach(
+            nodeHash -> {
+              var snapshot =
+                  snapshotBuilder
+                      .addServerListenerAddresses(serverListenerCache.get(nodeHash))
+                      .build();
+              delegate.setSnapshot(nodeHash, snapshot);
+            });
   }
 
   /** Just delegating, since delta xDS is not supported by this control plane implementation. */

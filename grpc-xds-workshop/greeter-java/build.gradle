@@ -93,9 +93,9 @@ tasks.withType(Checkstyle) {
     }
 }
 
-def grpcVersion = '1.59.0'
-def junitJupiterVersion = '5.10.0'
-def protobufVersion = '3.24.4'
+def grpcVersion = '1.60.0'
+def junitJupiterVersion = '5.10.1'
+def protobufVersion = '3.25.1'
 def slf4jVersion = '2.0.9'
 
 dependencies {
@@ -107,12 +107,12 @@ dependencies {
     implementation("io.grpc:grpc-xds:${grpcVersion}") {
         exclude(module: 'commons-logging')
     }
-    implementation("org.apache.logging.log4j:log4j-to-slf4j:2.21.1")
+    implementation("org.apache.logging.log4j:log4j-to-slf4j:2.22.0")
     implementation("org.slf4j:jcl-over-slf4j:${slf4jVersion}")
     implementation("org.slf4j:slf4j-jdk14:${slf4jVersion}")
 
     compileOnly("org.apache.tomcat:annotations-api:6.0.53")
-    compileOnly("org.jetbrains:annotations:24.0.1")
+    compileOnly("org.jetbrains:annotations:24.1.0")
 
     runtimeOnly("io.grpc:grpc-netty-shaded:${grpcVersion}")
 
