@@ -34,6 +34,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import okhttp3.OkHttpClient;
 import okhttp3.logging.HttpLoggingInterceptor;
 import okhttp3.logging.HttpLoggingInterceptor.Level;
@@ -142,18 +143,19 @@ public class InformerManager<T> {
   }
 
   private void handleEndpointSliceEvent() {
-    XdsSnapshotBuilder snapshotBuilder = new XdsSnapshotBuilder();
-    informers.stream()
-        .flatMap(informer -> informer.getIndexer().list().stream())
-        .filter(this::isValid)
-        .map(this::toGrpcApplication)
-        .forEach(snapshotBuilder::addGrpcApplications);
+    var apps =
+        informers.stream()
+            .flatMap(informer -> informer.getIndexer().list().stream())
+            .filter(this::isValid)
+            .map(this::toGrpcApplication)
+            .collect(Collectors.toSet());
+    XdsSnapshotBuilder snapshotBuilder = new XdsSnapshotBuilder().addGrpcApplications(apps);
     cache.setSnapshot(snapshotBuilder);
   }
 
   @SuppressWarnings("DataFlowIssue")
   @NotNull
-  private GrpcApplication toGrpcApplication(V1EndpointSlice endpointSlice) {
+  private GrpcApplication toGrpcApplication(@NotNull V1EndpointSlice endpointSlice) {
     List<GrpcApplicationEndpoint> applicationEndpoints = toGrpcApplicationEndpoints(endpointSlice);
     String endpointSliceName = endpointSlice.getMetadata().getName();
     String k8sServiceName = endpointSlice.getMetadata().getLabels().get(LABEL_SERVICE_NAME);

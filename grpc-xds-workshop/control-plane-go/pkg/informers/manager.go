@@ -144,14 +144,9 @@ func (m *Manager) handleEndpointSliceEvent(ctx context.Context, event string, ob
 		appsForInformer := getAppsForInformer(m.logger, informer)
 		apps = append(apps, appsForInformer...)
 	}
-	snapshotBuilder, err := xds.NewSnapshotBuilder().AddGRPCApplications(apps...)
-	if err != nil {
+	if err := m.xdsCache.UpdateResources(ctx, apps); err != nil {
 		// Can't propagate this error, and we probably shouldn't end the goroutine anyway.
-		m.logger.Error(err, "Could not add gRPC application configuration to a new xDS resource snapshot", "apps", apps)
-	}
-	if err := m.xdsCache.SetSnapshot(ctx, snapshotBuilder); err != nil {
-		// Can't propagate this error, and we probably shouldn't end the goroutine anyway.
-		m.logger.Error(err, "Could not update the xDS snapshot cache", "snapshotBuilder", snapshotBuilder)
+		m.logger.Error(err, "Could not update the xDS resource cache with new gRPC application configuration", "apps", apps)
 	}
 }
 

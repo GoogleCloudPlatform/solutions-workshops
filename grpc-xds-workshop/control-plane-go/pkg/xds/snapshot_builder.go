@@ -95,7 +95,7 @@ func (b *SnapshotBuilder) AddSnapshot(snapshot cachev3.ResourceSnapshot) *Snapsh
 // TODO: There can be more than one EndpointSlice for a k8s Service.
 // Check if there's already an application with the same name and merge,
 // instead of just blindly overwriting.
-func (b *SnapshotBuilder) AddGRPCApplications(apps ...GRPCApplication) (*SnapshotBuilder, error) {
+func (b *SnapshotBuilder) AddGRPCApplications(apps []GRPCApplication) (*SnapshotBuilder, error) {
 	for _, app := range apps {
 		apiListener, err := createAPIListener(app.listenerName(), app.routeConfigName())
 		if err != nil {
@@ -114,7 +114,7 @@ func (b *SnapshotBuilder) AddGRPCApplications(apps ...GRPCApplication) (*Snapsho
 
 // AddServerListenerAddresses adds server listeners and associated route
 // configurations with the provided IP addresses and ports to the snapshot.
-func (b *SnapshotBuilder) AddServerListenerAddresses(addresses ...EndpointAddress) *SnapshotBuilder {
+func (b *SnapshotBuilder) AddServerListenerAddresses(addresses []EndpointAddress) *SnapshotBuilder {
 	for _, address := range addresses {
 		b.serverListenerAddresses[address] = true
 	}
@@ -283,7 +283,7 @@ func createHTTPConnectionManagerForServerListener(routeConfigName string, router
 		RouteSpecifier: &hcmv3.HttpConnectionManager_RouteConfig{
 			RouteConfig: createRouteConfigForServerListener(routeConfigName),
 		},
-		// RouteConfiguration via RDS for server listeners:
+		// Dynamic RouteConfiguration via RDS for server listeners:
 		// RouteSpecifier: &hcmv3.HttpConnectionManager_Rds{
 		// 	Rds: &hcmv3.Rds{
 		// 		ConfigSource: &corev3.ConfigSource{

@@ -148,7 +148,7 @@ public class XdsSnapshotBuilder {
    */
   @SuppressWarnings("UnusedReturnValue")
   @NotNull
-  public XdsSnapshotBuilder addGrpcApplications(GrpcApplication... apps) {
+  public XdsSnapshotBuilder addGrpcApplications(@NotNull Set<GrpcApplication> apps) {
     for (GrpcApplication app : apps) {
       Listener listener = createApiListener(app.listenerName(), app.routeName());
       listeners.put(listener.getName(), listener);

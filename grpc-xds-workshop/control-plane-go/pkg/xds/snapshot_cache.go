@@ -21,7 +21,6 @@ import (
 	"net"
 	"strconv"
 	"strings"
-	"sync"
 
 	cachev3 "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
 	"github.com/envoyproxy/go-control-plane/pkg/server/stream/v3"
@@ -30,9 +29,9 @@ import (
 	"github.com/googlecloudplatform/solutions-workshops/grpc-xds-workshop/control-plane-go/pkg/logging"
 )
 
-var (
-	serverListenerNamePrefix = strings.SplitAfter(serverListenerResourceNameTemplate, "=")[0]
-)
+// Server listener resource names typically follow the template `grpc/server?xds.resource.listening_address=%s`.
+// serverListenerNamePrefix is the part up to and including the `=` sign.
+var serverListenerNamePrefix = strings.SplitAfter(serverListenerResourceNameTemplate, "=")[0]
 
 // SnapshotCache stores snapshots of xDS resources in a delegate cache.
 //
@@ -42,13 +41,23 @@ var (
 //
 // It also handles propagating snapshots to all node hashes in the cache.
 type SnapshotCache struct {
-	ctx                        context.Context
-	logger                     logr.Logger
-	delegate                   cachev3.SnapshotCache
-	hash                       cachev3.NodeHash
-	serverListenerAddresses    map[string]map[EndpointAddress]bool
-	serverListenerAddressesMux *sync.RWMutex
+	ctx    context.Context
+	logger logr.Logger
+	// delegate is the actual xDS resource cache.
+	delegate cachev3.SnapshotCache
+	// hash is the function to determine the cache key (`nodeHash`) for nodes.
+	hash cachev3.NodeHash
+	// appsCache stores the most recent gRPC application configuration information from k8s cluster EndpointSlices.
+	// The appsCache is used to populate new entries (previously unseen `nodeHash`es in the xDS resource snapshot cache,
+	// so that the new subscribers don't have to wait for an EndpointSlice update before they can receive xDS resource.
+	appsCache *GRPCApplicationCache
+	// serverListenerCache stores known server listener names for each snapshot cache key (`nodeHash`).
+	// These names are captured when new Listener streams are created, see `CreateWatch()`.
+	// The server listener names are added to xDS resource snapshots, to be included in LDS responded for xDS-enabled gRPC servers.
+	serverListenerCache *ServerListenerCache
 }
+
+var _ cachev3.Cache = &SnapshotCache{}
 
 // NewSnapshotCache creates an xDS resource cache for the provided node hash function.
 //
@@ -56,47 +65,13 @@ type SnapshotCache struct {
 // type even if some resources in the snapshot are not named in the request.
 func NewSnapshotCache(ctx context.Context, allowPartialRequests bool, hash cachev3.NodeHash) *SnapshotCache {
 	return &SnapshotCache{
-		ctx:                        ctx,
-		logger:                     logging.FromContext(ctx),
-		delegate:                   cachev3.NewSnapshotCache(!allowPartialRequests, hash, logging.SnapshotCacheLogger(ctx)),
-		hash:                       hash,
-		serverListenerAddresses:    make(map[string]map[EndpointAddress]bool),
-		serverListenerAddressesMux: &sync.RWMutex{},
+		ctx:                 ctx,
+		logger:              logging.FromContext(ctx),
+		delegate:            cachev3.NewSnapshotCache(!allowPartialRequests, hash, logging.SnapshotCacheLogger(ctx)),
+		hash:                hash,
+		appsCache:           NewGRPCApplicationCache(),
+		serverListenerCache: NewServerListenerCache(),
 	}
-}
-
-// SetSnapshot creates a new snapshot for each node hash in the cache, based on the provided snapshot builder,
-// with the addition of server listeners and their associated route configurations.
-func (c *SnapshotCache) SetSnapshot(ctx context.Context, snapshotBuilder *SnapshotBuilder) error {
-	var errs []error
-	for _, nodeHash := range c.delegate.GetStatusKeys() {
-		serverListenerAddresses := c.getServerListenerAddressesForNode(nodeHash)
-		snapshotForNodeHash, err := snapshotBuilder.
-			AddServerListenerAddresses(serverListenerAddresses...).
-			Build()
-		if err != nil {
-			errs = append(errs, fmt.Errorf("could not create snapshot with server Listeners for nodeHash=%s: %w", nodeHash, err))
-		}
-		if err = c.delegate.SetSnapshot(ctx, nodeHash, snapshotForNodeHash); err != nil {
-			errs = append(errs, fmt.Errorf("could not set snapshot for nodeHash=%s: %w", nodeHash, err))
-		}
-	}
-	if len(errs) > 0 {
-		return errors.Join(errs...)
-	}
-	return nil
-}
-
-func (c *SnapshotCache) getServerListenerAddressesForNode(nodeHash string) []EndpointAddress {
-	c.serverListenerAddressesMux.RLock()
-	defer c.serverListenerAddressesMux.RUnlock()
-	serverListenerAddresses := make([]EndpointAddress, len(c.serverListenerAddresses[nodeHash]))
-	i := 0
-	for address := range c.serverListenerAddresses[nodeHash] {
-		serverListenerAddresses[i] = address
-		i++
-	}
-	return serverListenerAddresses
 }
 
 // CreateWatch intercepts stream creation before delegating, and if it is a new Listener stream, does the following:
@@ -109,7 +84,6 @@ func (c *SnapshotCache) getServerListenerAddressesForNode(nodeHash string) []End
 //
 // This solves (in a slightly hacky way) bootstrapping of xDS-enabled gRPC servers.
 func (c *SnapshotCache) CreateWatch(request *cachev3.Request, state stream.StreamState, responses chan cachev3.Response) (cancel func()) {
-	// TODO: Should also look for the server listener in the resource names of the request.
 	if request != nil && len(request.ResourceNames) > 0 && request.GetTypeUrl() == "type.googleapis.com/envoy.config.listener.v3.Listener" {
 		nodeHash := c.hash.ID(request.GetNode())
 		addressesFromRequest, err := findServerListenerAddresses(request.ResourceNames)
@@ -117,11 +91,11 @@ func (c *SnapshotCache) CreateWatch(request *cachev3.Request, state stream.Strea
 			c.logger.Error(err, "Problem encountered when looking for server listener addresses in new Listener stream request", "nodeHash", nodeHash)
 			return func() {}
 		}
-		addressesAdded := c.addServerListenerAddressForNode(nodeHash, addressesFromRequest)
-		oldSnapshot, err := c.delegate.GetSnapshot(nodeHash)
+		addressesAdded := c.serverListenerCache.Add(nodeHash, addressesFromRequest)
+		_, err = c.delegate.GetSnapshot(nodeHash)
 		if err != nil || addressesAdded {
-			if err := c.createNewSnapshotForNode(nodeHash, oldSnapshot, addressesFromRequest); err != nil {
-				c.logger.Error(err, "Could not set new xDS resource snapshot", "nodeHash", nodeHash, "oldSnapshot", oldSnapshot, "serverListenerAddressesFromRequest", addressesFromRequest)
+			if err := c.createNewSnapshotForNode(nodeHash, addressesFromRequest); err != nil {
+				c.logger.Error(err, "Could not set new xDS resource snapshot", "nodeHash", nodeHash, "serverListenerAddressesFromRequest", addressesFromRequest)
 				return func() {}
 			}
 		}
@@ -129,13 +103,44 @@ func (c *SnapshotCache) CreateWatch(request *cachev3.Request, state stream.Strea
 	return c.delegate.CreateWatch(request, state, responses)
 }
 
+// UpdateResources creates a new snapshot for each node hash in the cache, based on the provided gRPC application configuration,
+// with the addition of server listeners and their associated route configurations.
+func (c *SnapshotCache) UpdateResources(ctx context.Context, apps []GRPCApplication) error {
+	var errs []error
+	for _, nodeHash := range c.delegate.GetStatusKeys() {
+		snapshotBuilder, err := NewSnapshotBuilder().AddGRPCApplications(apps)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("could not create xDS resource snapshot builder for gRPC application configuration %v+: %w", apps, err))
+		}
+		snapshotForNodeHash, err := snapshotBuilder.
+			AddServerListenerAddresses(c.serverListenerCache.Get(nodeHash)).
+			Build()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("could not create xDS resource snapshot with server Listeners for nodeHash=%s: %w", nodeHash, err))
+		}
+		if err = c.delegate.SetSnapshot(ctx, nodeHash, snapshotForNodeHash); err != nil {
+			errs = append(errs, fmt.Errorf("could not set xDS resource snapshot for nodeHash=%s: %w", nodeHash, err))
+		}
+	}
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	c.appsCache.Set(apps)
+	return nil
+}
+
 // createNewSnapshotForNode sets a new snapshot for the provided `nodeHash`,
 // based on the previous `oldSnapshot` (can be nil), and a slice of new server Listener addresses.
-func (c *SnapshotCache) createNewSnapshotForNode(nodeHash string, oldSnapshot cachev3.ResourceSnapshot, newServerListenerAddresses []EndpointAddress) error {
+func (c *SnapshotCache) createNewSnapshotForNode(nodeHash string, newServerListenerAddresses []EndpointAddress) error {
 	c.logger.Info("Creating a new snapshot", "nodeHash", nodeHash, "serverListenerAddressesFromRequest", newServerListenerAddresses)
-	newSnapshot, err := NewSnapshotBuilder().
-		AddSnapshot(oldSnapshot).
-		AddServerListenerAddresses(newServerListenerAddresses...).
+	snapshotBuilder := NewSnapshotBuilder()
+	apps := c.appsCache.Get()
+	snapshotBuilder, err := snapshotBuilder.AddGRPCApplications(apps)
+	if err != nil {
+		return fmt.Errorf("could not add cached gRPC application configuration %v+ to new xDS resource snapshot for nodeHash=%s: %w", apps, nodeHash, err)
+	}
+	newSnapshot, err := snapshotBuilder.
+		AddServerListenerAddresses(newServerListenerAddresses).
 		Build()
 	if err != nil {
 		return fmt.Errorf("could not create new xDS resource snapshot for nodeHash=%s: %w", nodeHash, err)
@@ -168,26 +173,6 @@ func findServerListenerAddresses(names []string) ([]EndpointAddress, error) {
 		}
 	}
 	return addresses, nil
-}
-
-// addServerListenerAddressForNode returns true if the provided `newAddresses` slice
-// contains server Listener addresses not previously recorded for the provided `nodeHash`.
-func (c *SnapshotCache) addServerListenerAddressForNode(nodeHash string, newAddresses []EndpointAddress) bool {
-	c.serverListenerAddressesMux.Lock()
-	defer c.serverListenerAddressesMux.Unlock()
-	addressesForNode := c.serverListenerAddresses[nodeHash]
-	if addressesForNode == nil {
-		addressesForNode = make(map[EndpointAddress]bool, len(newAddresses))
-		c.serverListenerAddresses[nodeHash] = addressesForNode
-	}
-	numAddressesBefore := len(addressesForNode)
-	for _, address := range newAddresses {
-		addressesForNode[address] = true
-	}
-	numAddressesAfter := len(addressesForNode)
-	// Since we never remove server Listener addresses for a node hash,
-	// we can just check if the set grew.
-	return numAddressesAfter > numAddressesBefore
 }
 
 // CreateDeltaWatch just delegates, since gRPC does not support delta/incremental xDS currently.
