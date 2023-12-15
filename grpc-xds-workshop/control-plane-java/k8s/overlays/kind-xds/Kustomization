@@ -17,34 +17,20 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 metadata:
-  name: control-plane
+  name: control-plane-java-kind-xds
   annotations:
     config.kubernetes.io/local-config: "true"
-commonLabels:
-  app.kubernetes.io/part-of: grpc-xds-workshop
+configMapGenerator:
+- name: app-config
+  namespace: xds # kpt-set: ${control-plane-namespace}
+  files:
+  - ../../../src/main/resources/config/informers.yaml
 patches:
-- path: patch-config.yaml
-  target:
-    group: apps
-    version: v1
-    kind: Deployment
-    name: control-plane
-- path: patch-probes.yaml
-  target:
-    group: apps
-    version: v1
-    kind: Deployment
-    name: control-plane
-- path: patch-resources.yaml
+- path: ../../base/patch-jvm-flags.yaml
   target:
     group: apps
     version: v1
     kind: Deployment
     name: control-plane
 resources:
-- namespace.yaml
-- service-account.yaml
-- cluster-role.yaml
-- cluster-role-binding.yaml
-- deployment.yaml
-- service.yaml
+- ../../../../k8s/control-plane/overlays/kind-xds

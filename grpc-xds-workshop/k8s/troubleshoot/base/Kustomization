@@ -25,8 +25,10 @@ commonLabels:
 images:
 - name: busybox
   newName: busybox:stable-glibc
-  digest: sha256:7338d0c72c655d6534670ed72590cdc99afc9c559958c47eb3a5a17a7520a75c
-namespace: xds # kpt-set: ${bastion-namespace}
+  digest: sha256:ee22a5823b1d3e7881d168f50585274611dbe0ceed4d2ba5bc8afd7cfac71d23
+- name: kubectl
+  newName: bitnami/kubectl
+  digest: sha256:6485a923f6f4ff3d42d871ce5bd45ee8f25a303c44972a4ad31ddd895082fc22
 patches:
 - path: patch-resources.yaml
   target:

@@ -26,4 +26,4 @@ spec:
         env:
         # UseParallelGC: https://inside.java/2022/08/01/sip062/
         - name: JDK_JAVA_OPTIONS
-          value: "-XX:+UseParallelGC"
+          value: "-XX:+UseParallelGC -Djavax.net.debug=ssl"

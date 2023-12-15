@@ -63,7 +63,51 @@ deploy:
   kubectl: {}
 manifests:
   kustomize:
-    buildArgs:
-    - --load-restrictor=LoadRestrictionsNone
-    paths:
-    - k8s/troubleshoot/base
+    buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+    paths: ["k8s/troubleshoot/base"]
+profiles:
+- name: kind-xds
+  activation:
+  - kubeContext: kind-grpc-xds-workshop
+  manifests:
+    kustomize:
+      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+      paths: ["k8s/troubleshoot/overlays/kind-xds"]
+---
+apiVersion: skaffold/v3
+kind: Config
+metadata:
+  name: cert-manager
+  annotations:
+    config.kubernetes.io/local-config: "true"
+build: {}
+deploy:
+  kubectl:
+    defaultNamespace: ""
+    hooks:
+      after:
+      - host:
+          command: ["kubectl", "wait", "--for=condition=established", "--timeout=30s", "crd", "certificates.cert-manager.io"]
+      - host:
+          command: ["kubectl", "rollout", "status", "--namespace=cert-manager", "deployment", "cert-manager-webhook"]
+manifests:
+  rawYaml:
+  - https://github.com/cert-manager/cert-manager/releases/download/v1.13.3/cert-manager.yaml # kpt-set: https://github.com/cert-manager/cert-manager/releases/download/${cert-manager-version}/cert-manager.yaml
+---
+apiVersion: skaffold/v3
+kind: Config
+metadata:
+  name: root-ca
+  annotations:
+    config.kubernetes.io/local-config: "true"
+build: {}
+deploy:
+  kubectl:
+    defaultNamespace: cert-manager
+    hooks:
+      after:
+      - host:
+          command: ["kubectl", "wait", "--for=condition=ready", "--timeout=30s", "clusterissuer", "root-ca"]
+manifests:
+  kustomize:
+      paths: ["k8s/cert-manager/base"]

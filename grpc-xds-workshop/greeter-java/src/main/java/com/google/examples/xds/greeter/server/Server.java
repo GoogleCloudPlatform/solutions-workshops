@@ -52,22 +52,30 @@ public class Server {
 
   /** Runs the server. */
   public void run(ServerConfig config) throws Exception {
-    int port = config.port();
+    int servingPort = config.servingPort();
     String nextHop = config.nextHop();
     boolean useXds = config.useXds();
 
-    // TODO: Start separate server for health and admin services.
     var health = new HealthStatusManager();
-    var serverBuilder = createServerBuilder(port, useXds);
+    var serverBuilder = createServerBuilder(servingPort, useXds);
+    // Start separate server on different port for health checks.
+    var healthServerBuilder = createServerBuilder(config.healthPort(), false);
     serverBuilder
+        .addService(ProtoReflectionService.newInstance())
+        .addService(health.getHealthService());
+    healthServerBuilder
         .addService(ProtoReflectionService.newInstance())
         .addService(health.getHealthService());
     if (useXds) {
       // Channelz and CSDS for xDS server
       serverBuilder.addServices(AdminInterface.getStandardServices());
+      healthServerBuilder.addServices(AdminInterface.getStandardServices());
     } else {
       // No CSDS service for non-xDS server
       serverBuilder.addService(
+          ChannelzService.newInstance(DEFAULT_CHANNELZ_MAX_PAGE_SIZE).bindService());
+      // No CSDS service for non-xDS server
+      healthServerBuilder.addService(
           ChannelzService.newInstance(DEFAULT_CHANNELZ_MAX_PAGE_SIZE).bindService());
     }
 
@@ -86,8 +94,10 @@ public class Server {
     serverBuilder.addService(greeterServiceWithLogging);
 
     var server = serverBuilder.build().start();
-    LOG.info("Greeter service with nextHop={} listening on port {}.", nextHop, port);
-    addServerShutdownHook(server, health);
+    LOG.info("Greeter service with nextHop={} listening on port {}.", nextHop, servingPort);
+
+    var healthServer = healthServerBuilder.build().start();
+    addServerShutdownHook(server, healthServer, health);
     health.setStatus("", ServingStatus.SERVING);
     health.setStatus(
         greeterServiceDefinition.getServiceDescriptor().getName(), ServingStatus.SERVING);
@@ -108,7 +118,8 @@ public class Server {
     return XdsServerBuilder.forPort(port, serverCredentials);
   }
 
-  private void addServerShutdownHook(io.grpc.Server server, HealthStatusManager health) {
+  private void addServerShutdownHook(
+      io.grpc.Server server, io.grpc.Server healthServer, HealthStatusManager health) {
     Runtime.getRuntime()
         .addShutdownHook(
             new Thread(
@@ -126,7 +137,10 @@ public class Server {
                       // up gracefully. Normally this will be well under a second.
                       server.awaitTermination(2, TimeUnit.SECONDS);
                     }
+                    healthServer.shutdownNow();
+                    healthServer.awaitTermination(2, TimeUnit.SECONDS);
                   } catch (InterruptedException ex) {
+                    healthServer.shutdownNow();
                     server.shutdownNow();
                   }
                 }));

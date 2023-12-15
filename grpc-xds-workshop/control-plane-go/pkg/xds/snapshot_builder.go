@@ -28,6 +28,8 @@ import (
 	faultv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/fault/v3"
 	routerv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
 	hcmv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
+	tlsv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
+	matcherv3 "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	"github.com/envoyproxy/go-control-plane/pkg/cache/types"
 	cachev3 "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
 	"github.com/envoyproxy/go-control-plane/pkg/resource/v3"
@@ -37,21 +39,22 @@ import (
 )
 
 const (
-	envoyHTTPConnectionManagerName = "envoy.http_connection_manager"
 	envoyFilterHTTPFaultName       = "envoy.filters.http.fault"
 	envoyFilterHTTPRouterName      = "envoy.filters.http.router"
+	envoyHTTPConnectionManagerName = "envoy.http_connection_manager"
+	envoyTransportSocketsTLSName   = "envoy.transport_sockets.tls"
 	// serverListenerResourceNameTemplate uses the address and port above. Must match the template in the gRPC xDS bootstrap file, see
 	// [gRFC A36: xDS-Enabled Servers]: https://github.com/grpc/proposal/blob/fd10c1a86562b712c2c5fa23178992654c47a072/A36-xds-for-servers.md#xds-protocol
 	// Using the sample name from the gRPC-Go unit tests, but this is not important.
 	serverListenerResourceNameTemplate = "grpc/server?xds.resource.listening_address=%s"
-	// serverListenerRouteConfigName is used for the RouteConfiguration pointed to by server Listeners.
-	serverListenerRouteConfigName = "default_inbound_config"
+	// serverListenerRouteConfigurationName is used for the RouteConfiguration pointed to by server Listeners.
+	serverListenerRouteConfigurationName = "default_inbound_config"
 )
 
 // SnapshotBuilder builds xDS resource snapshots for the cache.
 type SnapshotBuilder struct {
 	listeners               map[string]types.Resource
-	routeConfigs            map[string]types.Resource
+	routeConfigurations     map[string]types.Resource
 	clusters                map[string]types.Resource
 	clusterLoadAssignments  map[string]types.Resource
 	serverListenerAddresses map[EndpointAddress]bool
@@ -61,7 +64,7 @@ type SnapshotBuilder struct {
 func NewSnapshotBuilder() *SnapshotBuilder {
 	return &SnapshotBuilder{
 		listeners:               make(map[string]types.Resource),
-		routeConfigs:            make(map[string]types.Resource),
+		routeConfigurations:     make(map[string]types.Resource),
 		clusters:                make(map[string]types.Resource),
 		clusterLoadAssignments:  make(map[string]types.Resource),
 		serverListenerAddresses: make(map[EndpointAddress]bool),
@@ -77,8 +80,8 @@ func (b *SnapshotBuilder) AddSnapshot(snapshot cachev3.ResourceSnapshot) *Snapsh
 	for name, listener := range snapshot.GetResources(resource.ListenerType) {
 		b.listeners[name] = listener
 	}
-	for name, routeConfig := range snapshot.GetResources(resource.RouteType) {
-		b.routeConfigs[name] = routeConfig
+	for name, routeConfiguration := range snapshot.GetResources(resource.RouteType) {
+		b.routeConfigurations[name] = routeConfiguration
 	}
 	for name, cluster := range snapshot.GetResources(resource.ClusterType) {
 		b.clusters[name] = cluster
@@ -97,16 +100,19 @@ func (b *SnapshotBuilder) AddSnapshot(snapshot cachev3.ResourceSnapshot) *Snapsh
 // instead of just blindly overwriting.
 func (b *SnapshotBuilder) AddGRPCApplications(apps []GRPCApplication) (*SnapshotBuilder, error) {
 	for _, app := range apps {
-		apiListener, err := createAPIListener(app.listenerName(), app.routeConfigName())
+		apiListener, err := createAPIListener(app.ListenerName(), app.RouteConfigurationName())
 		if err != nil {
 			return nil, fmt.Errorf("could not create LDS API listener for gRPC application %+v: %w", app, err)
 		}
 		b.listeners[apiListener.Name] = apiListener
-		routeConfig := createRouteConfig(app.routeConfigName(), app.listenerName(), app.PathPrefix, app.clusterName())
-		b.routeConfigs[routeConfig.Name] = routeConfig
-		cluster := createCluster(app.clusterName())
+		routeConfiguration := createRouteConfiguration(app.RouteConfigurationName(), app.ListenerName(), app.PathPrefix(), app.ClusterName())
+		b.routeConfigurations[routeConfiguration.Name] = routeConfiguration
+		cluster, err := createCluster(app.ClusterName(), app.Namespace(), app.ServiceAccountName())
+		if err != nil {
+			return nil, fmt.Errorf("could not create CDS Cluster for gRPC application %+v: %w", app, err)
+		}
 		b.clusters[cluster.Name] = cluster
-		clusterLoadAssignment := createClusterLoadAssignment(app.clusterName(), app.Port, app.Endpoints)
+		clusterLoadAssignment := createClusterLoadAssignment(app.ClusterName(), app.Port(), app.Endpoints())
 		b.clusterLoadAssignments[clusterLoadAssignment.ClusterName] = clusterLoadAssignment
 	}
 	return b, nil
@@ -124,15 +130,15 @@ func (b *SnapshotBuilder) AddServerListenerAddresses(addresses []EndpointAddress
 // Build adds the server listeners and route configuration for the node hash, and then builds the snapshot.
 func (b *SnapshotBuilder) Build() (cachev3.ResourceSnapshot, error) {
 	for address := range b.serverListenerAddresses {
-		serverListener, err := createServerListener(address.host, address.port, serverListenerRouteConfigName)
+		serverListener, err := createServerListener(address.host, address.port, serverListenerRouteConfigurationName)
 		if err != nil {
 			return nil, fmt.Errorf("could not create server Listener for address %s:%d: %w", address.host, address.port, err)
 		}
 		b.listeners[serverListener.Name] = serverListener
 	}
 	if len(b.serverListenerAddresses) > 0 {
-		routeConfigForServerListener := createRouteConfigForServerListener(serverListenerRouteConfigName)
-		b.routeConfigs[routeConfigForServerListener.Name] = routeConfigForServerListener
+		routeConfigurationForServerListener := createRouteConfigurationForServerListener(serverListenerRouteConfigurationName)
+		b.routeConfigurations[routeConfigurationForServerListener.Name] = routeConfigurationForServerListener
 	}
 
 	listeners := make([]types.Resource, len(b.listeners))
@@ -141,10 +147,10 @@ func (b *SnapshotBuilder) Build() (cachev3.ResourceSnapshot, error) {
 		listeners[i] = listener
 		i++
 	}
-	routeConfigs := make([]types.Resource, len(b.routeConfigs))
+	routeConfigurations := make([]types.Resource, len(b.routeConfigurations))
 	i = 0
-	for _, routeConfig := range b.routeConfigs {
-		routeConfigs[i] = routeConfig
+	for _, routeConfiguration := range b.routeConfigurations {
+		routeConfigurations[i] = routeConfiguration
 		i++
 	}
 	clusters := make([]types.Resource, len(b.clusters))
@@ -163,7 +169,7 @@ func (b *SnapshotBuilder) Build() (cachev3.ResourceSnapshot, error) {
 	version := strconv.FormatInt(time.Now().UnixNano(), 10)
 	return cachev3.NewSnapshot(version, map[resource.Type][]types.Resource{
 		resource.ListenerType: listeners,
-		resource.RouteType:    routeConfigs,
+		resource.RouteType:    routeConfigurations,
 		resource.ClusterType:  clusters,
 		resource.EndpointType: clusterLoadAssignments,
 	})
@@ -173,7 +179,7 @@ func (b *SnapshotBuilder) Build() (cachev3.ResourceSnapshot, error) {
 //
 // [gRFC A27]: https://github.com/grpc/proposal/blob/master/A27-xds-global-load-balancing.md#listener-proto
 // [Reference]: https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/listener/v3/api_listener.proto
-func createAPIListener(name string, routeConfigName string) (*listenerv3.Listener, error) {
+func createAPIListener(name string, routeConfigurationName string) (*listenerv3.Listener, error) {
 	httpFaultFilterTypedConfig, err := anypb.New(&faultv3.HTTPFault{})
 	if err != nil {
 		return nil, fmt.Errorf("could not marshall HTTPFault typedConfig into Any instance: %w", err)
@@ -196,7 +202,7 @@ func createAPIListener(name string, routeConfigName string) (*listenerv3.Listene
 					},
 					ResourceApiVersion: corev3.ApiVersion_V3,
 				},
-				RouteConfigName: routeConfigName,
+				RouteConfigName: routeConfigurationName,
 			},
 		},
 		HttpFilters: []*hcmv3.HttpFilter{
@@ -229,15 +235,21 @@ func createAPIListener(name string, routeConfigName string) (*listenerv3.Listene
 }
 
 // createServerListener returns a listener for xDS clients that serve gRPC services.
-func createServerListener(host string, port uint32, routeConfigName string) (*listenerv3.Listener, error) {
+func createServerListener(host string, port uint32, routeConfigurationName string) (*listenerv3.Listener, error) {
 	routerTypedConfig, err := anypb.New(&routerv3.Router{})
 	if err != nil {
 		return nil, fmt.Errorf("could not marshall Router typedConfig into Any instance: %w", err)
 	}
-	httpConnectionManager := createHTTPConnectionManagerForServerListener(routeConfigName, routerTypedConfig)
+	httpConnectionManager := createHTTPConnectionManagerForServerListener(routeConfigurationName, routerTypedConfig)
 	anyWrappedHTTPConnectionManager, err := anypb.New(httpConnectionManager)
 	if err != nil {
 		return nil, fmt.Errorf("could not marshall HttpConnectionManager +%v into Any instance: %w", httpConnectionManager, err)
+	}
+
+	downstreamTLSContext := createDownstreamTLSContext()
+	anyWrappedDownstreamTLSContext, err := anypb.New(downstreamTLSContext)
+	if err != nil {
+		return nil, fmt.Errorf("could not marshall DownstreamTlsContext +%v into Any instance: %w", downstreamTLSContext, err)
 	}
 
 	// Relying on `serverListenerResourceNameTemplate` being an exact match of
@@ -262,10 +274,16 @@ func createServerListener(host string, port uint32, routeConfigName string) (*li
 			{
 				Filters: []*listenerv3.Filter{
 					{
-						Name: envoyHTTPConnectionManagerName,
+						Name: envoyHTTPConnectionManagerName, // must be the last filter
 						ConfigType: &listenerv3.Filter_TypedConfig{
 							TypedConfig: anyWrappedHTTPConnectionManager,
 						},
+					},
+				},
+				TransportSocket: &corev3.TransportSocket{
+					Name: envoyTransportSocketsTLSName,
+					ConfigType: &corev3.TransportSocket_TypedConfig{
+						TypedConfig: anyWrappedDownstreamTLSContext,
 					},
 				},
 			},
@@ -275,13 +293,13 @@ func createServerListener(host string, port uint32, routeConfigName string) (*li
 	}, nil
 }
 
-func createHTTPConnectionManagerForServerListener(routeConfigName string, routerTypedConfig *anypb.Any) *hcmv3.HttpConnectionManager {
+func createHTTPConnectionManagerForServerListener(routeConfigurationName string, routerTypedConfig *anypb.Any) *hcmv3.HttpConnectionManager {
 	return &hcmv3.HttpConnectionManager{
 		CodecType:  hcmv3.HttpConnectionManager_AUTO,
-		StatPrefix: routeConfigName,
+		StatPrefix: routeConfigurationName,
 		// Inline RouteConfiguration for server listeners:
 		RouteSpecifier: &hcmv3.HttpConnectionManager_RouteConfig{
-			RouteConfig: createRouteConfigForServerListener(routeConfigName),
+			RouteConfig: createRouteConfigurationForServerListener(routeConfigurationName),
 		},
 		// Dynamic RouteConfiguration via RDS for server listeners:
 		// RouteSpecifier: &hcmv3.HttpConnectionManager_Rds{
@@ -292,7 +310,7 @@ func createHTTPConnectionManagerForServerListener(routeConfigName string, router
 		// 			},
 		// 			ResourceApiVersion: corev3.ApiVersion_V3,
 		// 		},
-		// 		RouteConfigName: routeConfigName,
+		// 		RouteConfigName: routeConfigurationName,
 		// 	},
 		// },
 		HttpFilters: []*hcmv3.HttpFilter{
@@ -318,13 +336,45 @@ func createHTTPConnectionManagerForServerListener(routeConfigName string, router
 	}
 }
 
-// createRouteConfig returns an RDS route configuration for a gRPC
+// createDownstreamTLSContext configures:
+// 1. gRPC server TLS certificate provider
+// 2. certificate authorities (CAs) to validate gRPC client certificates.
+func createDownstreamTLSContext() *tlsv3.DownstreamTlsContext {
+	return &tlsv3.DownstreamTlsContext{
+		CommonTlsContext: &tlsv3.CommonTlsContext{
+			// Set server certificate:
+			TlsCertificateProviderInstance: &tlsv3.CertificateProviderPluginInstance{
+				// https://github.com/GoogleCloudPlatform/traffic-director-grpc-bootstrap/blob/2a9cf4614b56ec085c391a12f4cc53defaa575ac/main.go#L276
+				InstanceName: "google_cloud_private_spiffe",
+				// Using the same certificate name value as Traffic Director, but the
+				// certificate name is ignored by gRPC according to gRFC A29.
+				CertificateName: "DEFAULT",
+			},
+			// Validate client certificates:
+			ValidationContextType: &tlsv3.CommonTlsContext_ValidationContext{
+				ValidationContext: &tlsv3.CertificateValidationContext{
+					CaCertificateProviderInstance: &tlsv3.CertificateProviderPluginInstance{
+						InstanceName: "google_cloud_private_spiffe", // assumes same CA for clients and servers
+						// Using the same certificate name value as Traffic Director,
+						// but the certificate name is ignored by gRPC, see gRFC A29.
+						CertificateName: "ROOTCA",
+					},
+				},
+			},
+			// AlpnProtocols is set by Traffic Director, but ignored by gRPC according to gRFC A29.
+			AlpnProtocols: []string{"h2"},
+		},
+		RequireClientCertificate: wrapperspb.Bool(true), // `true` value requires a `ValidationContext`
+	}
+}
+
+// createRouteConfiguration returns an RDS route configuration for a gRPC
 // application with one virtual host and one route for that virtual host.
 //
 // The virtual host Name is not used for routing.
 // The virtual host domain must match the request `:authority`
 // Te routePrefix parameter can be an empty string.
-func createRouteConfig(name string, virtualHostName string, routePrefix string, clusterName string) *routev3.RouteConfiguration {
+func createRouteConfiguration(name string, virtualHostName string, routePrefix string, clusterName string) *routev3.RouteConfiguration {
 	return &routev3.RouteConfiguration{
 		Name: name,
 		VirtualHosts: []*routev3.VirtualHost{
@@ -352,8 +402,8 @@ func createRouteConfig(name string, virtualHostName string, routePrefix string, 
 	}
 }
 
-// createRouteConfigForServerListener returns an RDS route configuration for the server listeners.
-func createRouteConfigForServerListener(name string) *routev3.RouteConfiguration {
+// createRouteConfigurationForServerListener returns an RDS route configuration for the server listeners.
+func createRouteConfigurationForServerListener(name string) *routev3.RouteConfiguration {
 	return &routev3.RouteConfiguration{
 		Name: name,
 		VirtualHosts: []*routev3.VirtualHost{
@@ -383,7 +433,13 @@ func createRouteConfigForServerListener(name string) *routev3.RouteConfiguration
 
 // createCluster definition for CDS.
 // [gRFC A27]: https://github.com/grpc/proposal/blob/972b69ab1f0f7f6079af81a8c2b8a01a15ce3bec/A27-xds-global-load-balancing.md#cluster-proto
-func createCluster(name string) *clusterv3.Cluster {
+func createCluster(name string, namespace string, serviceAccountName string) (*clusterv3.Cluster, error) {
+	upstreamTLSContext := createUpstreamTLSContext(namespace, serviceAccountName)
+	anyWrappedUpstreamTLSContext, err := anypb.New(upstreamTLSContext)
+	if err != nil {
+		return nil, fmt.Errorf("could not marshall UpstreamTlsContext +%v into Any instance: %w", upstreamTLSContext, err)
+	}
+
 	return &clusterv3.Cluster{
 		Name: name,
 		ClusterDiscoveryType: &clusterv3.Cluster_Type{
@@ -400,7 +456,55 @@ func createCluster(name string) *clusterv3.Cluster {
 		ConnectTimeout: &durationpb.Duration{
 			Seconds: 3, // default is 5s
 		},
+		TransportSocket: &corev3.TransportSocket{
+			Name: envoyTransportSocketsTLSName,
+			ConfigType: &corev3.TransportSocket_TypedConfig{
+				TypedConfig: anyWrappedUpstreamTLSContext,
+			},
+		},
 		LbPolicy: clusterv3.Cluster_ROUND_ROBIN,
+	}, nil
+}
+
+// createUpstreamTLSContext configures:
+// 1. gRPC client TLS certificate provider
+// 2. certificate authorities (CAs) to validate gRPC server certificates, including server authorization.
+func createUpstreamTLSContext(namespace string, serviceAccountName string) *tlsv3.UpstreamTlsContext {
+	return &tlsv3.UpstreamTlsContext{
+		CommonTlsContext: &tlsv3.CommonTlsContext{
+			// Send client certificate in TLS handshake:
+			TlsCertificateProviderInstance: &tlsv3.CertificateProviderPluginInstance{
+				// https://github.com/GoogleCloudPlatform/traffic-director-grpc-bootstrap/blob/2a9cf4614b56ec085c391a12f4cc53defaa575ac/main.go#L276
+				InstanceName: "google_cloud_private_spiffe",
+				// Using the same certificate name value as Traffic Director, but the
+				// certificate name is ignored by gRPC according to gRFC A29.
+				CertificateName: "DEFAULT",
+			},
+			// Validate gRPC server certificates:
+			ValidationContextType: &tlsv3.CommonTlsContext_ValidationContext{
+				ValidationContext: &tlsv3.CertificateValidationContext{
+					CaCertificateProviderInstance: &tlsv3.CertificateProviderPluginInstance{
+						InstanceName: "google_cloud_private_spiffe",
+						// Using the same certificate name value as Traffic Director,
+						// but the certificate name is ignored by gRPC, see gRFC A29.
+						CertificateName: "ROOTCA",
+					},
+					// Server authorization (SAN checks):
+					// gRPC-Java as of v1.60.0 does not work correctly with
+					// `match_typed_subject_alt_names`, using `match_subject_alt_names`
+					// instead, for now.
+					MatchSubjectAltNames: []*matcherv3.StringMatcher{
+						{
+							MatchPattern: &matcherv3.StringMatcher_SafeRegex{
+								SafeRegex: &matcherv3.RegexMatcher{
+									Regex: fmt.Sprintf("spiffe://[^/]+/ns/%s/sa/%s", namespace, serviceAccountName),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 }
 
@@ -409,7 +513,7 @@ func createCluster(name string) *clusterv3.Cluster {
 func createClusterLoadAssignment(clusterName string, port uint32, endpoints []GRPCApplicationEndpoints) *endpointv3.ClusterLoadAssignment {
 	addressesByZone := map[string][]string{}
 	for _, endpoint := range endpoints {
-		addressesByZone[endpoint.Zone] = append(addressesByZone[endpoint.Zone], endpoint.Addresses...)
+		addressesByZone[endpoint.Zone()] = append(addressesByZone[endpoint.Zone()], endpoint.Addresses()...)
 	}
 	cla := &endpointv3.ClusterLoadAssignment{
 		ClusterName: clusterName,

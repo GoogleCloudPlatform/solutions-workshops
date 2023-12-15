@@ -78,7 +78,6 @@ profiles:
 - name: kind-xds
   activation:
   - kubeContext: kind-grpc-xds-workshop
-  - kubeContext: kind-kind
   manifests:
     kustomize:
       buildArgs: ["--load-restrictor=LoadRestrictionsNone"]

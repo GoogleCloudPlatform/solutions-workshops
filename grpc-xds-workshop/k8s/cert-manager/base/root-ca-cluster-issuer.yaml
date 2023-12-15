@@ -12,33 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Skaffold
-.kpt-pipeline/
+# Issues workload certificates.
+# Ref: https://cert-manager.io/docs/reference/api-docs/#cert-manager.io/v1.ClusterIssuer
 
-# Gradle
-.gradle
-build/
-!gradle/wrapper/gradle-wrapper.jar
-!gradle/wrapper/gradle-wrapper.properties
-!**/src/main/**/build/
-!**/src/test/**/build/
-
-# IntelliJ IDEA / GoLand
-bin/
-.idea/
-*.iws
-*.iml
-*.ipr
-out/
-!**/src/main/**/out/
-!**/src/test/**/out/
-
-# VS Code
-.vscode/*
-!.vscode/launch.json
-
-# Emacs
-*~
-
-# Certificates and keys
-*.pem
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: root-ca
+  labels:
+    app.kubernetes.io/component: cert-manager
+spec:
+  ca:
+    secretName: root-ca-certificate
+    

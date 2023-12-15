@@ -25,14 +25,14 @@ spec:
       - name: app
         livenessProbe:
           grpc:
-            port: 50051
+            port: 50052
           failureThreshold: 3
           initialDelaySeconds: 10
           periodSeconds: 10
           timeoutSeconds: 1
         readinessProbe:
           grpc:
-            port: 50051
+            port: 50052
             service: helloworld.Greeter
           failureThreshold: 3
           successThreshold: 1
@@ -41,7 +41,7 @@ spec:
           timeoutSeconds: 1
         startupProbe:
            grpc:
-             port: 50051
+             port: 50052
            failureThreshold: 30
            initialDelaySeconds: 10
            periodSeconds: 10

@@ -80,17 +80,23 @@ spec:
               "cluster": "$(cat /etc/podinfo/label-app-name)",
               "metadata": {
                 "INSTANCE_IP": "$(hostname -i)",
-                "GCE_VM_ID": "$(wget --header Metadata-Flavor:Google -qO- http://metadata.google.internal/computeMetadata/v1/instance/id)",
-                "GCE_VM_NAME": "$(wget --header Metadata-Flavor:Google -qO- http://metadata.google.internal/computeMetadata/v1/instance/hostname | cut -d. -f1)",
-                "GCP_PROJECT_NUMBER": "$(wget --header Metadata-Flavor:Google -qO- http://metadata.google.internal/computeMetadata/v1/project/numeric-project-id)",
-                "GKE_CLUSTER_NAME": "$(wget --header Metadata-Flavor:Google -qO- http://metadata.google.internal/computeMetadata/v1/instance/attributes/cluster-name)",
-                "GKE_CLUSTER_LOCATION": "$(wget --header Metadata-Flavor:Google -qO- http://metadata.google.internal/computeMetadata/v1/instance/attributes/cluster-location)",
                 "K8S_NAMESPACE": "$(cat /etc/podinfo/namespace)",
                 "K8S_POD": "$(hostname -s)",
                 "XDS_STREAM_TYPE": "ADS"
               },
               "locality": {
                 "zone": "$(wget --header Metadata-Flavor:Google -qO- http://metadata.google.internal/computeMetadata/v1/instance/zone | cut -d/ -f4)"
+              }
+            },
+            "certificate_providers": {
+              "google_cloud_private_spiffe": {
+                "plugin_name": "file_watcher",
+                "config": {
+                  "certificate_file": "/var/run/secrets/workload-spiffe-credentials/certificates.pem",
+                  "private_key_file": "/var/run/secrets/workload-spiffe-credentials/private_key.pem",
+                  "ca_certificate_file": "/var/run/secrets/workload-spiffe-credentials/ca_certificates.pem",
+                  "refresh_interval": "600s"
+                }
               }
             },
             "server_listener_resource_name_template": "grpc/server?xds.resource.listening_address=%s"
@@ -100,7 +106,7 @@ spec:
           # Set `locality.zone` from a file if the metadata server is not available,
           # e.g., when running on a local kind cluster:
           #
-          wget --header Metadata-Flavor:Google --spider http://metadata.google.internal/computeMetadata/v1/instance/zone \
+          wget --header Metadata-Flavor:Google --spider -q http://metadata.google.internal/computeMetadata/v1/instance/zone \
             || sed -i "s/\"zone\": \".*\"$/\"zone\": \"$(cat /etc/nodeinfo/zone)\"/" /etc/grpc-xds/bootstrap.json
         resources:
           requests:

@@ -22,6 +22,8 @@ import com.google.examples.xds.controlplane.xds.XdsSnapshotCache;
 import io.envoyproxy.controlplane.cache.NodeGroup;
 import io.envoyproxy.controlplane.server.V3DiscoveryServer;
 import io.grpc.BindableService;
+import io.grpc.Grpc;
+import io.grpc.InsecureServerCredentials;
 import io.grpc.ServerInterceptors;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.health.v1.HealthCheckResponse.ServingStatus;
@@ -51,13 +53,23 @@ public class Server {
     informers.start();
     Runtime.getRuntime().addShutdownHook(new Thread(informers::stop));
 
-    int controlPlanePort = config.port();
+    int controlPlanePort = config.servingPort();
     var discoveryServer = new V3DiscoveryServer(xdsCache);
     var health = new HealthStatusManager();
     health.setStatus("", ServingStatus.SERVING);
-    io.grpc.Server server = createServer(controlPlanePort, discoveryServer, health);
+    var server = createManagementServer(controlPlanePort, discoveryServer, health);
     server.start();
-    addServerShutdownHook(server, health);
+
+    // Serve health, admin and reflection services on the health port
+    var healthServer =
+        Grpc.newServerBuilderForPort(config.healthPort(), InsecureServerCredentials.create())
+            .addService(health.getHealthService())
+            .addServices(AdminInterface.getStandardServices())
+            .addService(ProtoReflectionService.newInstance())
+            .build()
+            .start();
+
+    addServerShutdownHook(server, healthServer, health);
     LOG.info("xDS control plane management server listening on port {}", server.getPort());
 
     server.awaitTermination();
@@ -74,7 +86,7 @@ public class Server {
   }
 
   @NotNull
-  private io.grpc.Server createServer(
+  private io.grpc.Server createManagementServer(
       int port, V3DiscoveryServer discoveryServer, @NotNull HealthStatusManager health) {
     return NettyServerBuilder.forPort(port)
         .addService(withLogging(discoveryServer.getAggregatedDiscoveryServiceImpl()))
@@ -83,9 +95,9 @@ public class Server {
         .addService(withLogging(discoveryServer.getListenerDiscoveryServiceImpl()))
         .addService(withLogging(discoveryServer.getRouteDiscoveryServiceImpl()))
         .addService(withLogging(discoveryServer.getSecretDiscoveryServiceImpl()))
+        .addService(health.getHealthService())
         .addServices(AdminInterface.getStandardServices())
         .addService(ProtoReflectionService.newInstance())
-        .addService(health.getHealthService())
         .build();
   }
 
@@ -94,7 +106,8 @@ public class Server {
     return ServerInterceptors.intercept(service, new LoggingServerInterceptor());
   }
 
-  private void addServerShutdownHook(io.grpc.Server server, HealthStatusManager health) {
+  private void addServerShutdownHook(
+      io.grpc.Server server, io.grpc.Server healthServer, HealthStatusManager health) {
     Runtime.getRuntime()
         .addShutdownHook(
             new Thread(
@@ -112,7 +125,10 @@ public class Server {
                       // up gracefully. Normally this will be well under a second.
                       server.awaitTermination(2, TimeUnit.SECONDS);
                     }
+                    healthServer.shutdownNow();
+                    healthServer.awaitTermination(2, TimeUnit.SECONDS);
                   } catch (InterruptedException ex) {
+                    healthServer.shutdownNow();
                     server.shutdownNow();
                   }
                 }));

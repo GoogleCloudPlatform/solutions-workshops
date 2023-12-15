@@ -34,10 +34,8 @@ deploy:
   kubectl: {}
 manifests:
   kustomize:
-    buildArgs:
-    - --load-restrictor=LoadRestrictionsNone
-    paths:
-    - k8s/base
+    buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+    paths: ["k8s/base"]
 portForward:
 - resourceType: Service
   resourceName: control-plane
@@ -63,4 +61,10 @@ profiles:
       namespace: xds # kpt-set: ${control-plane-namespace}
       localPort: 5006
       port: 5005 # JDWP port
-
+- name: kind-xds
+  activation:
+  - kubeContext: kind-grpc-xds-workshop
+  manifests:
+    kustomize:
+      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+      paths: ["k8s/overlays/kind-xds"]

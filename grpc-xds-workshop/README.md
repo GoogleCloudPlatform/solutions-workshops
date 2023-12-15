@@ -247,13 +247,27 @@ make debug-java
     make troubleshoot
     ```
 
+3.  Copy the certificates and private key from the bastion pod to your host:
+
+    ```shell
+    kubectl exec deployment/bastion --namespace=xds --container=app -- \
+      tar -chf - /var/run/secrets/workload-spiffe-credentials/ | \
+      tar -xf - --strip-components=4 --exclude='..*'
+    ```
+
 Some troubleshooting commands:
+
+- View the Kubernetes pod IP addresses:
+
+  ```shell
+  kubectl get pods --namespace=xds --output=wide
+  ```
 
 - View the operating xDS configuration of a server using
   [Client Status Discovery Service (CSDS)](https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/status/v3/csds.proto):
 
   ```shell
-  grpcurl -plaintext POD_IP:50051 envoy.service.status.v3.ClientStatusDiscoveryService/FetchClientStatus | yq --prettyPrint
+  grpcurl -plaintext POD_IP:50052 envoy.service.status.v3.ClientStatusDiscoveryService/FetchClientStatus | yq --prettyPrint
   ```
 
   Replace `POD_IP` with the IP address of the Kubernetes pod.
@@ -261,14 +275,16 @@ Some troubleshooting commands:
 - View the operating xDS configuration of a server using `grpcdebug`:
 
   ```shell
-  grpcdebug POD_IP:50051 xds config | yq --prettyPrint
+  grpcdebug POD_IP:50052 xds config | yq --prettyPrint
   ```
+
+  Note that `grpcdebug` currently doesn't support mTLS.
 
 - View the Listener Discovery Service (LDS) configuration of a server using
   `grpcdebug`:
 
   ```shell
-  grpcdebug POD_IP:50051 xds config --type LDS | yq --input-format=json --prettyPrint
+  grpcdebug POD_IP:50052 xds config --type LDS | yq --input-format=json --prettyPrint
   ```
 
 - Call the `greeter-leaf` service using xDS:
@@ -277,10 +293,46 @@ Some troubleshooting commands:
   grpcurl -plaintext -d '{"name": "World"}' xds:///greeter-leaf helloworld.Greeter/SayHello
   ```
 
+  Or, with mTLS:
+
+  ```shell
+  grpcurl \
+    -authority greeter-leaf \
+    -cacert /var/run/secrets/workload-spiffe-credentials/ca_certificates.pem \
+    -cert /var/run/secrets/workload-spiffe-credentials/certificates.pem \
+    -key /var/run/secrets/workload-spiffe-credentials/private_key.pem \
+    -d '{"name": "World"}' \
+    xds:///greeter-leaf \
+    helloworld.Greeter/SayHello
+  ```
+
+  Set the `GRPC_GO_LOG_SEVERITY_LEVEL` and `GRPC_GO_LOG_VERBOSITY_LEVEL`
+  environment variables to see addtional log messages from `grpcurl`'s
+  interaction with the xDS control plane management server:
+
+  ```shell
+  export GRPC_GO_LOG_SEVERITY_LEVEL=info
+  export GRPC_GO_LOG_VERBOSITY_LEVEL=99
+  ```
+
 - Call the `greeter-intermediary` service using xDS:
 
   ```shell
   grpcurl -plaintext -d '{"name": "World"}' xds:///greeter-intermediary helloworld.Greeter/SayHello
+  ```
+
+  Or, with mTLS:
+
+  ```shell
+  grpcurl \
+    -authority greeter-intermediary \
+    -cacert /var/run/secrets/workload-spiffe-credentials/ca_certificates.pem \
+    -cert /var/run/secrets/workload-spiffe-credentials/certificates.pem \
+    -key /var/run/secrets/workload-spiffe-credentials/private_key.pem \
+    -d '{"name": "World"}' \
+    -import-path /opt/protos -proto helloworld/greeter.proto -proto google/rpc/error_details.proto \
+    xds:///greeter-intermediary \
+    helloworld.Greeter/SayHello
   ```
 
 ## Cleaning up

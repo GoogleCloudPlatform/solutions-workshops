@@ -21,17 +21,31 @@ import (
 )
 
 const (
-	defaultControlPlanePort = 50051
-	portEnvVar              = "PORT"
+	defaultServingPort = 50051
+	defaultHealthPort  = 50052
+	servingPortEnvVar  = "PORT"
+	healthPortEnvVar   = "HEALTH_PORT"
 )
 
-func Port() (int, error) {
-	port := defaultControlPlanePort
-	if portEnv, exists := os.LookupEnv(portEnvVar); exists {
+func ServingPort() (int, error) {
+	port := defaultServingPort
+	if portEnv, exists := os.LookupEnv(servingPortEnvVar); exists {
 		var err error
 		port, err = strconv.Atoi(portEnv)
 		if err != nil {
-			return 0, fmt.Errorf("could not convert environment variable value %s=%s to integer: %w", portEnvVar, portEnv, err)
+			return 0, fmt.Errorf("could not convert environment variable value %s=%s to integer: %w", servingPortEnvVar, portEnv, err)
+		}
+	}
+	return port, nil
+}
+
+func HealthPort() (int, error) {
+	port := defaultHealthPort
+	if portEnv, exists := os.LookupEnv(healthPortEnvVar); exists {
+		var err error
+		port, err = strconv.Atoi(portEnv)
+		if err != nil {
+			return 0, fmt.Errorf("could not convert environment variable value %s=%s to integer: %w", healthPortEnvVar, portEnv, err)
 		}
 	}
 	return port, nil

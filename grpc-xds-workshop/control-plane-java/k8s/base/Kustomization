@@ -22,12 +22,9 @@ metadata:
     config.kubernetes.io/local-config: "true"
 configMapGenerator:
 - name: app-config
+  namespace: xds # kpt-set: ${control-plane-namespace}
   files:
-  # Referencing files outside the `k8s` directory require `--load-restrictor=LoadRestrictionsNone`
   - ../../src/main/resources/config/informers.yaml
-generatorOptions:
-  disableNameSuffixHash: false # Set to `true` to use fixed names for Kustomize-generated objects.
-namespace: xds # kpt-set: ${control-plane-namespace}
 patches:
 - path: patch-jvm-flags.yaml
   target:

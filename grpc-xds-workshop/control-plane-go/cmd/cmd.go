@@ -34,13 +34,17 @@ func Run(ctx context.Context, flagset *flag.FlagSet, args []string) error {
 	logger := logging.NewLogger()
 	logging.SetGRPCLogger(logger)
 	ctx = logging.NewContext(ctx, logger)
-	port, err := config.Port()
+	servingPort, err := config.ServingPort()
 	if err != nil {
 		return fmt.Errorf("could not configure management server listening port: %w", err)
+	}
+	healthPort, err := config.HealthPort()
+	if err != nil {
+		return fmt.Errorf("could not configure management server health checking port: %w", err)
 	}
 	informerConfigs, err := config.Informers(ctx)
 	if err != nil {
 		return fmt.Errorf("could not initialize informer configuration: %w", err)
 	}
-	return server.Run(ctx, port, informerConfigs)
+	return server.Run(ctx, servingPort, healthPort, informerConfigs)
 }

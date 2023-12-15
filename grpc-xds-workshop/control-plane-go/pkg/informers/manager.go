@@ -38,6 +38,7 @@ import (
 )
 
 var (
+	errMissingLabel           = errors.New("missing service label")
 	errMissingMetadata        = errors.New("missing metadata")
 	errNilEndpointSlice       = errors.New("nil EndpointSlice")
 	errNoPortsInEndpointSlice = errors.New("no ports in EndpointSlice")
@@ -159,12 +160,12 @@ func getAppsForInformer(logger logr.Logger, informer informercache.SharedIndexIn
 			continue
 		}
 		k8sServiceName := endpointSlice.GetObjectMeta().GetLabels()[discoveryv1.LabelServiceName]
-		k8sServiceNamespace := endpointSlice.GetObjectMeta().GetNamespace()
+		namespace := endpointSlice.GetObjectMeta().GetNamespace()
 		// TODO: Handle more than one port?
 		port := uint32(*endpointSlice.Ports[0].Port)
 		appEndpoints := getReadyApplicationEndpoints(endpointSlice)
-		logger.V(4).Info("Ready endpoints for service", "name", k8sServiceName, "namespace", k8sServiceNamespace, "appEndpoints", appEndpoints)
-		apps = append(apps, xds.NewGRPCApplication(k8sServiceName, port, appEndpoints))
+		logger.V(4).Info("Ready endpoints for service", "name", k8sServiceName, "namespace", namespace, "appEndpoints", appEndpoints)
+		apps = append(apps, xds.NewGRPCApplication(namespace, k8sServiceName, port, appEndpoints))
 	}
 	return apps
 }
@@ -198,9 +199,13 @@ func validateEndpointSlice(eps interface{}) (*discoveryv1.EndpointSlice, error) 
 	if !ok {
 		return nil, fmt.Errorf("%w: expected *discoveryv1.EndpointSlice, got %T", errUnexpectedType, eps)
 	}
+	if endpointSlice.GetObjectMeta().GetName() == "" ||
+		endpointSlice.GetObjectMeta().GetNamespace() == "" {
+		return nil, fmt.Errorf("%w from EndpointSlice %+v", errMissingMetadata, endpointSlice)
+	}
 	if endpointSlice.GetObjectMeta().GetLabels() == nil ||
 		len(endpointSlice.GetObjectMeta().GetLabels()[discoveryv1.LabelServiceName]) == 0 {
-		return nil, fmt.Errorf("%w from EndpointSlice %+v", errMissingMetadata, endpointSlice)
+		return nil, fmt.Errorf("%w from EndpointSlice %+v", errMissingLabel, endpointSlice)
 	}
 	if len(endpointSlice.Ports) == 0 {
 		return nil, fmt.Errorf("%w: %+v", errNoPortsInEndpointSlice, endpointSlice)

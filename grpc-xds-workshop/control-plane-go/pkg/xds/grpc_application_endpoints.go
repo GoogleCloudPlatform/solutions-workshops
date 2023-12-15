@@ -15,18 +15,31 @@
 package xds
 
 type GRPCApplicationEndpoints struct {
-	Node      string
-	Zone      string
-	Addresses []string
+	node      string
+	zone      string
+	addresses []string
 }
 
 func NewGRPCApplicationEndpoints(node string, zone string, addresses []string) GRPCApplicationEndpoints {
-	if addresses == nil {
-		addresses = []string{}
-	}
+	addressesCopy := make([]string, len(addresses))
+	copy(addressesCopy, addresses)
 	return GRPCApplicationEndpoints{
-		Node:      node,
-		Zone:      zone,
-		Addresses: addresses,
+		node:      node,
+		zone:      zone,
+		addresses: addressesCopy,
 	}
+}
+
+func (e *GRPCApplicationEndpoints) Node() string {
+	return e.node
+}
+
+func (e *GRPCApplicationEndpoints) Zone() string {
+	return e.zone
+}
+
+func (e *GRPCApplicationEndpoints) Addresses() []string {
+	addressesCopy := make([]string, len(e.addresses))
+	copy(addressesCopy, e.addresses)
+	return addressesCopy
 }

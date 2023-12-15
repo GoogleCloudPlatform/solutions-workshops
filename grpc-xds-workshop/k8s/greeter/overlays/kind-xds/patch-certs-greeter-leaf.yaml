@@ -12,36 +12,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Patch to configure liveness, readiness, and startup probes.
+# Patch to mount cert-manager issued TLS certificates as a volume.
 
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: control-plane
+  name: greeter-leaf
 spec:
   template:
     spec:
       containers:
       - name: app
-        livenessProbe:
-          grpc:
-            port: 50052
-          failureThreshold: 3
-          initialDelaySeconds: 10
-          periodSeconds: 10
-          timeoutSeconds: 1
-        readinessProbe:
-          grpc:
-            port: 50052
-          failureThreshold: 3
-          successThreshold: 1
-          initialDelaySeconds: 10
-          periodSeconds: 10
-          timeoutSeconds: 1
-        startupProbe:
-          grpc:
-            port: 50052
-          failureThreshold: 10
-          initialDelaySeconds: 5
-          periodSeconds: 10
-          timeoutSeconds: 1
+        volumeMounts:
+        - name: workload-certs
+          mountPath: /var/run/secrets/workload-spiffe-credentials
+          readOnly: true
+      volumes:
+      - name: workload-certs
+        secret:
+          secretName: greeter-leaf-certificate
+          items:
+          # https://cloud.google.com/traffic-director/docs/security-proxyless-setup#create-service%7D
+          - key: tls.key
+            path: private_key.pem
+          - key: tls.crt
+            path: certificates.pem
+          - key: ca.crt
+            path: ca_certificates.pem

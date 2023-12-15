@@ -23,7 +23,7 @@ metadata:
 images:
 - name: busybox
   newName: busybox:stable-glibc
-  digest: sha256:7338d0c72c655d6534670ed72590cdc99afc9c559958c47eb3a5a17a7520a75c
+  digest: sha256:ee22a5823b1d3e7881d168f50585274611dbe0ceed4d2ba5bc8afd7cfac71d23
 patches:
 - path: patch-next-hop-xds.yaml
   target:

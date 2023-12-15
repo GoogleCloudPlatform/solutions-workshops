@@ -41,7 +41,11 @@ spec:
         image: busybox # kpt-set: ${bastion-image}
         command: ["sleep"]
         args: ["31536000"]
-        env: []
+        # env:
+        # - name: GRPC_GO_LOG_SEVERITY_LEVEL
+        #   value: info
+        # - name: GRPC_GO_LOG_VERBOSITY_LEVEL
+        #   value: "99"
         volumeMounts:
         - name: tools
           mountPath: /usr/local/bin

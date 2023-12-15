@@ -34,12 +34,17 @@ func Run(ctx context.Context, flagset *flag.FlagSet, args []string) error {
 	logger := logging.NewLogger()
 	logging.SetGRPCLogger(logger)
 	ctx = logging.NewContext(ctx, logger)
-	port, err := config.Port()
+	servingPort, err := config.ServingPort()
 	if err != nil {
 		return fmt.Errorf("could not configure management server listening port: %w", err)
 	}
+	healthPort, err := config.HealthPort()
+	if err != nil {
+		return fmt.Errorf("could not configure management server health check port: %w", err)
+	}
 	serverConfig := server.Config{
-		Port:              port,
+		ServingPort:       servingPort,
+		HealthPort:        healthPort,
 		GreeterName:       config.GreeterName(ctx),
 		NextHop:           config.NextHop(),
 		UseXDS:            config.UseXDS(),

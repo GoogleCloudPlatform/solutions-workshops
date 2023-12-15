@@ -48,7 +48,8 @@ const (
 
 // Config provides server parameters read from the environment.
 type Config struct {
-	Port              int
+	ServingPort       int
+	HealthPort        int
 	GreeterName       string
 	NextHop           string
 	UseXDS            bool
@@ -72,51 +73,38 @@ func Run(ctx context.Context, c Config) error {
 	}
 
 	healthServer := health.NewServer()
-	grpcServer, err := newGRPCServer(ctx, logger, c.UseXDS, healthServer, grpcOptions...)
+	servingGRPCServer, err := newGRPCServer(logger, c.UseXDS, grpcOptions...)
 	if err != nil {
-		return fmt.Errorf("could not create the gRPC server: %w", err)
+		return fmt.Errorf("could not create the serving gRPC server: %w", err)
+	}
+	healthGRPCServer := grpc.NewServer() // naming is hard :-(
+	addServerStopBehavior(ctx, logger, servingGRPCServer, healthGRPCServer, healthServer)
+
+	if err := registerGreeterServer(ctx, logger, c, servingGRPCServer); err != nil {
+		return fmt.Errorf("could not register Greeter server: %w", err)
 	}
 
-	var greeterService helloworldpb.GreeterServer
-	if c.NextHop == "" {
-		logger.V(1).Info("Adding leaf Greeter service, as NEXT_HOP is not provided")
-		greeterService = greeter.NewLeafService(ctx, c.GreeterName)
-	} else {
-		logger.V(1).Info("Adding intermediary Greeter service", "NEXT_HOP", c.NextHop)
-		greeterClient, err := greeter.NewClient(ctx, c.NextHop, c.UseXDSCredentials)
-		if err != nil {
-			return fmt.Errorf("could not create greeter client %w", err)
-		}
-		greeterService = greeter.NewIntermediaryService(ctx, c.GreeterName, greeterClient)
-	}
-	helloworldpb.RegisterGreeterServer(grpcServer, greeterService)
-
-	// TODO: Start separate server for health and admin services.
+	// Register health server on both serving and health ports
 	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
 	healthServer.SetServingStatus(helloworldpb.Greeter_ServiceDesc.ServiceName, healthpb.HealthCheckResponse_SERVING)
-	healthpb.RegisterHealthServer(grpcServer, healthServer)
-	if c.UseXDS {
-		// Using xDS, so registering Channelz and CSDS
-		cleanup, err := admin.Register(grpcServer)
-		if err != nil {
-			return fmt.Errorf("could not register Channelz and CSDS admin services: %w", err)
-		}
-		defer func() {
-			logger.V(2).Info("Cleaning up admin services as the server is stopping")
-			cleanup()
-		}()
-	} else {
-		// Not using xDS, so only registering Channelz
-		channelzservice.RegisterChannelzServiceToServer(grpcServer)
-	}
-	reflection.Register(grpcServer)
+	healthpb.RegisterHealthServer(servingGRPCServer, healthServer)
+	healthpb.RegisterHealthServer(healthGRPCServer, healthServer)
 
-	tcpListener, err := net.Listen("tcp4", fmt.Sprintf(":%d", c.Port))
+	// Register admin services on both serving and health ports
+	cleanupAdminServers, err := registerAdminServers(c.UseXDS, servingGRPCServer, healthGRPCServer)
 	if err != nil {
-		return fmt.Errorf("could not create TCP listener on port=%d: %w", c.Port, err)
+		return fmt.Errorf("could not register admin servers: %w", err)
 	}
-	logger.V(1).Info("Greeter service listening", "port", c.Port, "nextHop", c.NextHop)
-	return grpcServer.Serve(tcpListener)
+	defer func() {
+		logger.V(2).Info("Cleaning up admin servers as the gRPC server is stopping")
+		cleanupAdminServers()
+	}()
+
+	// Enable reflection on both serving and health ports
+	reflection.Register(servingGRPCServer)
+	reflection.Register(healthGRPCServer)
+
+	return serve(logger, c, servingGRPCServer, healthServer, healthGRPCServer)
 }
 
 func serverOptions(logger logr.Logger, useXDSCredentials bool) ([]grpc.ServerOption, error) {
@@ -145,7 +133,7 @@ func serverOptions(logger logr.Logger, useXDSCredentials bool) ([]grpc.ServerOpt
 	}, nil
 }
 
-func newGRPCServer(ctx context.Context, logger logr.Logger, useXDS bool, healthServer *health.Server, opts ...grpc.ServerOption) (grpcserver, error) {
+func newGRPCServer(logger logr.Logger, useXDS bool, opts ...grpc.ServerOption) (grpcserver, error) {
 	var server grpcserver
 	if !useXDS {
 		logger.V(1).Info("Creating a non-xDS managed server")
@@ -158,28 +146,87 @@ func newGRPCServer(ctx context.Context, logger logr.Logger, useXDS bool, healthS
 			return nil, fmt.Errorf("could not create xDS-enabled gRPC server: %w", err)
 		}
 	}
-	addServerStopBehavior(ctx, logger, server, healthServer)
 	return server, nil
 }
 
-func addServerStopBehavior(ctx context.Context, logger logr.Logger, server grpcserver, healthServer *health.Server) {
-	go func(s grpcserver) {
+func addServerStopBehavior(ctx context.Context, logger logr.Logger, servingGRPCServer grpcserver, healthGRPCServer grpcserver, healthServer *health.Server) {
+	go func() {
 		<-ctx.Done()
 		healthServer.SetServingStatus("", healthpb.HealthCheckResponse_NOT_SERVING)
 		healthServer.SetServingStatus(helloworldpb.Greeter_ServiceDesc.ServiceName, healthpb.HealthCheckResponse_NOT_SERVING)
 		stopped := make(chan struct{})
 		go func() {
 			logger.Info("Attempting to gracefully stop the gRPC server")
-			s.GracefulStop()
+			servingGRPCServer.GracefulStop()
 			close(stopped)
 		}()
-		t := time.NewTimer(5 * time.Second)
+		timer := time.NewTimer(5 * time.Second)
 		select {
-		case <-t.C:
+		case <-timer.C:
 			logger.Info("Stopping the gRPC server immediately")
-			s.Stop()
+			servingGRPCServer.Stop()
+			healthGRPCServer.Stop()
 		case <-stopped:
-			t.Stop()
+			timer.Stop()
 		}
-	}(server)
+	}()
+}
+
+func registerGreeterServer(ctx context.Context, logger logr.Logger, c Config, servingGRPCServer grpcserver) error {
+	var greeterService helloworldpb.GreeterServer
+	if c.NextHop == "" {
+		logger.V(1).Info("Adding leaf Greeter service, as NEXT_HOP is not provided")
+		greeterService = greeter.NewLeafService(ctx, c.GreeterName)
+	} else {
+		logger.V(1).Info("Adding intermediary Greeter service", "NEXT_HOP", c.NextHop)
+		greeterClient, err := greeter.NewClient(ctx, c.NextHop, c.UseXDSCredentials)
+		if err != nil {
+			return fmt.Errorf("could not create greeter client %w", err)
+		}
+		greeterService = greeter.NewIntermediaryService(ctx, c.GreeterName, greeterClient)
+	}
+	helloworldpb.RegisterGreeterServer(servingGRPCServer, greeterService)
+	return nil
+}
+
+func registerAdminServers(useXDS bool, servingGRPCServer grpcserver, healthGRPCServer grpcserver) (func(), error) {
+	if !useXDS {
+		// Not using xDS, so only registering Channelz
+		channelzservice.RegisterChannelzServiceToServer(servingGRPCServer)
+		channelzservice.RegisterChannelzServiceToServer(healthGRPCServer)
+		return func() {}, nil
+	}
+	// Using xDS, so registering Channelz and CSDS
+	cleanupServing, err := admin.Register(servingGRPCServer)
+	if err != nil {
+		return func() {}, fmt.Errorf("could not register Channelz and CSDS admin services to serving server: %w", err)
+	}
+	cleanupHealth, err := admin.Register(healthGRPCServer)
+	if err != nil {
+		return func() {}, fmt.Errorf("could not register Channelz and CSDS admin services to health server: %w", err)
+	}
+	return func() {
+		cleanupServing()
+		cleanupHealth()
+	}, nil
+}
+
+func serve(logger logr.Logger, c Config, servingGRPCServer grpcserver, healthServer *health.Server, healthGRPCServer *grpc.Server) error {
+	servingListener, err := net.Listen("tcp4", fmt.Sprintf(":%d", c.ServingPort))
+	if err != nil {
+		return fmt.Errorf("could not create TCP listener on serving port=%d: %w", c.ServingPort, err)
+	}
+	healthListener, err := net.Listen("tcp4", fmt.Sprintf(":%d", c.HealthPort))
+	if err != nil {
+		return fmt.Errorf("could not create TCP listener on health port=%d: %w", c.HealthPort, err)
+	}
+	logger.V(1).Info("Greeter service listening", "port", c.ServingPort, "healthPort", c.HealthPort, "nextHop", c.NextHop)
+	go func() {
+		err := servingGRPCServer.Serve(servingListener)
+		if err != nil {
+			healthServer.SetServingStatus("", healthpb.HealthCheckResponse_NOT_SERVING)
+			healthServer.SetServingStatus(helloworldpb.Greeter_ServiceDesc.ServiceName, healthpb.HealthCheckResponse_NOT_SERVING)
+		}
+	}()
+	return healthGRPCServer.Serve(healthListener)
 }

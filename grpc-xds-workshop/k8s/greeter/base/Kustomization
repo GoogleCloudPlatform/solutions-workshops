@@ -22,7 +22,6 @@ metadata:
     config.kubernetes.io/local-config: "true"
 commonLabels:
   app.kubernetes.io/part-of: grpc-xds-workshop
-namespace: xds # kpt-set: ${greeter-namespace}
 patches:
 - path: patch-probes.yaml
   target:
@@ -38,6 +37,6 @@ patches:
     version: v1
 resources:
 - namespace.yaml
-- service-account.yaml
+- service-accounts.yaml
 - deployments.yaml
 - services.yaml

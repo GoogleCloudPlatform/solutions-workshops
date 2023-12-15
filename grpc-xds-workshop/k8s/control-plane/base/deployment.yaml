@@ -38,5 +38,7 @@ spec:
         ports:
         - name: app-port
           containerPort: 50051
+        - name: health-port
+          containerPort: 50052
       serviceAccountName: control-plane
       terminationGracePeriodSeconds: 10

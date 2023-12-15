@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Patch to install troubleshooting tools using an init container.
+# Patch to install troubleshooting tools and protobuf definition using an init container.
 
 apiVersion: apps/v1
 kind: Deployment
@@ -24,6 +24,8 @@ spec:
       containers:
       - name: app
         volumeMounts:
+        - name: protos
+          mountPath: /opt/protos
         - name: tools
           mountPath: /usr/local/bin
       initContainers:
@@ -42,18 +44,26 @@ spec:
           curl -L -o /opt/tools/kubectl "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/$(go env GOOS)/$(go env GOARCH)/kubectl"
           chmod +x /opt/tools/kubectl
           #
-          # Clone the Google RPC type definition protos, such as ErrorInfo, to /opt/tools/googleapis/google/rpc:
-          git clone --branch=master --depth=1 --no-checkout --single-branch https://github.com/googleapis/googleapis /opt/tools/googleapis
-          cd /opt/tools/googleapis
+          # Clone the Google RPC type definition protos, such as ErrorInfo, to /opt/protos/google/rpc:
+          git clone --branch=master --depth=1 --no-checkout --single-branch https://github.com/googleapis/googleapis /opt/protos
+          cd /opt/protos
           git sparse-checkout init --cone
           git sparse-checkout set google/rpc
           git checkout --quiet @
+          #
+          # Download the `helloworld.Greeter` gRPC service proto definition to /opt/protos/helloworld/greeter.proto:
+          mkdir -p /opt/protos/helloworld
+          curl -sSLo /opt/protos/helloworld/greeter.proto https://raw.githubusercontent.com/grpc/grpc/v1.60.0/examples/protos/helloworld.proto
         env:
         - name: GOBIN
           value: /opt/tools
         volumeMounts:
+        - name: protos
+          mountPath: /opt/protos          
         - name: tools
           mountPath: /opt/tools
       volumes:
+      - name: protos
+        emptyDir: {}
       - name: tools
         emptyDir: {}

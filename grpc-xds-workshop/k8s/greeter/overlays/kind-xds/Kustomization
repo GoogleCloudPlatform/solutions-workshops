@@ -25,7 +25,7 @@ metadata:
 images:
 - name: kubectl
   newName: bitnami/kubectl
-  digest: sha256:b062b7a76e0777551399157d59d3e8babac69c6c050d3b18c1199059fb3f0663
+  digest: sha256:6485a923f6f4ff3d42d871ce5bd45ee8f25a303c44972a4ad31ddd895082fc22
 patches:
 - path: patch-zone-label.yaml
   target:
@@ -33,7 +33,20 @@ patches:
     version: v1
     kind: Deployment
     name: greeter-.*
+- path: patch-certs-greeter-intermediary.yaml
+  target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: greeter-intermediary
+- path: patch-certs-greeter-leaf.yaml
+  target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: greeter-leaf
 resources:
 - ../diy-xds
 - cluster-role.yaml
-- cluster-role-binding.yaml
+- cluster-role-bindings.yaml
+- greeter-certificates.yaml

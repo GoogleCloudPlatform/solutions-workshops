@@ -37,6 +37,7 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/googlecloudplatform/solutions-workshops/grpc-xds-workshop/control-plane-go/pkg/informers"
 	"github.com/googlecloudplatform/solutions-workshops/grpc-xds-workshop/control-plane-go/pkg/interceptors"
@@ -52,7 +53,7 @@ const (
 	grpcMaxConcurrentStreams = 1000000
 )
 
-func Run(ctx context.Context, port int, informerConfigs []informers.Config) error {
+func Run(ctx context.Context, servingPort int, healthPort int, informerConfigs []informers.Config) error {
 	logger := logging.FromContext(ctx)
 	grpcOptions, err := serverOptions(logger)
 	if err != nil {
@@ -60,9 +61,12 @@ func Run(ctx context.Context, port int, informerConfigs []informers.Config) erro
 	}
 	healthServer := health.NewServer()
 	server := grpc.NewServer(grpcOptions...)
-	addServerStopBehavior(ctx, logger, server, healthServer)
+	healthGRPCServer := grpc.NewServer()
+	addServerStopBehavior(ctx, logger, server, healthGRPCServer, healthServer)
 	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
 	healthpb.RegisterHealthServer(server, healthServer)
+	healthpb.RegisterHealthServer(healthGRPCServer, healthServer)
+
 	cleanup, err := admin.Register(server)
 	if err != nil {
 		return fmt.Errorf("could not register gRPC Channelz and CSDS admin services: %w", err)
@@ -71,12 +75,7 @@ func Run(ctx context.Context, port int, informerConfigs []informers.Config) erro
 	reflection.Register(server)
 
 	xdsCache := xds.NewSnapshotCache(ctx, true, xds.FixedHash{})
-	xdsServer := serverv3.NewServer(ctx, xdsCache, serverv3.CallbackFuncs{
-		StreamRequestFunc: func(_ int64, request *discoveryv3.DiscoveryRequest) error {
-			logger.Info("StreamRequest", "type", request.GetTypeUrl(), "resourceNames", request.ResourceNames)
-			return nil
-		},
-	})
+	xdsServer := serverv3.NewServer(ctx, xdsCache, xdsServerCallbackFuncs(logger))
 
 	registerXDSServices(server, xdsServer)
 	informerManager, err := informers.NewManager(ctx, xdsCache)
@@ -89,12 +88,56 @@ func Run(ctx context.Context, port int, informerConfigs []informers.Config) erro
 		}
 	}
 
-	tcpListener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	tcpListener, err := net.Listen("tcp", fmt.Sprintf(":%d", servingPort))
 	if err != nil {
-		return fmt.Errorf("could not create TCP listener on port=%d: %w", port, err)
+		return fmt.Errorf("could not create TCP listener on port=%d: %w", servingPort, err)
 	}
-	logger.V(1).Info("xDS control plane management server listening", "port", port)
-	return server.Serve(tcpListener)
+	healthTCPListener, err := net.Listen("tcp", fmt.Sprintf(":%d", healthPort))
+	if err != nil {
+		return fmt.Errorf("could not create TCP listener on port=%d: %w", healthPort, err)
+	}
+	logger.V(1).Info("xDS control plane management server listening", "port", servingPort, "healthPort", healthPort)
+	go func() {
+		err := server.Serve(tcpListener)
+		if err != nil {
+			healthServer.SetServingStatus("", healthpb.HealthCheckResponse_NOT_SERVING)
+		}
+	}()
+	return healthGRPCServer.Serve(healthTCPListener)
+}
+
+func xdsServerCallbackFuncs(logger logr.Logger) *serverv3.CallbackFuncs {
+	return &serverv3.CallbackFuncs{
+		StreamRequestFunc: func(streamID int64, request *discoveryv3.DiscoveryRequest) error {
+			logger.Info("StreamRequest", "streamID", streamID, "type", request.GetTypeUrl(), "resourceNames", request.ResourceNames)
+			return nil
+		},
+		StreamResponseFunc: func(_ context.Context, streamID int64, _ *discoveryv3.DiscoveryRequest, response *discoveryv3.DiscoveryResponse) {
+			protoMarshalOptions := protojson.MarshalOptions{
+				Multiline:    true,
+				Indent:       "  ",
+				AllowPartial: true,
+			}
+			for _, anyResource := range response.Resources {
+				if anyResource == nil {
+					continue
+				}
+				protoResource, err := anyResource.UnmarshalNew()
+				if err != nil {
+					logger.Error(err, "StreamResponse: could not unmarshall Any message")
+					continue
+				}
+				jsonResourceBytes, err := protoMarshalOptions.Marshal(protoResource)
+				if err != nil {
+					logger.Error(err, "StreamResponse: could not marshall proto message to JSON")
+					continue
+				}
+				// Logging each resource instead of a slice of resources, to take advantage of multi-line logging,
+				// which is helpful for development and exploration.
+				logger.Info("StreamResponse", "streamID", streamID, "type", response.GetTypeUrl(), "resource", string(jsonResourceBytes))
+			}
+		},
+	}
 }
 
 func registerXDSServices(grpcServer *grpc.Server, xdsServer serverv3.Server) {
@@ -136,23 +179,24 @@ func serverOptions(logger logr.Logger) ([]grpc.ServerOption, error) {
 	}, nil
 }
 
-func addServerStopBehavior(ctx context.Context, logger logr.Logger, server *grpc.Server, healthServer *health.Server) {
-	go func(s *grpc.Server, h *health.Server) {
+func addServerStopBehavior(ctx context.Context, logger logr.Logger, servingGRPCServer *grpc.Server, healthGRPCServer *grpc.Server, healthServer *health.Server) {
+	go func() {
 		<-ctx.Done()
-		h.SetServingStatus("", healthpb.HealthCheckResponse_NOT_SERVING)
+		healthServer.SetServingStatus("", healthpb.HealthCheckResponse_NOT_SERVING)
 		stopped := make(chan struct{})
 		go func() {
 			logger.Info("Attempting to gracefully stop the xDS management server")
-			s.GracefulStop()
+			servingGRPCServer.GracefulStop()
 			close(stopped)
 		}()
 		t := time.NewTimer(5 * time.Second)
 		select {
 		case <-t.C:
 			logger.Info("Stopping the xDS management server immediately")
-			s.Stop()
+			servingGRPCServer.Stop()
+			healthGRPCServer.Stop()
 		case <-stopped:
 			t.Stop()
 		}
-	}(server, healthServer)
+	}()
 }

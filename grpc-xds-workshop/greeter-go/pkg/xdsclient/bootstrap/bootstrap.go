@@ -64,7 +64,7 @@ var (
 	// given name. This is set by package certprovider for use from xDS
 	// bootstrap code while parsing certificate provider configs in the
 	// bootstrap file.
-	GetCertificateProviderBuilder interface{} // func(string) certprovider.Builder
+	GetCertificateProviderBuilder any // func(string) certprovider.Builder
 
 	errNoBootstrapEnvVar = fmt.Errorf("none of the bootstrap environment variables (%q or %q) defined",
 		XDSBootstrapFileNameEnv, XDSBootstrapFileContentEnv)
@@ -171,7 +171,6 @@ func newConfigFromContents(data []byte) (*Config, error) {
 
 func parseCertificateProviders(providerInstances map[string]json.RawMessage) (map[string]*certprovider.BuildableConfig, error) {
 	configs := make(map[string]*certprovider.BuildableConfig)
-	getBuilder := GetCertificateProviderBuilder.(func(string) certprovider.Builder)
 	for instance, data := range providerInstances {
 		var nameAndConfig struct {
 			PluginName string          `json:"plugin_name"`
@@ -180,17 +179,10 @@ func parseCertificateProviders(providerInstances map[string]json.RawMessage) (ma
 		if err := json.Unmarshal(data, &nameAndConfig); err != nil {
 			return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %w", string(data), instance, err)
 		}
-
-		name := nameAndConfig.PluginName
-		parser := getBuilder(nameAndConfig.PluginName)
-		if parser == nil {
-			// We ignore plugins that we do not know about.
-			continue
-		}
-		bc, err := parser.ParseConfig(nameAndConfig.Config)
-		if err != nil {
-			return nil, fmt.Errorf("xds: config parsing for plugin %q failed: %w", name, err)
-		}
+		bc := certprovider.NewBuildableConfig(
+			nameAndConfig.PluginName,
+			[]byte{},
+			func(options certprovider.BuildOptions) certprovider.Provider { return nil })
 		configs[instance] = bc
 	}
 	return configs, nil

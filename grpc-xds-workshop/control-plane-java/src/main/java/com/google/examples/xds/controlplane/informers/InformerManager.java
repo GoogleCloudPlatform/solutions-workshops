@@ -157,11 +157,14 @@ public class InformerManager<T> {
   @NotNull
   private GrpcApplication toGrpcApplication(@NotNull V1EndpointSlice endpointSlice) {
     List<GrpcApplicationEndpoint> applicationEndpoints = toGrpcApplicationEndpoints(endpointSlice);
+    String namespace = endpointSlice.getMetadata().getNamespace();
     String endpointSliceName = endpointSlice.getMetadata().getName();
     String k8sServiceName = endpointSlice.getMetadata().getLabels().get(LABEL_SERVICE_NAME);
     // TODO: Handle more than one port?
     int port = endpointSlice.getPorts().get(0).getPort();
-    GrpcApplication app = new GrpcApplication(k8sServiceName, port, applicationEndpoints);
+    // Assume that the k8s ServiceAccount name matches the k8s Service name!
+    GrpcApplication app =
+        new GrpcApplication(namespace, k8sServiceName, port, applicationEndpoints);
     LOG.debug(
         "endpointSlice={} service={} port={} endpoints={}",
         endpointSliceName,
@@ -197,9 +200,15 @@ public class InformerManager<T> {
       return false;
     }
     if (endpointSlice.getMetadata() == null
+        || endpointSlice.getMetadata().getName() == null
+        || endpointSlice.getMetadata().getNamespace() == null) {
+      LOG.error("Skipping EndpointSlice due to missing metadata: {}", endpointSlice);
+      return false;
+    }
+    if (endpointSlice.getMetadata() == null
         || endpointSlice.getMetadata().getLabels() == null
         || endpointSlice.getMetadata().getLabels().get(LABEL_SERVICE_NAME) == null) {
-      LOG.error("Skipping EndpointSlice due to missing metadata: {}", endpointSlice);
+      LOG.error("Skipping EndpointSlice due to missing labels: {}", endpointSlice);
       return false;
     }
     if (endpointSlice.getPorts() == null || endpointSlice.getPorts().isEmpty()) {

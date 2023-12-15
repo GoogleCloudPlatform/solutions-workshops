@@ -16,6 +16,22 @@
 # flags in the commands below are optional. They are included only to speed up
 # the commands.
 
+# kind-create creates a kind Kubernetes cluster with multiple nodes.
+# It also installs prerequisites such as cert-manager.
+.PHONY: kind-create
+kind-create: kind-create-cluster-only cert-manager
+
+# kind-create-cluster-only creates a kind Kubernetes cluster with multiple nodes.
+.PHONY: kind-create-cluster-only
+kind-create-cluster-only: check-kind check-kubectl
+	kind create cluster --config=docs/kind-cluster-config.yaml
+	kubectl config set-context --current --namespace=xds
+
+# kind-delete deletes the kind Kubernetes cluster.
+.PHONY: kind-delete
+kind-delete: check-kind
+	kind delete cluster --name=grpc-xds-workshop
+
 # run-go builds and deploys control-plane-go and greeter-go.
 .PHONY: run-go
 run-go: check-skaffold check-go
@@ -93,6 +109,12 @@ xds-config-intermediary: check-grpcdebug check-yq
 xds-config-leaf: check-grpcdebug check-yq
 	grpcdebug localhost:50057 xds config | yq --input-format=json --prettyPrint
 
+# cert-manager deploys cert-manager and its custom resource definitions (CRDs) to the Kubernetes cluster.
+.PHONY: cert-manager
+cert-manager: check-skaffold
+	skaffold run --detect-minikube=false --module=cert-manager --skip-tests
+	skaffold run --detect-minikube=false --module=root-ca --skip-tests
+
 # run-bastion deploys a bastion Pod with troubleshooting tools.
 .PHONY: run-bastion
 run-bastion: check-skaffold
@@ -152,6 +174,13 @@ check-grpcurl:
 check-javac:
 	@if ! which javac > /dev/null; then \
 		echo "error: javac is not installed: https://adoptium.net/" >&2; \
+		exit 1; \
+	fi
+
+.PHONY: check-kind
+check-kind:
+	@if ! which kind > /dev/null; then \
+		echo "error: kind is not installed: https://kind.sigs.k8s.io/" >&2; \
 		exit 1; \
 	fi
 

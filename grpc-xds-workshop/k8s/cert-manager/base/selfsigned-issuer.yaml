@@ -12,20 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# The control plane needs `get`, `list`, and `watch` access to
-# `EndpointSlices` resources in the `discovery.k8s.io` API group.
+# Issues the root CA certificate only.
+# Doc: https://cert-manager.io/docs/configuration/selfsigned/
+# Ref: https://cert-manager.io/docs/reference/api-docs/#cert-manager.io/v1.Issuer
 
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
+apiVersion: cert-manager.io/v1
+kind: Issuer
 metadata:
-  name: greeter-nodes-reader
+  name: selfsigned
+  namespace: cert-manager
   labels:
-    app.kubernetes.io/component: greeter
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: nodes-reader
-subjects:
-- kind: ServiceAccount
-  namespace: xds # kpt-set: ${greeter-namespace}
-  name: greeter
+    app.kubernetes.io/component: cert-manager
+spec:
+  selfSigned: {}

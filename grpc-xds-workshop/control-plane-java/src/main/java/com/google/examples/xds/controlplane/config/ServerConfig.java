@@ -35,13 +35,18 @@ public class ServerConfig {
   private static final Logger LOG = LoggerFactory.getLogger(ServerConfig.class);
 
   /** Default management server port. Override with the <code>PORT</code> environment variable. */
-  private static final int DEFAULT_PORT = 50051;
+  private static final int DEFAULT_SERVING_PORT = 50051;
+
+  /**
+   * Default health checking port. Override with the <code>HEALTH_PORT</code> environment variable.
+   */
+  private static final int DEFAULT_HEALTH_PORT = 50052;
 
   /** The file that lists the K8s Services whose EndpointSlices should be watched. */
   private static final String INFORMERS_CONFIG_FILE = "config/informers.yaml";
 
-  /** Returns the port number that the management server should listen on. */
-  public int port() {
+  /** Returns the port number that the management server should listen on for xDS requests. */
+  public int servingPort() {
     String portEnv = System.getenv("PORT");
     if (portEnv != null && !portEnv.isBlank()) {
       try {
@@ -50,7 +55,21 @@ public class ServerConfig {
         throw new RuntimeException("Invalid value of PORT environment variable: " + portEnv, e);
       }
     }
-    return DEFAULT_PORT;
+    return DEFAULT_SERVING_PORT;
+  }
+
+  /** Returns the port number that the management server should listen on for health requests. */
+  public int healthPort() {
+    String portEnv = System.getenv("HEALTH_PORT");
+    if (portEnv != null && !portEnv.isBlank()) {
+      try {
+        return Integer.parseInt(portEnv);
+      } catch (NumberFormatException e) {
+        throw new RuntimeException(
+            "Invalid value of HEALTH_PORT environment variable: " + portEnv, e);
+      }
+    }
+    return DEFAULT_HEALTH_PORT;
   }
 
   /** Reads informer (watch) configurations from a file on the classpath. */

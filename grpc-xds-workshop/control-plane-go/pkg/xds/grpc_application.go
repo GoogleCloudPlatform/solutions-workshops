@@ -15,32 +15,63 @@
 package xds
 
 type GRPCApplication struct {
-	Name       string
-	PathPrefix string
-	Port       uint32
-	Endpoints  []GRPCApplicationEndpoints
+	namespace              string
+	serviceAccountName     string
+	listenerName           string
+	routeConfigurationName string
+	clusterName            string
+	pathPrefix             string
+	port                   uint32
+	endpoints              []GRPCApplicationEndpoints
 }
 
-func NewGRPCApplication(name string, port uint32, endpoints []GRPCApplicationEndpoints) GRPCApplication {
-	if endpoints == nil {
-		endpoints = []GRPCApplicationEndpoints{}
-	}
+// NewGRPCApplication is a convenience function that creates a GRPCApplication where the
+// k8s ServiceAccount, LDS Listener, RDS RouteConfiguration, and CDS Cluster all share the same name.
+func NewGRPCApplication(namespace string, name string, port uint32, endpoints []GRPCApplicationEndpoints) GRPCApplication {
+	endpointsCopy := make([]GRPCApplicationEndpoints, len(endpoints))
+	copy(endpointsCopy, endpoints)
 	return GRPCApplication{
-		Name:       name,
-		PathPrefix: "",
-		Port:       port,
-		Endpoints:  endpoints,
+		namespace:              namespace,
+		serviceAccountName:     name,
+		listenerName:           name,
+		routeConfigurationName: name,
+		clusterName:            name,
+		pathPrefix:             "",
+		port:                   port,
+		endpoints:              endpointsCopy,
 	}
 }
 
-func (a *GRPCApplication) listenerName() string {
-	return a.Name
+func (a *GRPCApplication) Namespace() string {
+	return a.namespace
 }
 
-func (a *GRPCApplication) routeConfigName() string {
-	return a.Name
+func (a *GRPCApplication) ServiceAccountName() string {
+	return a.serviceAccountName
 }
 
-func (a *GRPCApplication) clusterName() string {
-	return a.Name
+func (a *GRPCApplication) ListenerName() string {
+	return a.listenerName
+}
+
+func (a *GRPCApplication) RouteConfigurationName() string {
+	return a.routeConfigurationName
+}
+
+func (a *GRPCApplication) ClusterName() string {
+	return a.clusterName
+}
+
+func (a *GRPCApplication) PathPrefix() string {
+	return a.pathPrefix
+}
+
+func (a *GRPCApplication) Port() uint32 {
+	return a.port
+}
+
+func (a *GRPCApplication) Endpoints() []GRPCApplicationEndpoints {
+	endpointsCopy := make([]GRPCApplicationEndpoints, len(a.endpoints))
+	copy(endpointsCopy, a.endpoints)
+	return endpointsCopy
 }

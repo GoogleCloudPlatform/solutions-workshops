@@ -17,34 +17,18 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 metadata:
-  name: control-plane
+  name: troubleshoot-kind-xds
   annotations:
     config.kubernetes.io/local-config: "true"
 commonLabels:
   app.kubernetes.io/part-of: grpc-xds-workshop
 patches:
-- path: patch-config.yaml
+- path: patch-certs-bastion.yaml
   target:
     group: apps
     version: v1
     kind: Deployment
-    name: control-plane
-- path: patch-probes.yaml
-  target:
-    group: apps
-    version: v1
-    kind: Deployment
-    name: control-plane
-- path: patch-resources.yaml
-  target:
-    group: apps
-    version: v1
-    kind: Deployment
-    name: control-plane
+    name: bastion
 resources:
-- namespace.yaml
-- service-account.yaml
-- cluster-role.yaml
-- cluster-role-binding.yaml
-- deployment.yaml
-- service.yaml
+- ../../base
+- bastion-certificate.yaml

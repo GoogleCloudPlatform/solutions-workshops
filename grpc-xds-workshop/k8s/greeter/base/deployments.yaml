@@ -39,7 +39,9 @@ spec:
         ports:
         - containerPort: 50051
           name: app-port
-      serviceAccountName: greeter
+        - containerPort: 50052
+          name: health-port
+      serviceAccountName: greeter-intermediary
       terminationGracePeriodSeconds: 10
       # Best effort scheduling of pods across separate zones and nodes.
       topologySpreadConstraints:
@@ -83,7 +85,9 @@ spec:
         ports:
         - containerPort: 50051
           name: app-port
-      serviceAccountName: greeter
+        - containerPort: 50052
+          name: health-port
+      serviceAccountName: greeter-leaf
       terminationGracePeriodSeconds: 10
       # Best effort scheduling of pods across separate zones and nodes.
       topologySpreadConstraints:

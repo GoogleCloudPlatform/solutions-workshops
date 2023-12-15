@@ -12,33 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Skaffold
-.kpt-pipeline/
+# Used when running the `apply-setters` KRM function.
 
-# Gradle
-.gradle
-build/
-!gradle/wrapper/gradle-wrapper.jar
-!gradle/wrapper/gradle-wrapper.properties
-!**/src/main/**/build/
-!**/src/test/**/build/
-
-# IntelliJ IDEA / GoLand
-bin/
-.idea/
-*.iws
-*.iml
-*.ipr
-out/
-!**/src/main/**/out/
-!**/src/test/**/out/
-
-# VS Code
-.vscode/*
-!.vscode/launch.json
-
-# Emacs
-*~
-
-# Certificates and keys
-*.pem
+patch-*
