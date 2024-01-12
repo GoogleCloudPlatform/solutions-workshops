@@ -23,6 +23,12 @@ metadata:
 commonLabels:
   app.kubernetes.io/part-of: grpc-xds-workshop
 patches:
+- path: patch-experimental-flags.yaml
+  target:
+    group: apps
+    kind: Deployment
+    name: greeter-.*
+    version: v1
 - path: patch-probes.yaml
   target:
     group: apps

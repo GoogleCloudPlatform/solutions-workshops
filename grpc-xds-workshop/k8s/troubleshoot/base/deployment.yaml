@@ -41,12 +41,12 @@ spec:
         image: busybox # kpt-set: ${bastion-image}
         command: ["sleep"]
         args: ["31536000"]
-        # env:
+        env:
+        - name: GOTRACEBACK
+          value: all
+        # Set GRPC_GO_LOG_SEVERITY_LEVEL and GRPC_GO_LOG_VERBOSITY_LEVEL to see more log output from Go-based troubleshooting tools.
         # - name: GRPC_GO_LOG_SEVERITY_LEVEL
         #   value: info
         # - name: GRPC_GO_LOG_VERBOSITY_LEVEL
         #   value: "99"
-        volumeMounts:
-        - name: tools
-          mountPath: /usr/local/bin
       serviceAccountName: bastion

@@ -1,6 +1,6 @@
 # vi: set ft=yaml :
 #
-# Copyright 2023 Google LLC
+# Copyright 2024 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,25 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Use gRPC's DNS resolver instead of xDS.
+
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 metadata:
   name: greeter-go-no-xds
   annotations:
     config.kubernetes.io/local-config: "true"
-patches:
-# Referencing files outside the `k8s` directory require `--load-restrictor=LoadRestrictionsNone`
-- path: ../../base/patch-go-env-vars.yaml
-  target:
-    group: apps
-    version: v1
-    kind: Deployment
-    name: control-plane
-- path: ../../base/patch-go-log-flags.yaml
-  target:
-    group: apps
-    version: v1
-    kind: Deployment
-    name: greeter-.*
+components:
+- ../../../../k8s/greeter/meta-components/no-xds
 resources:
-- ../../../../k8s/greeter/overlays/no-xds
+- ../../base

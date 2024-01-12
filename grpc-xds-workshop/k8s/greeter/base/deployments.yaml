@@ -35,7 +35,9 @@ spec:
       - name: app
         image: greeter
         args: []
-        env: []
+        env:
+        - name: NEXT_HOP
+          value: xds:///greeter-leaf
         ports:
         - containerPort: 50051
           name: app-port

@@ -45,5 +45,5 @@ spec:
   - crl sign
   privateKey:
     encoding: PKCS8 # Default is `PKCS1`. gRPC-Java requires PKCS #8
-    algorithm: RSA # gRPC-Java as of v1.60.1 only supports RSA for xDS
+    algorithm: RSA # gRPC-Java as of v1.60.1 only supports RSA for xDS, use the same algorithm for root CA certificate.
     size: 4096

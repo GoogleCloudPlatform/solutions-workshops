@@ -24,4 +24,3 @@ metadata:
 spec:
   ca:
     secretName: root-ca-certificate
-    

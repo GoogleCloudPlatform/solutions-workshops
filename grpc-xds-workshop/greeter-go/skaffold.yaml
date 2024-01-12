@@ -36,7 +36,7 @@ deploy:
 manifests:
   kustomize:
     buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
-    paths: ["k8s/overlays/diy-xds"]
+    paths: ["k8s/base"]
 portForward:
 - resourceType: Deployment
   resourceName: greeter-intermediary
@@ -54,7 +54,7 @@ profiles:
   activation:
   - command: debug
   patches:
-  # Use a different base image.
+  # Use a different base image when debugging.
   - op: replace
     path: /build/artifacts/0/ko/fromImage
     value: gcr.io/distroless/base-debian12:debug
@@ -75,15 +75,35 @@ profiles:
       namespace: xds # kpt-set: ${control-plane-namespace}
       localPort: 56272
       port: 56268 # delve debug port
-# Add zone lookup from node labels, useful when there is no metadata server available in the pod.
-- name: kind-xds
+# Deploy to a GKE cluster, and use GKE workload TLS certificates ("mesh certificates").
+- name: gke
   activation:
-  - kubeContext: kind-grpc-xds-workshop
+  - kubeContext: gke.*
   manifests:
     kustomize:
       buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
-      paths: ["k8s/overlays/kind-xds"]
-# No xDS, use kube-proxy and headful services.
+      paths: ["k8s/overlays/gke"]
+# Deploy to a GKE cluster, with workload TLS certificates from cert-manager.
+- name: gke-cert-manager
+  manifests:
+    kustomize:
+      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+      paths: ["k8s/overlays/gke-cert-manager"]
+# Deploy to a GKE cluster and use Traffic Director as the xDS control plane.
+- name: gke-td
+  manifests:
+    kustomize:
+      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+      paths: ["k8s/overlays/gke-td"]
+# Deploy to a kind Kubernetes cluster, with workload TLS certificates from cert-manager.
+- name: kind
+  activation:
+  - kubeContext: kind.*
+  manifests:
+    kustomize:
+      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+      paths: ["k8s/overlays/kind"]
+# No xDS, use gRPC DNS resolver, kube-proxy, and headful services.
 - name: no-xds
   manifests:
     kustomize:

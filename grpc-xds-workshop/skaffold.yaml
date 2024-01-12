@@ -66,13 +66,30 @@ manifests:
     buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
     paths: ["k8s/troubleshoot/base"]
 profiles:
-- name: kind-xds
+- name: gke
   activation:
-  - kubeContext: kind-grpc-xds-workshop
+  - kubeContext: gke.*
   manifests:
     kustomize:
       buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
-      paths: ["k8s/troubleshoot/overlays/kind-xds"]
+      paths: ["k8s/troubleshoot/overlays/gke"]
+- name: gke-cert-manager
+  manifests:
+    kustomize:
+      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+      paths: ["k8s/troubleshoot/overlays/gke-cert-manager"]
+- name: gke-ts
+  manifests:
+    kustomize:
+      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+      paths: ["k8s/troubleshoot/overlays/gke-td"]
+- name: kind
+  activation:
+  - kubeContext: kind.*
+  manifests:
+    kustomize:
+      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+      paths: ["k8s/troubleshoot/overlays/kind"]
 ---
 apiVersion: skaffold/v3
 kind: Config

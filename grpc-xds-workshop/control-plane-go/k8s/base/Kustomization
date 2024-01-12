@@ -14,35 +14,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Use this kustomization for a no-TLS/mTLS deployment.
+
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 metadata:
   name: control-plane-go
   annotations:
     config.kubernetes.io/local-config: "true"
-configMapGenerator:
-- name: app-config
-  namespace: xds # kpt-set: ${control-plane-namespace}
-  files:
-  - ../../config/informers.yaml
-patches:
-- path: patch-config-dir-env.yaml
-  target:
-    group: apps
-    version: v1
-    kind: Deployment
-    name: control-plane
-- path: patch-go-env-vars.yaml
-  target:
-    group: apps
-    version: v1
-    kind: Deployment
-    name: control-plane
-- path: patch-go-log-flags.yaml
-  target:
-    group: apps
-    version: v1
-    kind: Deployment
-    name: control-plane
+components:
+- ../components/app-config
+- ../components/go-flags
 resources:
 - ../../../k8s/control-plane/base

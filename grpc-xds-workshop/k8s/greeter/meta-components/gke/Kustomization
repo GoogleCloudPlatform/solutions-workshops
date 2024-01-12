@@ -1,0 +1,30 @@
+# vi: set ft=yaml :
+#
+# Copyright 2024 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Deploy to a GKE cluster, with an in-cluster self-managed xDS control plane,
+# and use managed GKE workload TLS certificates ("mesh certificates").
+# A certificate authority (CA) must already be set up in Certificate Authority Service,
+# see: https://cloud.google.com/traffic-director/docs/security-proxyless-setup
+
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+metadata:
+  name: greeter-gke
+  annotations:
+    config.kubernetes.io/local-config: "true"
+components:
+- ../../components/bootstrap-diy
+- ../../components/tls-gke-workload-certs

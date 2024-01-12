@@ -1,0 +1,36 @@
+# vi: set ft=yaml :
+#
+# Copyright 2024 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Create an xDS bootstrap file for greeter-[intermediary|leaf],
+# pointing to Traffic Director as the xDS control plane.
+
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+metadata:
+  name: greeter-bootstrap-td
+  annotations:
+    config.kubernetes.io/local-config: "true"
+images:
+- name: td-grpc-bootstrap
+  newName: gcr.io/trafficdirector-prod/td-grpc-bootstrap:0.15.0
+  digest: sha256:16f3ebacb6f5541f93474908ac2be08adfb427b263587200e2a0ea94e0d61ec3
+patches:
+- path: patch-xds-init-td.yaml
+  target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: greeter-.*|bastion

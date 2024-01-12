@@ -1,0 +1,89 @@
+# Copyright 2023 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Ref: https://cert-manager.io/docs/reference/api-docs/#cert-manager.io/v1.Certificate
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: greeter-intermediary
+  namespace: xds # kpt-set: ${greeter-namespace}
+  labels:
+    app.kubernetes.io/component: greeter
+spec:
+  commonName: greeter-intermediary
+  duration: 24h
+  renewBefore: 8h
+  dnsNames:
+  - greeter-intermediary
+  - greeter-intermediary:50051
+  - greeter-intermediary.xds:50051 # kpt-set: greeter-intermediary.${greeter-namespace}:50051
+  - greeter-intermediary.xds.svc.cluster.local:50051 # kpt-set: greeter-intermediary.${greeter-namespace}.svc.cluster.local:50051
+  uris:
+  - spiffe://cluster.local/ns/xds/sa/greeter-intermediary # kpt-set: spiffe://${project-id}.svc.id.goog/ns/${greeter-namespace}/sa/greeter-intermediary
+  secretName: greeter-intermediate-cert
+  issuerRef:
+    name: root-ca
+    kind: ClusterIssuer
+    group: cert-manager.io
+  isCA: false
+  usages:
+  # https://cert-manager.io/docs/reference/api-docs/#cert-manager.io/v1.KeyUsage
+  - digital signature
+  - key encipherment
+  - key agreement
+  # https://cert-manager.io/docs/usage/certificate/#x509-key-usages-and-extended-key-usages
+  - server auth
+  - client auth
+  privateKey:
+    encoding: PKCS8 # Default is `PKCS1`. gRPC-Java requires PKCS #8
+    algorithm: RSA # gRPC-Java as of v1.60.1 only supports RSA for xDS
+    size: 4096
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: greeter-leaf
+  namespace: xds # kpt-set: ${greeter-namespace}
+  labels:
+    app.kubernetes.io/component: greeter
+spec:
+  commonName: greeter-leaf
+  duration: 24h
+  renewBefore: 8h
+  dnsNames:
+  - greeter-leaf
+  - greeter-leaf:50051
+  - greeter-leaf.xds:50051 # kpt-set: greeter-leaf.${greeter-namespace}:50051
+  - greeter-leaf.xds.svc.cluster.local:50051 # kpt-set: greeter-leaf.${greeter-namespace}.svc.cluster.local:50051
+  uris:
+  - spiffe://cluster.local/ns/xds/sa/greeter-leaf # kpt-set: spiffe://${project-id}.svc.id.goog/ns/${greeter-namespace}/sa/greeter-leaf
+  secretName: greeter-leaf-cert
+  issuerRef:
+    name: root-ca
+    kind: ClusterIssuer
+    group: cert-manager.io
+  isCA: false
+  usages:
+  # https://cert-manager.io/docs/reference/api-docs/#cert-manager.io/v1.KeyUsage
+  - digital signature
+  - key encipherment
+  - key agreement
+  # https://cert-manager.io/docs/usage/certificate/#x509-key-usages-and-extended-key-usages
+  - server auth
+  - client auth
+  privateKey:
+    encoding: PKCS8 # Default is `PKCS1`. gRPC-Java requires PKCS #8
+    algorithm: RSA # gRPC-Java as of v1.60.1 only supports RSA for xDS
+    size: 4096

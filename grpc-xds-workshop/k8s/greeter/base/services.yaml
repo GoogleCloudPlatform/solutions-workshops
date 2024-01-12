@@ -20,6 +20,7 @@ metadata:
   labels:
     app.kubernetes.io/component: greeter
 spec:
+  clusterIP: None # https://kubernetes.io/docs/concepts/services-networking/service/#headless-services
   ports:
   - appProtocol: gRPC
     name: app
@@ -38,6 +39,7 @@ metadata:
   labels:
     app.kubernetes.io/component: greeter
 spec:
+  clusterIP: None # https://kubernetes.io/docs/concepts/services-networking/service/#headless-services
   ports:
   - appProtocol: gRPC
     name: app
