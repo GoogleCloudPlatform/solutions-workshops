@@ -49,6 +49,10 @@ const (
 	serverListenerResourceNameTemplate = "grpc/server?xds.resource.listening_address=%s"
 	// serverListenerRouteConfigurationName is used for the RouteConfiguration pointed to by server Listeners.
 	serverListenerRouteConfigurationName = "default_inbound_config"
+	// tlsCertificateProviderInstanceName is used in the `[Down|Up]streamTlsContext`s.
+	// Using the same name as the `traffic-director-grpc-bootstrap` tool, but this is not important.
+	// https://github.com/GoogleCloudPlatform/traffic-director-grpc-bootstrap/blob/2a9cf4614b56ec085c391a12f4cc53defaa575ac/main.go#L276
+	tlsCertificateProviderInstanceName = "google_cloud_private_spiffe"
 )
 
 // SnapshotBuilder builds xDS resource snapshots for the cache.
@@ -58,16 +62,18 @@ type SnapshotBuilder struct {
 	clusters                map[string]types.Resource
 	clusterLoadAssignments  map[string]types.Resource
 	serverListenerAddresses map[EndpointAddress]bool
+	features                *Features
 }
 
 // NewSnapshotBuilder initializes the builder.
-func NewSnapshotBuilder() *SnapshotBuilder {
+func NewSnapshotBuilder(features *Features) *SnapshotBuilder {
 	return &SnapshotBuilder{
 		listeners:               make(map[string]types.Resource),
 		routeConfigurations:     make(map[string]types.Resource),
 		clusters:                make(map[string]types.Resource),
 		clusterLoadAssignments:  make(map[string]types.Resource),
 		serverListenerAddresses: make(map[EndpointAddress]bool),
+		features:                features,
 	}
 }
 
@@ -107,7 +113,12 @@ func (b *SnapshotBuilder) AddGRPCApplications(apps []GRPCApplication) (*Snapshot
 		b.listeners[apiListener.Name] = apiListener
 		routeConfiguration := createRouteConfiguration(app.RouteConfigurationName(), app.ListenerName(), app.PathPrefix(), app.ClusterName())
 		b.routeConfigurations[routeConfiguration.Name] = routeConfiguration
-		cluster, err := createCluster(app.ClusterName(), app.Namespace(), app.ServiceAccountName())
+		cluster, err := createCluster(
+			app.ClusterName(),
+			app.Namespace(),
+			app.ServiceAccountName(),
+			b.features.EnableDataPlaneTLS,
+			b.features.RequireDataPlaneClientCerts)
 		if err != nil {
 			return nil, fmt.Errorf("could not create CDS Cluster for gRPC application %+v: %w", app, err)
 		}
@@ -130,7 +141,13 @@ func (b *SnapshotBuilder) AddServerListenerAddresses(addresses []EndpointAddress
 // Build adds the server listeners and route configuration for the node hash, and then builds the snapshot.
 func (b *SnapshotBuilder) Build() (cachev3.ResourceSnapshot, error) {
 	for address := range b.serverListenerAddresses {
-		serverListener, err := createServerListener(address.host, address.port, serverListenerRouteConfigurationName)
+		serverListener, err := createServerListener(
+			address.host,
+			address.port,
+			serverListenerRouteConfigurationName,
+			b.features.ServerListenerUsesRDS,
+			b.features.EnableDataPlaneTLS,
+			b.features.RequireDataPlaneClientCerts)
 		if err != nil {
 			return nil, fmt.Errorf("could not create server Listener for address %s:%d: %w", address.host, address.port, err)
 		}
@@ -235,21 +252,15 @@ func createAPIListener(name string, routeConfigurationName string) (*listenerv3.
 }
 
 // createServerListener returns a listener for xDS clients that serve gRPC services.
-func createServerListener(host string, port uint32, routeConfigurationName string) (*listenerv3.Listener, error) {
+func createServerListener(host string, port uint32, routeConfigurationName string, useRDS bool, enableTLS bool, requireClientCerts bool) (*listenerv3.Listener, error) {
 	routerTypedConfig, err := anypb.New(&routerv3.Router{})
 	if err != nil {
 		return nil, fmt.Errorf("could not marshall Router typedConfig into Any instance: %w", err)
 	}
-	httpConnectionManager := createHTTPConnectionManagerForServerListener(routeConfigurationName, routerTypedConfig)
+	httpConnectionManager := createHTTPConnectionManagerForServerListener(routeConfigurationName, routerTypedConfig, useRDS)
 	anyWrappedHTTPConnectionManager, err := anypb.New(httpConnectionManager)
 	if err != nil {
 		return nil, fmt.Errorf("could not marshall HttpConnectionManager +%v into Any instance: %w", httpConnectionManager, err)
-	}
-
-	downstreamTLSContext := createDownstreamTLSContext()
-	anyWrappedDownstreamTLSContext, err := anypb.New(downstreamTLSContext)
-	if err != nil {
-		return nil, fmt.Errorf("could not marshall DownstreamTlsContext +%v into Any instance: %w", downstreamTLSContext, err)
 	}
 
 	// Relying on `serverListenerResourceNameTemplate` being an exact match of
@@ -257,7 +268,7 @@ func createServerListener(host string, port uint32, routeConfigurationName strin
 	// [gRFC A36: xDS-Enabled Servers]: https://github.com/grpc/proposal/blob/fd10c1a86562b712c2c5fa23178992654c47a072/A36-xds-for-servers.md#xds-protocol
 	listenerName := fmt.Sprintf(serverListenerResourceNameTemplate, net.JoinHostPort(host, strconv.Itoa(int(port))))
 
-	return &listenerv3.Listener{
+	serverListener := listenerv3.Listener{
 		Name: listenerName,
 		Address: &corev3.Address{
 			Address: &corev3.Address_SocketAddress{
@@ -280,39 +291,33 @@ func createServerListener(host string, port uint32, routeConfigurationName strin
 						},
 					},
 				},
-				TransportSocket: &corev3.TransportSocket{
-					Name: envoyTransportSocketsTLSName,
-					ConfigType: &corev3.TransportSocket_TypedConfig{
-						TypedConfig: anyWrappedDownstreamTLSContext,
-					},
-				},
 			},
 		},
 		TrafficDirection: corev3.TrafficDirection_INBOUND,
 		EnableReusePort:  wrapperspb.Bool(true),
-	}, nil
+	}
+
+	if enableTLS {
+		downstreamTLSContext := createDownstreamTLSContext(requireClientCerts)
+		anyWrappedDownstreamTLSContext, err := anypb.New(downstreamTLSContext)
+		if err != nil {
+			return nil, fmt.Errorf("could not marshall DownstreamTlsContext %+v into Any instance: %w", downstreamTLSContext, err)
+		}
+		serverListener.FilterChains[0].TransportSocket = &corev3.TransportSocket{
+			Name: envoyTransportSocketsTLSName,
+			ConfigType: &corev3.TransportSocket_TypedConfig{
+				TypedConfig: anyWrappedDownstreamTLSContext,
+			},
+		}
+	}
+
+	return &serverListener, nil
 }
 
-func createHTTPConnectionManagerForServerListener(routeConfigurationName string, routerTypedConfig *anypb.Any) *hcmv3.HttpConnectionManager {
-	return &hcmv3.HttpConnectionManager{
+func createHTTPConnectionManagerForServerListener(routeConfigurationName string, routerTypedConfig *anypb.Any, useRDS bool) *hcmv3.HttpConnectionManager {
+	httpConnectionManager := hcmv3.HttpConnectionManager{
 		CodecType:  hcmv3.HttpConnectionManager_AUTO,
 		StatPrefix: routeConfigurationName,
-		// Inline RouteConfiguration for server listeners:
-		RouteSpecifier: &hcmv3.HttpConnectionManager_RouteConfig{
-			RouteConfig: createRouteConfigurationForServerListener(routeConfigurationName),
-		},
-		// Dynamic RouteConfiguration via RDS for server listeners:
-		// RouteSpecifier: &hcmv3.HttpConnectionManager_Rds{
-		// 	Rds: &hcmv3.Rds{
-		// 		ConfigSource: &corev3.ConfigSource{
-		// 			ConfigSourceSpecifier: &corev3.ConfigSource_Ads{
-		// 				Ads: &corev3.AggregatedConfigSource{},
-		// 			},
-		// 			ResourceApiVersion: corev3.ApiVersion_V3,
-		// 		},
-		// 		RouteConfigName: routeConfigurationName,
-		// 	},
-		// },
 		HttpFilters: []*hcmv3.HttpFilter{
 			{
 				// Router must be the last filter.
@@ -334,38 +339,68 @@ func createHTTPConnectionManagerForServerListener(routeConfigurationName string,
 			},
 		},
 	}
+
+	if useRDS {
+		// Dynamic RouteConfiguration via RDS for server listeners:
+		httpConnectionManager.RouteSpecifier = &hcmv3.HttpConnectionManager_Rds{
+			Rds: &hcmv3.Rds{
+				ConfigSource: &corev3.ConfigSource{
+					ConfigSourceSpecifier: &corev3.ConfigSource_Ads{
+						Ads: &corev3.AggregatedConfigSource{},
+					},
+					ResourceApiVersion: corev3.ApiVersion_V3,
+				},
+				RouteConfigName: routeConfigurationName,
+			},
+		}
+	} else {
+		// Inline RouteConfiguration for server listeners:
+		httpConnectionManager.RouteSpecifier = &hcmv3.HttpConnectionManager_RouteConfig{
+			RouteConfig: createRouteConfigurationForServerListener(routeConfigurationName),
+		}
+	}
+
+	return &httpConnectionManager
 }
 
 // createDownstreamTLSContext configures:
 // 1. gRPC server TLS certificate provider
 // 2. certificate authorities (CAs) to validate gRPC client certificates.
-func createDownstreamTLSContext() *tlsv3.DownstreamTlsContext {
-	return &tlsv3.DownstreamTlsContext{
+func createDownstreamTLSContext(requireClientCerts bool) *tlsv3.DownstreamTlsContext {
+	downstreamTLSContext := tlsv3.DownstreamTlsContext{
 		CommonTlsContext: &tlsv3.CommonTlsContext{
 			// Set server certificate:
 			TlsCertificateProviderInstance: &tlsv3.CertificateProviderPluginInstance{
-				// https://github.com/GoogleCloudPlatform/traffic-director-grpc-bootstrap/blob/2a9cf4614b56ec085c391a12f4cc53defaa575ac/main.go#L276
-				InstanceName: "google_cloud_private_spiffe",
+				InstanceName: tlsCertificateProviderInstanceName,
 				// Using the same certificate name value as Traffic Director, but the
 				// certificate name is ignored by gRPC according to gRFC A29.
 				CertificateName: "DEFAULT",
 			},
-			// Validate client certificates:
-			ValidationContextType: &tlsv3.CommonTlsContext_ValidationContext{
-				ValidationContext: &tlsv3.CertificateValidationContext{
-					CaCertificateProviderInstance: &tlsv3.CertificateProviderPluginInstance{
-						InstanceName: "google_cloud_private_spiffe", // assumes same CA for clients and servers
-						// Using the same certificate name value as Traffic Director,
-						// but the certificate name is ignored by gRPC, see gRFC A29.
-						CertificateName: "ROOTCA",
-					},
-				},
-			},
 			// AlpnProtocols is set by Traffic Director, but ignored by gRPC according to gRFC A29.
 			AlpnProtocols: []string{"h2"},
 		},
-		RequireClientCertificate: wrapperspb.Bool(true), // `true` value requires a `ValidationContext`
 	}
+
+	if requireClientCerts {
+		// `require_client_certificate: true` requires a `validation_context`.
+		downstreamTLSContext.RequireClientCertificate = wrapperspb.Bool(true)
+		// Validate client certificates:
+		// gRFC A29 specifies to use either `validation_context` or
+		// `combined_validation_context.default_validation_context`, but
+		// gRPC-Java as of v1.60.0 doesn't handle `combined_validation_context` correctly.
+		downstreamTLSContext.CommonTlsContext.ValidationContextType = &tlsv3.CommonTlsContext_ValidationContext{
+			ValidationContext: &tlsv3.CertificateValidationContext{
+				CaCertificateProviderInstance: &tlsv3.CertificateProviderPluginInstance{
+					InstanceName: tlsCertificateProviderInstanceName,
+					// Using the same certificate name value as Traffic Director,
+					// but the certificate name is ignored by gRPC, see gRFC A29.
+					CertificateName: "ROOTCA",
+				},
+			},
+		}
+	}
+
+	return &downstreamTLSContext
 }
 
 // createRouteConfiguration returns an RDS route configuration for a gRPC
@@ -433,14 +468,8 @@ func createRouteConfigurationForServerListener(name string) *routev3.RouteConfig
 
 // createCluster definition for CDS.
 // [gRFC A27]: https://github.com/grpc/proposal/blob/972b69ab1f0f7f6079af81a8c2b8a01a15ce3bec/A27-xds-global-load-balancing.md#cluster-proto
-func createCluster(name string, namespace string, serviceAccountName string) (*clusterv3.Cluster, error) {
-	upstreamTLSContext := createUpstreamTLSContext(namespace, serviceAccountName)
-	anyWrappedUpstreamTLSContext, err := anypb.New(upstreamTLSContext)
-	if err != nil {
-		return nil, fmt.Errorf("could not marshall UpstreamTlsContext +%v into Any instance: %w", upstreamTLSContext, err)
-	}
-
-	return &clusterv3.Cluster{
+func createCluster(name string, namespace string, serviceAccountName string, enableTLS bool, requireClientCerts bool) (*clusterv3.Cluster, error) {
+	cluster := clusterv3.Cluster{
 		Name: name,
 		ClusterDiscoveryType: &clusterv3.Cluster_Type{
 			Type: clusterv3.Cluster_EDS,
@@ -456,35 +485,37 @@ func createCluster(name string, namespace string, serviceAccountName string) (*c
 		ConnectTimeout: &durationpb.Duration{
 			Seconds: 3, // default is 5s
 		},
-		TransportSocket: &corev3.TransportSocket{
+		LbPolicy: clusterv3.Cluster_ROUND_ROBIN,
+	}
+
+	if enableTLS {
+		upstreamTLSContext := createUpstreamTLSContext(namespace, serviceAccountName, requireClientCerts)
+		anyWrappedUpstreamTLSContext, err := anypb.New(upstreamTLSContext)
+		if err != nil {
+			return nil, fmt.Errorf("could not marshall UpstreamTlsContext +%v into Any instance: %w", upstreamTLSContext, err)
+		}
+		cluster.TransportSocket = &corev3.TransportSocket{
 			Name: envoyTransportSocketsTLSName,
 			ConfigType: &corev3.TransportSocket_TypedConfig{
 				TypedConfig: anyWrappedUpstreamTLSContext,
 			},
-		},
-		LbPolicy: clusterv3.Cluster_ROUND_ROBIN,
-	}, nil
+		}
+	}
+
+	return &cluster, nil
 }
 
 // createUpstreamTLSContext configures:
 // 1. gRPC client TLS certificate provider
 // 2. certificate authorities (CAs) to validate gRPC server certificates, including server authorization.
-func createUpstreamTLSContext(namespace string, serviceAccountName string) *tlsv3.UpstreamTlsContext {
-	return &tlsv3.UpstreamTlsContext{
+func createUpstreamTLSContext(namespace string, serviceAccountName string, requireClientCerts bool) *tlsv3.UpstreamTlsContext {
+	upstreamTLSContext := tlsv3.UpstreamTlsContext{
 		CommonTlsContext: &tlsv3.CommonTlsContext{
-			// Send client certificate in TLS handshake:
-			TlsCertificateProviderInstance: &tlsv3.CertificateProviderPluginInstance{
-				// https://github.com/GoogleCloudPlatform/traffic-director-grpc-bootstrap/blob/2a9cf4614b56ec085c391a12f4cc53defaa575ac/main.go#L276
-				InstanceName: "google_cloud_private_spiffe",
-				// Using the same certificate name value as Traffic Director, but the
-				// certificate name is ignored by gRPC according to gRFC A29.
-				CertificateName: "DEFAULT",
-			},
 			// Validate gRPC server certificates:
 			ValidationContextType: &tlsv3.CommonTlsContext_ValidationContext{
 				ValidationContext: &tlsv3.CertificateValidationContext{
 					CaCertificateProviderInstance: &tlsv3.CertificateProviderPluginInstance{
-						InstanceName: "google_cloud_private_spiffe",
+						InstanceName: tlsCertificateProviderInstanceName,
 						// Using the same certificate name value as Traffic Director,
 						// but the certificate name is ignored by gRPC, see gRFC A29.
 						CertificateName: "ROOTCA",
@@ -506,6 +537,18 @@ func createUpstreamTLSContext(namespace string, serviceAccountName string) *tlsv
 			},
 		},
 	}
+
+	if requireClientCerts {
+		// Send client certificate in TLS handshake:
+		upstreamTLSContext.CommonTlsContext.TlsCertificateProviderInstance = &tlsv3.CertificateProviderPluginInstance{
+			InstanceName: tlsCertificateProviderInstanceName,
+			// Using the same certificate name value as Traffic Director, but the
+			// certificate name is ignored by gRPC according to gRFC A29.
+			CertificateName: "DEFAULT",
+		}
+	}
+
+	return &upstreamTLSContext
 }
 
 // createClusterLoadAssignment for EDS.

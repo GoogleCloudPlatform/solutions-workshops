@@ -53,12 +53,10 @@ public class Server {
   /** Runs the server. */
   public void run(ServerConfig config) throws Exception {
     int servingPort = config.servingPort();
-    String nextHop = config.nextHop();
     boolean useXds = config.useXds();
-
     var health = new HealthStatusManager();
     var serverBuilder = createServerBuilder(servingPort, useXds);
-    // Start separate server on different port for health checks.
+    // Start separate server on different port for health checks and admin services.
     var healthServerBuilder = createServerBuilder(config.healthPort(), false);
     serverBuilder
         .addService(ProtoReflectionService.newInstance())
@@ -81,6 +79,7 @@ public class Server {
 
     String greeterName = config.greeterName();
     ServerServiceDefinition greeterServiceDefinition;
+    String nextHop = config.nextHop();
     if (nextHop.isBlank()) {
       LOG.info("Adding leaf Greeter service, as NEXT_HOP is not provided.");
       greeterServiceDefinition = new GreeterLeaf(greeterName).bindService();

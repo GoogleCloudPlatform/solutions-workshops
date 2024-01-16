@@ -15,6 +15,7 @@
 package com.google.examples.xds.controlplane.config;
 
 import com.google.examples.xds.controlplane.informers.InformerConfig;
+import com.google.examples.xds.controlplane.xds.XdsFeatures;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -44,6 +45,9 @@ public class ServerConfig {
 
   /** The file that lists the K8s Services whose EndpointSlices should be watched. */
   private static final String INFORMERS_CONFIG_FILE = "config/informers.yaml";
+
+  /** The file that contains xDS feature toggles. */
+  private static final String XDS_FEATURES_CONFIG_FILE = "config/xds_features.yaml";
 
   /** Returns the port number that the management server should listen on for xDS requests. */
   public int servingPort() {
@@ -86,7 +90,22 @@ public class ServerConfig {
           new InformerConfig(
               (String) config.get("namespace"), (List<String>) config.get("services")));
     }
+    LOG.info("Informer configurations: {}", informerConfigurations);
     return informerConfigurations;
+  }
+
+  /** Reads xDS feature flags from a file on the classpath. */
+  @SuppressWarnings("unchecked")
+  @NotNull
+  public XdsFeatures xdsFeatures() {
+    var featureMap =
+        (Map<String, Boolean>)
+            new Load(LoadSettings.builder().build())
+                .loadFromInputStream(
+                    getClassLoader().getResourceAsStream(XDS_FEATURES_CONFIG_FILE));
+    var xdsFeatures = new XdsFeatures(featureMap);
+    LOG.info("xDS features: {}", xdsFeatures);
+    return xdsFeatures;
   }
 
   @NotNull
@@ -105,7 +124,7 @@ public class ServerConfig {
         return classLoader;
       }
     } catch (Exception e) {
-      LOG.warn("Could not get class loader of {} class.", this.getClass().getSimpleName(), e);
+      LOG.warn("Could not get class loader of {} class.", this.getClass().getName(), e);
     }
     var systemClassLoader = ClassLoader.getSystemClassLoader();
     if (systemClassLoader == null) {

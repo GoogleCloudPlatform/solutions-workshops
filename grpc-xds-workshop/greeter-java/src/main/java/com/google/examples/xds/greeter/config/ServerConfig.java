@@ -40,7 +40,9 @@ public class ServerConfig {
   private static final String DEFAULT_SERVING_PORT = "50051";
   private static final String DEFAULT_HEALTH_PORT = "50052";
 
-  /** Returns the port number that the gRPC server should listen on for serving the greeter service. */
+  /**
+   * Returns the port number that the gRPC server should listen on for serving the greeter service.
+   */
   public int servingPort() {
     return Integer.parseInt(System.getenv().getOrDefault("PORT", DEFAULT_SERVING_PORT));
   }

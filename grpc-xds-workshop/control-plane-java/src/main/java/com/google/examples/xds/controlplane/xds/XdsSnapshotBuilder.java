@@ -113,6 +113,16 @@ public class XdsSnapshotBuilder {
    */
   private static final String SERVER_LISTENER_ROUTE_CONFIG_NAME = "default_inbound_config";
 
+  /**
+   * TLS_CERTIFICATE_PROVIDER_INSTANCE_NAME is used in the `[Down|Up]streamTlsContext`s.
+   *
+   * <p>Using the same name as the <a
+   * href="https://github.com/GoogleCloudPlatform/traffic-director-grpc-bootstrap/blob/2a9cf4614b56ec085c391a12f4cc53defaa575ac/main.go#L276">
+   * <code>traffic-director-grpc-bootstrap</code></a> tool, but this is not important.
+   */
+  private static final String TLS_CERTIFICATE_PROVIDER_INSTANCE_NAME =
+      "google_cloud_private_spiffe";
+
   private final Map<String, Listener> listeners = new HashMap<>();
   private final Map<String, RouteConfiguration> routeConfigurations = new HashMap<>();
   private final Map<String, Cluster> clusters = new HashMap<>();
@@ -121,8 +131,12 @@ public class XdsSnapshotBuilder {
   /** Addresses for server listeners to be added to the snapshot. */
   private final Set<EndpointAddress> serverListenerAddresses = new HashSet<>();
 
+  private final XdsFeatures xdsFeatures;
+
   /** Creates a builder for an xDS resource cache snapshot. */
-  public XdsSnapshotBuilder() {}
+  public XdsSnapshotBuilder(@NotNull XdsFeatures xdsFeatures) {
+    this.xdsFeatures = xdsFeatures;
+  }
 
   /**
    * Add the Listener, RouteConfiguration, Cluster, and ClusterLoadAssignment resources from the
@@ -188,7 +202,13 @@ public class XdsSnapshotBuilder {
   @NotNull
   public Snapshot build() {
     for (EndpointAddress address : serverListenerAddresses) {
-      Listener serverListener = createServerListener(address.ipAddress(), address.port());
+      Listener serverListener =
+          createServerListener(
+              address.ipAddress(),
+              address.port(),
+              xdsFeatures.serverListenerUsesRds(),
+              xdsFeatures.enableDataPlaneTls(),
+              xdsFeatures.requireDataPlaneClientCerts());
       listeners.put(serverListener.getName(), serverListener);
     }
     if (!serverListenerAddresses.isEmpty()) {
@@ -256,36 +276,30 @@ public class XdsSnapshotBuilder {
    *
    * @return a Listener, using RDS for the RouteConfiguration
    */
-  private Listener createServerListener(@NotNull String address, int port) {
-    var httpConnectionManager =
-        HttpConnectionManager.newBuilder()
-            .setCodecType(CodecType.AUTO)
-            .setStatPrefix("default_inbound_config")
-            // Use setRouteConfig() for inline RouteConfiguration, or setRds() for dynamic RDS.
-            .setRouteConfig(createRouteConfigForServerListener())
-            // .setRds(
-            //     Rds.newBuilder()
-            //         .setConfigSource(
-            //             ConfigSource.newBuilder()
-            //                 .setResourceApiVersion(ApiVersion.V3)
-            //                 .setAds(AggregatedConfigSource.getDefaultInstance())
-            //                 .build())
-            //         .setRouteConfigName(SERVER_LISTENER_ROUTE_CONFIG_NAME)
-            //         .build())
-            .addHttpFilters(
-                HttpFilter.newBuilder()
-                    .setName(ENVOY_FILTER_HTTP_ROUTER)
-                    .setTypedConfig(Any.pack(Router.newBuilder().build()))
-                    .build())
-            .setForwardClientCertDetails(ForwardClientCertDetails.APPEND_FORWARD)
-            .setSetCurrentClientCertDetails(
-                SetCurrentClientCertDetails.newBuilder()
-                    .setSubject(BoolValue.of(true))
-                    .setDns(true)
-                    .setUri(true)
-                    .build())
-            .addUpgradeConfigs(UpgradeConfig.newBuilder().setUpgradeType("websocket").build())
-            .build();
+  private Listener createServerListener(
+      @NotNull String address,
+      int port,
+      boolean useRds,
+      boolean enableTls,
+      boolean requireClientCerts) {
+    var httpConnectionManager = createHttpConnectionManagerForServerListener(useRds);
+
+    var filterChainBuilder =
+        FilterChain.newBuilder()
+            .addFilters(
+                Filter.newBuilder()
+                    .setName(ENVOY_HTTP_CONNECTION_MANAGER) // must be the last filter
+                    .setTypedConfig(Any.pack(httpConnectionManager))
+                    .build());
+    if (enableTls) {
+      var downstreamTlsContext = createDownstreamTlsContext(requireClientCerts);
+      filterChainBuilder.setTransportSocket(
+          TransportSocket.newBuilder()
+              .setName(TRANSPORT_SOCKET_NAME_TLS)
+              .setTypedConfig(Any.pack(downstreamTlsContext))
+              .build());
+    }
+    var filterChain = filterChainBuilder.build();
 
     String listenerName = SERVER_LISTENER_RESOURCE_NAME_TEMPLATE.formatted(address + ":" + port);
     var socketAddressAddress = address;
@@ -293,42 +307,6 @@ public class XdsSnapshotBuilder {
       // Special IPv6 address handling ("[::]" -> "::"):
       socketAddressAddress = address.substring(1, address.length() - 1);
     }
-
-    var downstreamTlsContext =
-        DownstreamTlsContext.newBuilder()
-            .setCommonTlsContext(
-                CommonTlsContext.newBuilder()
-                    // Set server certificate:
-                    .setTlsCertificateProviderInstance(
-                        CertificateProviderPluginInstance.newBuilder()
-                            // https://github.com/GoogleCloudPlatform/traffic-director-grpc-bootstrap/blob/2a9cf4614b56ec085c391a12f4cc53defaa575ac/main.go#L276
-                            .setInstanceName("google_cloud_private_spiffe")
-                            // Using the same certificate name value as Traffic Director, but the
-                            // certificate name is ignored by gRPC according to gRFC A29.
-                            .setCertificateName("DEFAULT")
-                            .build())
-                    // Validate client certificates:
-                    // gRFC A29 specifies to use either `validation_context` or
-                    // `combined_validation_context.default_validation_context`, but
-                    // gRPC-Java as of v1.60.0 doesn't handle `combined_validation_context`
-                    // correctly.
-                    .setValidationContext(
-                        CertificateValidationContext.newBuilder()
-                            .setCaCertificateProviderInstance(
-                                CertificateProviderPluginInstance.newBuilder()
-                                    // assumes same CA for clients and servers
-                                    .setInstanceName("google_cloud_private_spiffe")
-                                    // Using the same certificate name value as Traffic Director,
-                                    // but the certificate name is ignored by gRPC, see gRFC A29.
-                                    .setCertificateName("ROOTCA")
-                                    .build())
-                            .build())
-                    .addAlpnProtocols(
-                        "h2") // set by Traffic Director, but ignored by gRPC according to gRFC A29
-                    .build())
-            .setRequireClientCertificate(
-                BoolValue.of(true)) // `true` value requires a `ValidationContext`
-            .build();
 
     return Listener.newBuilder()
         .setName(listenerName)
@@ -341,22 +319,88 @@ public class XdsSnapshotBuilder {
                         .setProtocol(Protocol.TCP)
                         .build())
                 .build())
-        .addFilterChains(
-            FilterChain.newBuilder()
-                .addFilters(
-                    Filter.newBuilder()
-                        .setName(ENVOY_HTTP_CONNECTION_MANAGER) // must be the last filter
-                        .setTypedConfig(Any.pack(httpConnectionManager))
-                        .build())
-                .setTransportSocket(
-                    TransportSocket.newBuilder()
-                        .setName(TRANSPORT_SOCKET_NAME_TLS)
-                        .setTypedConfig(Any.pack(downstreamTlsContext))
-                        .build())
-                .build())
+        .addFilterChains(filterChain)
         .setTrafficDirection(TrafficDirection.INBOUND)
         .setEnableReusePort(BoolValue.of(true))
         .build();
+  }
+
+  private HttpConnectionManager createHttpConnectionManagerForServerListener(boolean useRds) {
+    var httpConnectionManagerBuilder =
+        HttpConnectionManager.newBuilder()
+            .setCodecType(CodecType.AUTO)
+            .setStatPrefix("default_inbound_config")
+            .addHttpFilters(
+                HttpFilter.newBuilder()
+                    .setName(ENVOY_FILTER_HTTP_ROUTER)
+                    .setTypedConfig(Any.pack(Router.newBuilder().build()))
+                    .build())
+            .setForwardClientCertDetails(ForwardClientCertDetails.APPEND_FORWARD)
+            .setSetCurrentClientCertDetails(
+                SetCurrentClientCertDetails.newBuilder()
+                    .setSubject(BoolValue.of(true))
+                    .setDns(true)
+                    .setUri(true)
+                    .build())
+            .addUpgradeConfigs(UpgradeConfig.newBuilder().setUpgradeType("websocket").build());
+
+    // Use setRouteConfig() for inline RouteConfiguration, or setRds() for dynamic RDS.
+    if (useRds) {
+      httpConnectionManagerBuilder.setRds(
+          Rds.newBuilder()
+              .setConfigSource(
+                  ConfigSource.newBuilder()
+                      .setResourceApiVersion(ApiVersion.V3)
+                      .setAds(AggregatedConfigSource.getDefaultInstance())
+                      .build())
+              .setRouteConfigName(SERVER_LISTENER_ROUTE_CONFIG_NAME)
+              .build());
+    } else {
+      httpConnectionManagerBuilder.setRouteConfig(createRouteConfigForServerListener());
+    }
+
+    return httpConnectionManagerBuilder.build();
+  }
+
+  private DownstreamTlsContext createDownstreamTlsContext(boolean requireClientCerts) {
+    var commonTlsContextBuilder =
+        CommonTlsContext.newBuilder()
+            // Set server certificate:
+            .setTlsCertificateProviderInstance(
+                CertificateProviderPluginInstance.newBuilder()
+                    // https://github.com/GoogleCloudPlatform/traffic-director-grpc-bootstrap/blob/2a9cf4614b56ec085c391a12f4cc53defaa575ac/main.go#L276
+                    .setInstanceName(TLS_CERTIFICATE_PROVIDER_INSTANCE_NAME)
+                    // Using the same certificate name value as Traffic Director, but the
+                    // certificate name is ignored by gRPC according to gRFC A29.
+                    .setCertificateName("DEFAULT")
+                    .build())
+            // Traffic Director sets AlpnProtocols, but it is ignored by gRPC according to gRFC A29.
+            .addAlpnProtocols("h2");
+
+    var downstreamTlsContextBuilder = DownstreamTlsContext.newBuilder();
+
+    if (requireClientCerts) {
+      // `require_client_certificate: true` requires a `validation_context`.
+      downstreamTlsContextBuilder.setRequireClientCertificate(BoolValue.of(true));
+      // Validate client certificates:
+      // gRFC A29 specifies to use either `validation_context` or
+      // `combined_validation_context.default_validation_context`, but
+      // gRPC-Java as of v1.60.0 doesn't handle `combined_validation_context` correctly.
+      commonTlsContextBuilder.setValidationContext(
+          CertificateValidationContext.newBuilder()
+              .setCaCertificateProviderInstance(
+                  CertificateProviderPluginInstance.newBuilder()
+                      .setInstanceName(TLS_CERTIFICATE_PROVIDER_INSTANCE_NAME)
+                      // Using the same certificate name value as Traffic Director,
+                      // but the certificate name is ignored by gRPC, see gRFC A29.
+                      .setCertificateName("ROOTCA")
+                      .build())
+              .build());
+    }
+
+    downstreamTlsContextBuilder.setCommonTlsContext(commonTlsContextBuilder.build());
+
+    return downstreamTlsContextBuilder.build();
   }
 
   /**
@@ -433,7 +477,7 @@ public class XdsSnapshotBuilder {
                     // Send client certificate in TLS handshake:
                     .setTlsCertificateProviderInstance(
                         CertificateProviderPluginInstance.newBuilder()
-                            .setInstanceName("google_cloud_private_spiffe")
+                            .setInstanceName(TLS_CERTIFICATE_PROVIDER_INSTANCE_NAME)
                             // Using the same certificate name value as Traffic Director,
                             // but the certificate name is ignored by gRPC says gRFC A29.
                             .setCertificateName("DEFAULT")
@@ -447,7 +491,7 @@ public class XdsSnapshotBuilder {
                         CertificateValidationContext.newBuilder()
                             .setCaCertificateProviderInstance(
                                 CertificateProviderPluginInstance.newBuilder()
-                                    .setInstanceName("google_cloud_private_spiffe")
+                                    .setInstanceName(TLS_CERTIFICATE_PROVIDER_INSTANCE_NAME)
                                     // Using the same certificate name value as Traffic Director,
                                     // but the certificate name is ignored by gRPC says gRFC A29.
                                     .setCertificateName("ROOTCA")

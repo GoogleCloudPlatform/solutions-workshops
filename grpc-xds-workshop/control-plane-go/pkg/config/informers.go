@@ -15,16 +15,15 @@
 package config
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/go-logr/logr"
 	"gopkg.in/yaml.v3"
 
 	"github.com/googlecloudplatform/solutions-workshops/grpc-xds-workshop/control-plane-go/pkg/informers"
-	"github.com/googlecloudplatform/solutions-workshops/grpc-xds-workshop/control-plane-go/pkg/logging"
 )
 
 const (
@@ -38,16 +37,16 @@ var (
 	errDuplicateNamespace = errors.New("namespace used more than once in the informer configuration")
 )
 
-func Informers(ctx context.Context) ([]informers.Config, error) {
+func Informers(logger logr.Logger) ([]informers.Config, error) {
 	configDir, exists := os.LookupEnv("CONFIG_DIR")
 	if !exists {
 		configDir = defaultConfigDir
 	}
 	informersConfigFilePath := filepath.Join(configDir, informersConfigFile)
-	logging.FromContext(ctx).V(4).Info("Loading informer configuration", "filepath", informersConfigFilePath)
+	logger.V(4).Info("Loading informer configuration", "filepath", informersConfigFilePath)
 	yamlBytes, err := os.ReadFile(informersConfigFilePath)
 	if err != nil {
-		return nil, fmt.Errorf("could not read informer configurations from file %s: %w", informersConfigFile, err)
+		return nil, fmt.Errorf("could not read informer configurations from file %s: %w", informersConfigFilePath, err)
 	}
 	var configs []informers.Config
 	err = yaml.Unmarshal(yamlBytes, &configs)
@@ -57,6 +56,7 @@ func Informers(ctx context.Context) ([]informers.Config, error) {
 	if err := validateInformerConfigs(configs); err != nil {
 		return nil, fmt.Errorf("informer configuration validation failed: %w", err)
 	}
+	logger.V(2).Info("Informer", "configurations", configs)
 	return configs, err
 }
 

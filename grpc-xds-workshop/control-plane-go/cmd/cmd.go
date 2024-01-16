@@ -42,9 +42,13 @@ func Run(ctx context.Context, flagset *flag.FlagSet, args []string) error {
 	if err != nil {
 		return fmt.Errorf("could not configure management server health checking port: %w", err)
 	}
-	informerConfigs, err := config.Informers(ctx)
+	informerConfigs, err := config.Informers(logger)
 	if err != nil {
 		return fmt.Errorf("could not initialize informer configuration: %w", err)
 	}
-	return server.Run(ctx, servingPort, healthPort, informerConfigs)
+	xdsFeatures, err := config.XDSFeatures(logger)
+	if err != nil {
+		return fmt.Errorf("could not initialize xDS feature flags: %w", err)
+	}
+	return server.Run(ctx, servingPort, healthPort, informerConfigs, xdsFeatures)
 }

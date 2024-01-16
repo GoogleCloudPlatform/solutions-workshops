@@ -48,7 +48,7 @@ public class Server {
 
   /** Runs the server. */
   public void run(@NotNull ServerConfig config) throws Exception {
-    var xdsCache = new XdsSnapshotCache<>(FIXED_HASH);
+    var xdsCache = new XdsSnapshotCache<>(FIXED_HASH, config.xdsFeatures());
     InformerManager<String> informers = setupInformers(xdsCache, config.informers());
     informers.start();
     Runtime.getRuntime().addShutdownHook(new Thread(informers::stop));

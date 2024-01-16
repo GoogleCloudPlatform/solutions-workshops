@@ -16,7 +16,6 @@ package com.google.examples.xds.controlplane.informers;
 
 import com.google.examples.xds.controlplane.xds.GrpcApplication;
 import com.google.examples.xds.controlplane.xds.GrpcApplicationEndpoint;
-import com.google.examples.xds.controlplane.xds.XdsSnapshotBuilder;
 import com.google.examples.xds.controlplane.xds.XdsSnapshotCache;
 import io.kubernetes.client.informer.ResourceEventHandler;
 import io.kubernetes.client.informer.SharedIndexInformer;
@@ -149,11 +148,10 @@ public class InformerManager<T> {
             .filter(this::isValid)
             .map(this::toGrpcApplication)
             .collect(Collectors.toSet());
-    XdsSnapshotBuilder snapshotBuilder = new XdsSnapshotBuilder().addGrpcApplications(apps);
-    cache.setSnapshot(snapshotBuilder);
+    cache.updateResources(apps);
   }
 
-  @SuppressWarnings("DataFlowIssue")
+  @SuppressWarnings("null") // https://github.com/redhat-developer/vscode-java/issues/3124
   @NotNull
   private GrpcApplication toGrpcApplication(@NotNull V1EndpointSlice endpointSlice) {
     List<GrpcApplicationEndpoint> applicationEndpoints = toGrpcApplicationEndpoints(endpointSlice);
@@ -194,6 +192,7 @@ public class InformerManager<T> {
         .toList();
   }
 
+  @SuppressWarnings("null") // https://github.com/redhat-developer/vscode-java/issues/3124
   private boolean isValid(V1EndpointSlice endpointSlice) {
     if (endpointSlice == null) {
       LOG.error("Skipping null EndPointSlice");

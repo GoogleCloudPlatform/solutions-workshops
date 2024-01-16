@@ -96,16 +96,20 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
    */
   private final ServerListenerCache<T> serverListenerCache;
 
+  /** xdsFeatures contains flags to enable and disable xDS features, e.g., mTLS. */
+  private final XdsFeatures xdsFeatures;
+
   /**
    * Create an xDS resource cache for the provided node hash function (<code>NodeGroup</code>).
    *
    * @param nodeHashFn function that returns a consistent identifier for a node.
    */
-  public XdsSnapshotCache(@NotNull NodeGroup<T> nodeHashFn) {
+  public XdsSnapshotCache(@NotNull NodeGroup<T> nodeHashFn, @NotNull XdsFeatures xdsFeatures) {
     this.delegate = new SimpleCache<>(nodeHashFn);
     this.nodeHashFn = nodeHashFn;
     this.appsCache = new GrpcApplicationCache();
     this.serverListenerCache = new ServerListenerCache<>();
+    this.xdsFeatures = xdsFeatures;
   }
 
   /**
@@ -136,7 +140,7 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
       boolean isAdded = serverListenerCache.add(nodeHash, listenerAddressesFromRequest);
       if (isAdded) {
         var snapshot =
-            new XdsSnapshotBuilder()
+            new XdsSnapshotBuilder(xdsFeatures)
                 .addGrpcApplications(appsCache.get())
                 .addServerListenerAddresses(serverListenerCache.get(nodeHash))
                 .build();
@@ -180,20 +184,25 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
   }
 
   /**
-   * For each node group (hash) in the cache, create a new snapshot based on the provided snapshot,
-   * with the addition of server listeners per group.
+   * UpdateResources creates a new snapshot for each node hash in the cache, based on the provided
+   * gRPC application configuration, with the addition of server listeners and their associated
+   * route configurations.
+   *
+   * @param apps gRPC application configuration to add to the new snapshot
    */
-  public void setSnapshot(@NotNull XdsSnapshotBuilder snapshotBuilder) {
+  public void updateResources(@NotNull Set<GrpcApplication> apps) {
     delegate
         .groups()
         .forEach(
             nodeHash -> {
               var snapshot =
-                  snapshotBuilder
+                  new XdsSnapshotBuilder(xdsFeatures)
+                      .addGrpcApplications(apps)
                       .addServerListenerAddresses(serverListenerCache.get(nodeHash))
                       .build();
               delegate.setSnapshot(nodeHash, snapshot);
             });
+    appsCache.set(apps);
   }
 
   /** Just delegating, since delta xDS is not supported by this control plane implementation. */

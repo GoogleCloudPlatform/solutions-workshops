@@ -53,7 +53,7 @@ const (
 	grpcMaxConcurrentStreams = 1000000
 )
 
-func Run(ctx context.Context, servingPort int, healthPort int, informerConfigs []informers.Config) error {
+func Run(ctx context.Context, servingPort int, healthPort int, informerConfigs []informers.Config, xdsFeatures *xds.Features) error {
 	logger := logging.FromContext(ctx)
 	grpcOptions, err := serverOptions(logger)
 	if err != nil {
@@ -74,7 +74,7 @@ func Run(ctx context.Context, servingPort int, healthPort int, informerConfigs [
 	defer cleanup()
 	reflection.Register(server)
 
-	xdsCache := xds.NewSnapshotCache(ctx, true, xds.FixedHash{})
+	xdsCache := xds.NewSnapshotCache(ctx, true, xds.FixedHash{}, xdsFeatures)
 	xdsServer := serverv3.NewServer(ctx, xdsCache, xdsServerCallbackFuncs(logger))
 
 	registerXDSServices(server, xdsServer)

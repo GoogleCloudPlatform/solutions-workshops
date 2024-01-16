@@ -55,6 +55,8 @@ type SnapshotCache struct {
 	// These names are captured when new Listener streams are created, see `CreateWatch()`.
 	// The server listener names are added to xDS resource snapshots, to be included in LDS responded for xDS-enabled gRPC servers.
 	serverListenerCache *ServerListenerCache
+	// features contains flags to enable and disable xDS features, e.g., mTLS.
+	features *Features
 }
 
 var _ cachev3.Cache = &SnapshotCache{}
@@ -63,7 +65,7 @@ var _ cachev3.Cache = &SnapshotCache{}
 //
 // If `allowPartialRequests` is true, the DiscoveryServer will respond to requests for a resource
 // type even if some resources in the snapshot are not named in the request.
-func NewSnapshotCache(ctx context.Context, allowPartialRequests bool, hash cachev3.NodeHash) *SnapshotCache {
+func NewSnapshotCache(ctx context.Context, allowPartialRequests bool, hash cachev3.NodeHash, features *Features) *SnapshotCache {
 	return &SnapshotCache{
 		ctx:                 ctx,
 		logger:              logging.FromContext(ctx),
@@ -71,6 +73,7 @@ func NewSnapshotCache(ctx context.Context, allowPartialRequests bool, hash cache
 		hash:                hash,
 		appsCache:           NewGRPCApplicationCache(),
 		serverListenerCache: NewServerListenerCache(),
+		features:            features,
 	}
 }
 
@@ -108,7 +111,7 @@ func (c *SnapshotCache) CreateWatch(request *cachev3.Request, state stream.Strea
 func (c *SnapshotCache) UpdateResources(ctx context.Context, apps []GRPCApplication) error {
 	var errs []error
 	for _, nodeHash := range c.delegate.GetStatusKeys() {
-		snapshotBuilder, err := NewSnapshotBuilder().AddGRPCApplications(apps)
+		snapshotBuilder, err := NewSnapshotBuilder(c.features).AddGRPCApplications(apps)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("could not create xDS resource snapshot builder for gRPC application configuration %v+: %w", apps, err))
 		}
@@ -133,7 +136,7 @@ func (c *SnapshotCache) UpdateResources(ctx context.Context, apps []GRPCApplicat
 // based on the previous `oldSnapshot` (can be nil), and a slice of new server Listener addresses.
 func (c *SnapshotCache) createNewSnapshotForNode(nodeHash string, newServerListenerAddresses []EndpointAddress) error {
 	c.logger.Info("Creating a new snapshot", "nodeHash", nodeHash, "serverListenerAddressesFromRequest", newServerListenerAddresses)
-	snapshotBuilder := NewSnapshotBuilder()
+	snapshotBuilder := NewSnapshotBuilder(c.features)
 	apps := c.appsCache.Get()
 	snapshotBuilder, err := snapshotBuilder.AddGRPCApplications(apps)
 	if err != nil {
