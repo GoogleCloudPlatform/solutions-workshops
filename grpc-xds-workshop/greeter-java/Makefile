@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-PKG := github.com/googlecloudplatform/solutions-workshops/grpc-xds-workshop/control-plane-go
-
 .PHONY: all
 all: clean proto format lint test
 
