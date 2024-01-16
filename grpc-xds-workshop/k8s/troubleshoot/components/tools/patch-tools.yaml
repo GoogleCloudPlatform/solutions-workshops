@@ -30,7 +30,7 @@ spec:
           mountPath: /usr/local/bin
       initContainers:
       - name: install-tools
-        image: golang:1.20
+        image: golang
         command:
         - /bin/sh
         - -c

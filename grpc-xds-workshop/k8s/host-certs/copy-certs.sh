@@ -1,10 +1,12 @@
-# Copyright 2023 Google LLC
+#!/bin/sh
+#
+# Copyright 2024 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#      http://www.apache.org/licenses/LICENSE-2.0
+#      https://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -12,34 +14,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Skaffold
-.kpt-pipeline/
+# Copy the workload TLS certificates from the pod of the `host-certs`
+# deployment to the local developer workstation.
 
-# Gradle
-.gradle
-build/
-!gradle/wrapper/gradle-wrapper.jar
-!gradle/wrapper/gradle-wrapper.properties
-!**/src/main/**/build/
-!**/src/test/**/build/
+set -euf
 
-# IntelliJ IDEA / GoLand
-bin/
-.idea/
-*.iws
-*.iml
-*.ipr
-out/
-!**/src/main/**/out/
-!**/src/test/**/out/
+output_dir=${1:-.}
+mkdir -p "$output_dir"
 
-# VS Code
-.vscode/*
-!.vscode/launch.json
-
-# Emacs
-*~
-
-# Certificates and keys
-*.pem
-/certs/
+kubectl exec --context "$SKAFFOLD_KUBE_CONTEXT" --namespace host-certs --container app deployment/host-certs \
+  -- \
+  tar -C /var/run/secrets/workload-spiffe-credentials -cf - . \
+  | \
+  tar -C "$output_dir" -xf - 

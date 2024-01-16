@@ -25,6 +25,7 @@ configMapGenerator:
   namespace: xds # kpt-set: ${control-plane-namespace}
   files:
   - ../../../config/informers.yaml
+  - ../../../config/xds_features.yaml
 patches:
 - path: patch-config-dir-env.yaml
   target:

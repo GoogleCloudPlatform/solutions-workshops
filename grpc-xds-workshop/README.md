@@ -73,8 +73,7 @@ You also need the following tools:
 - [kubectl](https://kubernetes.io/docs/reference/kubectl/)
 - [Kustomize](https://kustomize.io/)
 - [Skaffold](https://skaffold.dev/)
-- A gRPC command-line client, such as
-  [gRPCurl](https://github.com/fullstorydev/grpcurl).
+- [gRPCurl](https://github.com/fullstorydev/grpcurl)
 
 If you have already installed the
 [Google Cloud SDK](https://cloud.google.com/sdk/docs/install),
@@ -100,10 +99,21 @@ to ensure that your cluster and the prerequisite tools are set up correctly.
 
 If you use a kind Kubernetes cluster,
 [create a multi-node cluster](docs/kind.md) with fake
-[zone labels (`topology.kubernetes.io/zone`)](https://kubernetes.io/docs/reference/labels-annotations-taints/#topologykubernetesiozone).
+[zone labels (`topology.kubernetes.io/zone`)](https://kubernetes.io/docs/reference/labels-annotations-taints/#topologykubernetesiozone), and set up
+[cert-manager](https://cert-manager.io/docs/):
+
+```shell
+make kind-create
+```
 
 The multi-node configuration and the zone labels enable you to simulate a
 Kubernetes cluster with nodes across multiple cloud provider zones.
+
+When you are done with the workshop, you can delete the kind cluster:
+
+```shell
+make kind-delete
+```
 
 ## Remote cluster and image registry setup
 
@@ -122,7 +132,7 @@ export SKAFFOLD_DEFAULT_REPO=LOCATION-docker.pkg.dev/PROJECT_ID/REPOSITORY
 
 Replace the following:
 
-- `LOCATION`: the 
+- `LOCATION`: the
   [location](https://cloud.google.com/artifact-registry/docs/repositories/repo-locations)
   of your Artifact Registry container image repository.
 - `PROJECT_ID`: your Google Cloud
@@ -168,30 +178,77 @@ Replace the following:
     kubectl logs --all-containers --follow --namespace=xds deployment/greeter-leaf
     ```
 
-5.  Send a request to the `greeter-leaf` server:
+5.  In - you guessed it - a new terminal, create a private key and TLS
+    certificate for your developer workstation. You do this by creating a
+    temporary Kubernetes pod with a workload TLS certificate, copy this
+    certificate and private key to your developer workstation, and deleting
+    the temporary pod:
 
     ```shell
-    grpcurl -plaintext -d '{"name": "World"}' localhost:50057 helloworld.Greeter/SayHello
+    make host-certs
     ```
 
-6.  Send a request to the `greeter-intermediary` server:
+    The certificates and private key will be copied to the `certs` directory.
+
+6.  Send a request to the `greeter-leaf` server, using mTLS and the
+    [DNS resolver](https://grpc.io/docs/guides/custom-name-resolution/):
 
     ```shell
-    grpcurl -plaintext -d '{"name": "World"}' localhost:50055 helloworld.Greeter/SayHello
+    grpcurl \
+      -authority greeter-leaf \
+      -cacert ./certs/ca_certificates.pem \
+      -cert ./certs/certificates.pem \
+      -key ./certs/private_key.pem \
+      -d '{"name": "World"}' \
+      dns:///localhost:50057 \
+      helloworld.Greeter/SayHello
     ```
 
-7.  Observe the control plane logs as you scale the greeter service
+    Or, using a target from the included [`Makefile`](Makefile):
+
+    ```shell
+    make request-leaf-mtls
+    ```
+
+7.  Send a request to the `greeter-intermediary` server, using mTLS and the
+    [DNS resolver](https://grpc.io/docs/guides/custom-name-resolution/):
+
+    ```shell
+    grpcurl \
+      -authority greeter-intermediary \
+      -cacert ./certs/ca_certificates.pem \
+      -cert ./certs/certificates.pem \
+      -key ./certs/private_key.pem \
+      -d '{"name": "World"}' \
+      dns:///localhost:50055 \
+      helloworld.Greeter/SayHello
+    ```
+
+    Or, using a target from the included [`Makefile`](Makefile):
+
+    ```shell
+    make request-mtls
+    ```
+
+8.  Observe the control plane logs as you scale the greeter service
     deployments. For instance, you can scale the `greeter-leaf` deployment:
 
     ```shell
     kubectl scale deployment/greeter-leaf --namespace=xds --replicas=2
     ```
 
-8.  To explore the cluster resources, you may find it convenient to set the
+9.  To explore the cluster resources, you may find it convenient to set the
     namespace for your current kubeconfig context entry:
 
     ```shell
     kubectl config set-context --current --namespace=xds
+    ```
+
+10. To delete the control plane and greeter pods, without deleting the `xds`
+    namespace or other resources, such as `cert-manager`:
+
+    ```shell
+    make delete
     ```
 
 See the [`Makefile`](Makefile) for examples of other commands you can run.
@@ -247,14 +304,6 @@ make debug-java
     make troubleshoot
     ```
 
-3.  Copy the certificates and private key from the bastion pod to your host:
-
-    ```shell
-    kubectl exec deployment/bastion --namespace=xds --container=app -- \
-      tar -chf - /var/run/secrets/workload-spiffe-credentials/ | \
-      tar -xf - --strip-components=4 --exclude='..*'
-    ```
-
 Some troubleshooting commands:
 
 - View the Kubernetes pod IP addresses:
@@ -272,28 +321,28 @@ Some troubleshooting commands:
 
   Replace `POD_IP` with the IP address of the Kubernetes pod.
 
-- View the operating xDS configuration of a server using `grpcdebug`:
+- List the ACK'ed xDS resources of a gRPC server using `grpcdebug`:
+
+  ```shell
+  grpcdebug POD_IP:50052 xds status
+  ```
+
+- View the operating xDS configuration of a gRPC server using `grpcdebug`:
 
   ```shell
   grpcdebug POD_IP:50052 xds config | yq --prettyPrint
   ```
 
-  Note that `grpcdebug` currently doesn't support mTLS.
-
-- View the Listener Discovery Service (LDS) configuration of a server using
-  `grpcdebug`:
+- View the Listener Discovery Service (LDS) configuration only of a gRPC
+  server using `grpcdebug`:
 
   ```shell
   grpcdebug POD_IP:50052 xds config --type LDS | yq --input-format=json --prettyPrint
   ```
 
-- Call the `greeter-leaf` service using xDS:
+  Replace `LDS` with other xDS services to view other ACK'ed xDS resources.
 
-  ```shell
-  grpcurl -plaintext -d '{"name": "World"}' xds:///greeter-leaf helloworld.Greeter/SayHello
-  ```
-
-  Or, with mTLS:
+- Send a request to the `greeter-leaf` service using mTLS and xDS:
 
   ```shell
   grpcurl \
@@ -315,13 +364,7 @@ Some troubleshooting commands:
   export GRPC_GO_LOG_VERBOSITY_LEVEL=99
   ```
 
-- Call the `greeter-intermediary` service using xDS:
-
-  ```shell
-  grpcurl -plaintext -d '{"name": "World"}' xds:///greeter-intermediary helloworld.Greeter/SayHello
-  ```
-
-  Or, with mTLS:
+- Send a request to the `greeter-intermediary` service using mTLS and xDS:
 
   ```shell
   grpcurl \
@@ -333,6 +376,12 @@ Some troubleshooting commands:
     -import-path /opt/protos -proto helloworld/greeter.proto -proto google/rpc/error_details.proto \
     xds:///greeter-intermediary \
     helloworld.Greeter/SayHello
+  ```
+
+- View the xDS bootstrap configuration file of the troubleshooting pod:
+
+  ```shell
+  cat $GRPC_XDS_BOOTSTRAP
   ```
 
 ## Cleaning up
@@ -355,6 +404,7 @@ make clean
 - [xDS REST and gRPC protocol](https://www.envoyproxy.io/docs/envoy/latest/api-docs/xds_protocol)
 - [Aggregated Discovery Service (ADS)](https://www.envoyproxy.io/docs/envoy/latest/configuration/overview/xds_api#aggregated-discovery-service)
 - [gRFC A27: xDS-Based Global Load Balancing](https://github.com/grpc/proposal/blob/972b69ab1f0f7f6079af81a8c2b8a01a15ce3bec/A27-xds-global-load-balancing.md)
+- [gRFC A29: xDS-Based Security for gRPC Clients and Servers](https://github.com/grpc/proposal/blob/deaf1bcf248d1e48e83c470b00930cbd363fab6d/A29-xds-tls-security.md)
 - [gRFC A36: xDS-Enabled Servers](https://github.com/grpc/proposal/blob/fd10c1a86562b712c2c5fa23178992654c47a072/A36-xds-for-servers.md)
 - [xDS Features in gRPC](https://github.com/grpc/grpc/blob/1b31c6e0ba711787c05e8e78719896a682fca102/doc/grpc_xds_features.md)
 

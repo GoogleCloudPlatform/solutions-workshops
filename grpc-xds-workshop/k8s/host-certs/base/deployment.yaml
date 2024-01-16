@@ -1,4 +1,4 @@
-# Copyright 2023 Google LLC
+# Copyright 2024 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,35 +18,27 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: bastion
-  namespace: xds # kpt-set: ${bastion-namespace}
+  name: host-certs
+  namespace: host-certs # kpt-set: ${host-certs-namespace}
   labels:
-    app.kubernetes.io/component: troubleshoot
+    app.kubernetes.io/component: host-certs
 spec:
-  progressDeadlineSeconds: 300
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: bastion
+      app.kubernetes.io/name: host-certs
   template:
     metadata:
       annotations:
         debug.cloud.google.com/config: "" # Never debug this pod.
       labels:
-        app.kubernetes.io/name: bastion
-        app.kubernetes.io/component: troubleshoot
+        app.kubernetes.io/name: host-certs
+        app.kubernetes.io/component: host-certs
     spec:
       containers:
       - name: app
-        image: busybox # kpt-set: ${bastion-image}
+        image: busybox # kpt-set: ${host-certs-image}
         command: ["sleep"]
-        args: ["31536000"] # 1 year
-        env:
-        - name: GOTRACEBACK
-          value: all
-        # Set GRPC_GO_LOG_SEVERITY_LEVEL and GRPC_GO_LOG_VERBOSITY_LEVEL to see more log output from Go-based troubleshooting tools.
-        # - name: GRPC_GO_LOG_SEVERITY_LEVEL
-        #   value: info
-        # - name: GRPC_GO_LOG_VERBOSITY_LEVEL
-        #   value: "99"
-      serviceAccountName: bastion
+        args: ["3600"] # 1 hour
+        env: []
+      serviceAccountName: host

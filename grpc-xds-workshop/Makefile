@@ -62,17 +62,44 @@ dev-go: check-skaffold check-go
 dev-java: check-skaffold check-javac
 	skaffold dev --build-concurrency=0 --cleanup=false --detect-minikube=false --module=java --skip-tests
 
-# request sends a request to the greeter-intermediary server. Port forwarding must be running.
-# Verify that the port in the command below matches the local forwarded port.
+# host-certs does the following:
+# 1. creates a temporary pod with a workload TLS certificate
+# 2. copies the certificate to the local developer workstation
+# 3. deletes the temporary pod and associated k8s resources
+.PHONY: host-certs
+host-certs: check-skaffold
+	skaffold run --detect-minikube=false --filename=k8s/host-certs/skaffold.yaml --skip-tests
+	skaffold delete --detect-minikube=false --filename=k8s/host-certs/skaffold.yaml
+
+# copy-bastion-certs copies the workload TLS certificates from the bastion pod to the local developer workstation.
+.PHONY: copy-bastion-certs
+copy-bastion-certs: check-kubectl
+	mkdir -p certs
+	kubectl exec deployment/bastion --namespace=xds --container=app -- tar -chf - /var/run/secrets/workload-spiffe-credentials/ | tar -C certs -xf - --strip-components=4 --exclude='..*'
+
+# request sends a plaintext request to the greeter-intermediary server using the DNS resolver.
+# Port forwarding must be running. Verify that the port in the command below matches the local forwarded port.
 .PHONY: request
 request: check-grpcurl
-	grpcurl -plaintext -d '{"name": "World"}' localhost:50055 helloworld.Greeter/SayHello
+	grpcurl -plaintext -d '{"name": "World"}' dns:///localhost:50055 helloworld.Greeter/SayHello
 
-# request-leaf sends a request to the greeter-leaf server. Port forwarding must be running.
-# Verify that the port in the command below matches the local forwarded port.
+# request-leaf sends a plaintext request to the greeter-leaf server using the DNS resolver.
+# Port forwarding must be running. Verify that the port in the command below matches the local forwarded port.
 .PHONY: request-leaf
 request-leaf: check-grpcurl
-	grpcurl -plaintext -d '{"name": "World"}' localhost:50057 helloworld.Greeter/SayHello
+	grpcurl -plaintext -d '{"name": "World"}' dns:///localhost:50057 helloworld.Greeter/SayHello
+
+# request-mtls sends an mTLS request to the greeter-intermediary server using the DNS resolver.
+# Port forwarding must be running. Verify that the port in the command below matches the local forwarded port.
+.PHONY: request-mtls
+request-mtls: certs/ca_certificates.pem
+	grpcurl -authority greeter-intermediary -cacert ./certs/ca_certificates.pem -cert ./certs/certificates.pem -key ./certs/private_key.pem -d '{"name": "World"}' dns:///localhost:50055 helloworld.Greeter/SayHello
+
+# request-leaf-mtls sends an mTLS request to the greeter-leaf server using the DNS resolver.
+# Port forwarding must be running. Verify that the port in the command below matches the local forwarded port.
+.PHONY: request-leaf-mtls
+request-leaf-mtls: certs/ca_certificates.pem
+	grpcurl -authority greeter-leaf -cacert ./certs/ca_certificates.pem -cert ./certs/certificates.pem -key ./certs/private_key.pem -d '{"name": "World"}' dns:///localhost:50057 helloworld.Greeter/SayHello
 
 # tail-control-plane tails the control-plane logs
 .PHONY: tail-control-plane

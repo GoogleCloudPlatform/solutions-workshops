@@ -1,6 +1,6 @@
 # vi: set ft=yaml :
 #
-# Copyright 2023 Google LLC
+# Copyright 2024 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,31 +14,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Use this for a no-xDS deployment.
-
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 metadata:
-  name: troubleshoot
+  name: host-certs-tls-cert-manager
   annotations:
     config.kubernetes.io/local-config: "true"
 commonLabels:
   app.kubernetes.io/part-of: grpc-xds-workshop
-components:
-- ../components/tools
-images:
-- name: busybox
-  newName: busybox:stable-glibc
-  digest: sha256:51d373b90d58729e81641b49dcf52139090a89f1e2a4e631632db10cfbfd184d
 patches:
-- path: patch-resources.yaml
+- path: patch-cert-volume-host-certs.yaml
   target:
     group: apps
     version: v1
     kind: Deployment
-    name: bastion
+    name: host-certs
 resources:
-- namespace.yaml
-- service-account.yaml
-- cluster-role-binding.yaml
-- deployment.yaml
+- ../../base
+- certificate.yaml

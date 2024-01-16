@@ -23,9 +23,9 @@ metadata:
 commonLabels:
   app.kubernetes.io/part-of: grpc-xds-workshop
 images:
-- name: busybox
-  newName: busybox:stable-glibc
-  digest: sha256:ee22a5823b1d3e7881d168f50585274611dbe0ceed4d2ba5bc8afd7cfac71d23
+- name: golang
+  newName: golang:1.20
+  digest: sha256:c58c636721d1e30938f783f9daf1093a9939256f23f895f6b71b36580d0e46f9
 patches:
 - path: patch-tools.yaml
   target:
