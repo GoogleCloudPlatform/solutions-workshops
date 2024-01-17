@@ -18,6 +18,13 @@ metadata:
   name: go
   annotations:
     config.kubernetes.io/local-config: "true"
+profiles:
+- name: tls-cert-manager
+  activation:
+  - kubeContext: kind.* # use cert-manager by default for kind Kubernetes clusters
+- name: tls-gke-workload-certs
+  activation:
+  - kubeContext: gke.* # use GKE workload TLS certificates by default for GKE clusters
 requires:
 - path: control-plane-go
 - path: greeter-go
@@ -28,8 +35,32 @@ metadata:
   name: java
   annotations:
     config.kubernetes.io/local-config: "true"
+profiles:
+- name: tls-cert-manager
+  activation:
+  - kubeContext: kind.* # use cert-manager by default for kind Kubernetes clusters
+- name: tls-gke-workload-certs
+  activation:
+  - kubeContext: gke.* # use GKE workload TLS certificates by default for GKE clusters
 requires:
 - path: control-plane-java
+- path: greeter-java
+---
+apiVersion: skaffold/v3
+kind: Config
+metadata:
+  name: go-java
+  annotations:
+    config.kubernetes.io/local-config: "true"
+profiles:
+- name: tls-cert-manager
+  activation:
+  - kubeContext: kind.*
+- name: tls-gke-workload-certs
+  activation:
+  - kubeContext: gke.*
+requires:
+- path: control-plane-go
 - path: greeter-java
 ---
 apiVersion: skaffold/v3
@@ -38,6 +69,13 @@ metadata:
   name: java-go
   annotations:
     config.kubernetes.io/local-config: "true"
+profiles:
+- name: tls-cert-manager
+  activation:
+  - kubeContext: kind.*
+- name: tls-gke-workload-certs
+  activation:
+  - kubeContext: gke.*
 requires:
 - path: control-plane-java
 - path: greeter-go
@@ -45,11 +83,23 @@ requires:
 apiVersion: skaffold/v3
 kind: Config
 metadata:
-  name: go-java
+  name: go-td
   annotations:
     config.kubernetes.io/local-config: "true"
+profiles:
+- name: traffic-director
 requires:
-- path: control-plane-go
+- path: greeter-go
+---
+apiVersion: skaffold/v3
+kind: Config
+metadata:
+  name: java-td
+  annotations:
+    config.kubernetes.io/local-config: "true"
+profiles:
+- name: traffic-director
+requires:
 - path: greeter-java
 ---
 apiVersion: skaffold/v3

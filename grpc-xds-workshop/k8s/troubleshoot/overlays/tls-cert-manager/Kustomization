@@ -1,4 +1,3 @@
-
 # vi: set ft=yaml :
 #
 # Copyright 2024 Google LLC
@@ -15,19 +14,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Deploy to a GKE cluster, with an in-cluster self-managed xDS control plane,
-# and use cert-manager for workload TLS certificates.
+# Deploy to a GKE or kind Kubernetes cluster, and use cert-manager for TLS certificates.
 # cert-manager and the `root-ca` ClusterIssuer must already be set up in the cluster,
-# the `make cert-manager` target sets this up.
+# the `make kind-create` target sets this up.
 
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 metadata:
-  name: troubleshoot-gke-cert-manager
+  name: troubleshoot-tls-cert-manager
   annotations:
     config.kubernetes.io/local-config: "true"
 components:
 - ../../../greeter/components/bootstrap-diy
+- ../../../greeter/components/node-labels # not actually required for GKE
 - ../../components/tls-cert-manager
 resources:
 - ../../base

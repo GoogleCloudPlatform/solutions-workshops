@@ -14,18 +14,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Deploy to a kind Kubernetes cluster with an in-cluster xDS control plane,
-# and use workload TLS certificates from cert-manager.
-# cert-manager and the `root-ca` ClusterIssuer must already be set up in the cluster,
-# the `make kind-create` target sets this up.
+# Deploy to a GKE cluster, use Traffic Director as the xDS control plane,
+# and use managed GKE workload TLS certificates.
+# Traffic Director must have been set up already,
+# see: https://cloud.google.com/traffic-director/docs/set-up-proxyless-gke-mesh
+# A certificate authority (CA) must already be set up in Certificate Authority Service,
+# see: https://cloud.google.com/traffic-director/docs/security-proxyless-setup
 
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
 metadata:
-  name: greeter-java-kind
+  name: greeter-traffic-director
   annotations:
     config.kubernetes.io/local-config: "true"
 components:
-- ../../../../k8s/greeter/meta-components/kind
-resources:
-- ../../base
+- ../../components/bootstrap-td
+- ../../components/tls-gke-workload-certs

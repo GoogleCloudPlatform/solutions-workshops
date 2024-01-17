@@ -24,10 +24,10 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 metadata:
-  name: greeter-java-gke-td
+  name: greeter-go-traffic-director
   annotations:
     config.kubernetes.io/local-config: "true"
 components:
-- ../../../../k8s/greeter/meta-components/gke-td
+- ../../../../k8s/greeter/meta-components/traffic-director
 resources:
 - ../../base

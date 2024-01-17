@@ -14,7 +14,12 @@ Go and Java. The sample applications implement the
 [`helloworld.Greeter`](https://github.com/grpc/grpc-go/blob/v1.59.0/examples/helloworld/helloworld/helloworld.proto)
 gRPC service.
 
-The code in this repository in not recommended for production deployments, and
+The scripts and manifests in this directory enable running the xDS control
+plane and the sample gRPC application on either a
+[Google Kubernetes Engine (GKE)](https://cloud.google.com/kubernetes-engine/docs)
+cluster, or on a local [kind](https://kind.sigs.k8s.io/) Kubernetes cluster.
+
+The code in this repository in not recommended for production environments, and
 there are no plans to make it production-ready. Instead, we recommend
 [Traffic Director](https://cloud.google.com/traffic-director/docs) from Google Cloud.
 
@@ -59,8 +64,9 @@ but you can also use other clusters and container image registries, including
 local clusters using [kind](https://kind.sigs.k8s.io/).
 
 The [`docs`](docs) directory contains instructions on both
-[creating a GKE cluster and Artifact Registry repository](docs/gke.md), and
-creating a multi-node Kubernetes cluster using [kind](docs/kind.md).
+[creating a GKE cluster and Artifact Registry repository](docs/gke.md), or
+creating a multi-node Kubernetes cluster using [kind](docs/kind.md), and on
+creating certificate authorities (CAs) for issuing workload TLS certificates.
 
 If you want to build and deploy the Java control plane and sample application,
 you need [Java 17](https://adoptium.net/).
@@ -95,55 +101,41 @@ Follow the steps in the documents
 [Verify local development setup using Java](docs/verify-local-setup-java.md)
 to ensure that your cluster and the prerequisite tools are set up correctly.
 
-## Local cluster setup
+## Local Kubernetes cluster setup using kind
 
-If you use a kind Kubernetes cluster,
-[create a multi-node cluster](docs/kind.md) with fake
-[zone labels (`topology.kubernetes.io/zone`)](https://kubernetes.io/docs/reference/labels-annotations-taints/#topologykubernetesiozone), and set up
-[cert-manager](https://cert-manager.io/docs/):
+Follow the the documentation on
+[create a multi-node kind Kubernetes cluster](docs/kind.md) with fake
+[zone labels (`topology.kubernetes.io/zone`)](https://kubernetes.io/docs/reference/labels-annotations-taints/#topologykubernetesiozone),
+and set up a root certificate authority using
+[cert-manager](https://cert-manager.io/docs/)
+to issue workload TLS certificates.
 
-```shell
-make kind-create
-```
+## GKE cluster and Artifact Registry setup
 
-The multi-node configuration and the zone labels enable you to simulate a
-Kubernetes cluster with nodes across multiple cloud provider zones.
+1.  Follow the documentation on
+    [creating a GKE cluster, an Artifact Registry container image repository, and certificate authorities for issuing workload TLS certificates](docs/gke.md).
 
-When you are done with the workshop, you can delete the kind cluster:
+2.  Create and export an environment variable called `SKAFFOLD_DEFAULT_REPO`
+    to point to your container image registry:
 
-```shell
-make kind-delete
-```
+    ```shell
+    export SKAFFOLD_DEFAULT_REPO=LOCATION-docker.pkg.dev/PROJECT_ID/REPOSITORY
+    ```
 
-## Remote cluster and image registry setup
+    Replace the following:
 
-If you use a remote Kubernetes cluster and container image registry, e.g.,
-GKE and Artifact Registry, create and export an environment variable
-called `SKAFFOLD_DEFAULT_REPO` to point to your container image registry.
+    - `LOCATION`: the
+      [location](https://cloud.google.com/artifact-registry/docs/repositories/repo-locations)
+      of your Artifact Registry container image repository.
+    - `PROJECT_ID`: your Google Cloud
+      [project ID](https://cloud.google.com/resource-manager/docs/creating-managing-projects).
+    - `REPOSITORY`: the name of your Artifact Registry
+      [container image repository](https://cloud.google.com/artifact-registry/docs/docker).
 
-If you use a kind cluster, you can skip this step.
+## Running the xDS control plane and sample gRPC application
 
-For instance, if you use
-[Artifact Registry](https://cloud.google.com/artifact-registry/docs):
-
-```shell
-export SKAFFOLD_DEFAULT_REPO=LOCATION-docker.pkg.dev/PROJECT_ID/REPOSITORY
-```
-
-Replace the following:
-
-- `LOCATION`: the
-  [location](https://cloud.google.com/artifact-registry/docs/repositories/repo-locations)
-  of your Artifact Registry container image repository.
-- `PROJECT_ID`: your Google Cloud
-  [project ID](https://cloud.google.com/resource-manager/docs/creating-managing-projects).
-- `REPOSITORY`: the name of your Artifact Registry
-  [container image repository](https://cloud.google.com/artifact-registry/docs/docker).
-
-## Running the sample
-
-1.  Build the container images for the control plane and the greeter
-    service, render the Kubernetes resource manifests, apply them to the
+1.  Build the container images for the control plane and the sample gRPC
+    application, render the Kubernetes resource manifests, apply them to the
     Kubernetes cluster, and set up port forwarding.
 
     Using the Go implementations:
@@ -163,32 +155,33 @@ Replace the following:
 2.  In a new terminal, tail the control plane logs:
 
     ```shell
-    kubectl logs --all-containers --follow --namespace=xds deployment/control-plane
+    make tail-control-plane
     ```
 
 3.  In another new terminal, tail the greeter-intermediary logs:
 
     ```shell
-    kubectl logs --all-containers --follow --namespace=xds deployment/greeter-intermediary
+    make tail-greeter-intermediary
     ```
 
 4.  In yet another new terminal, tail the greeter-leaf logs:
 
     ```shell
-    kubectl logs --all-containers --follow --namespace=xds deployment/greeter-leaf
+    make tail-greeter-leaf
     ```
 
 5.  In - you guessed it - a new terminal, create a private key and TLS
     certificate for your developer workstation. You do this by creating a
-    temporary Kubernetes pod with a workload TLS certificate, copy this
-    certificate and private key to your developer workstation, and deleting
-    the temporary pod:
+    temporary Kubernetes Pod with a workload TLS certificate and private key,
+    copy this certificate and private key to your developer workstation, and
+    deleting the temporary Pod:
 
     ```shell
     make host-certs
     ```
 
-    The certificates and private key will be copied to the `certs` directory.
+    The workload certificate, CA certificate, and private key will be copied
+    to the `certs` directory.
 
 6.  Send a request to the `greeter-leaf` server, using mTLS and the
     [DNS resolver](https://grpc.io/docs/guides/custom-name-resolution/):
@@ -386,7 +379,7 @@ Some troubleshooting commands:
 
 ## Cleaning up
 
-Delete the resources in the Kubernetes cluster:
+Delete all the deployed resources in the Kubernetes cluster:
 
 ```shell
 make clean

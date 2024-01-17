@@ -42,6 +42,20 @@ run-go: check-skaffold check-go
 run-java: check-skaffold check-javac
 	skaffold run --build-concurrency=0 --detect-minikube=false --module=java --port-forward=user --skip-tests
 
+# run-go-tls-cert-manager builds and deploys control-plane-go and greeter-go,
+# with workload TLS certificates from CA managed by cert-manager,
+# even if the current kubecontext points to a GKE cluster.
+.PHONY: run-go-tls-cert-manager
+run-go-tls-cert-manager: check-skaffold check-go
+	skaffold run --build-concurrency=0 --detect-minikube=false --module=go --port-forward=user --profile=tls-gke-workload-certs,-tls-cert-manager --skip-tests
+
+# run-java-tls-cert-manager builds and deploys control-plane-java and greeter-java,
+# with workload TLS certificates from CA managed by cert-manager,
+# even if the current kubecontext points to a GKE cluster.
+.PHONY: run-java-tls-cert-manager
+run-java-tls-cert-manager: check-skaffold check-javac
+	skaffold run --build-concurrency=0 --detect-minikube=false --module=java --port-forward=user --profile=tls-gke-workload-certs,-tls-cert-manager --skip-tests
+
 # debug-go builds and deploys control-plane-go and greeter-go, with remote debugging enabled.
 .PHONY: debug-go
 debug-go: check-skaffold check-go
@@ -92,13 +106,13 @@ request-leaf: check-grpcurl
 # request-mtls sends an mTLS request to the greeter-intermediary server using the DNS resolver.
 # Port forwarding must be running. Verify that the port in the command below matches the local forwarded port.
 .PHONY: request-mtls
-request-mtls: certs/ca_certificates.pem
+request-mtls: check-grpcurl certs/ca_certificates.pem
 	grpcurl -authority greeter-intermediary -cacert ./certs/ca_certificates.pem -cert ./certs/certificates.pem -key ./certs/private_key.pem -d '{"name": "World"}' dns:///localhost:50055 helloworld.Greeter/SayHello
 
 # request-leaf-mtls sends an mTLS request to the greeter-leaf server using the DNS resolver.
 # Port forwarding must be running. Verify that the port in the command below matches the local forwarded port.
 .PHONY: request-leaf-mtls
-request-leaf-mtls: certs/ca_certificates.pem
+request-leaf-mtls: check-grpcurl certs/ca_certificates.pem
 	grpcurl -authority greeter-leaf -cacert ./certs/ca_certificates.pem -cert ./certs/certificates.pem -key ./certs/private_key.pem -d '{"name": "World"}' dns:///localhost:50057 helloworld.Greeter/SayHello
 
 # tail-control-plane tails the control-plane logs
@@ -154,13 +168,13 @@ troubleshoot: check-kubectl
 
 # delete-control-plane deletes the Services and Deployments for control-plane-[go|java].
 .PHONY: delete-control-plane
-delete-control-plane:
+delete-control-plane: check-kubectl
 	kubectl delete --ignore-not-found --namespace=xds deployment control-plane
 	kubectl delete --ignore-not-found --namespace=xds service control-plane
 
 # delete-greeter deletes the Services and Deployments for greeter-[intermediary|leaf].
 .PHONY: delete-greeter
-delete-greeter:
+delete-greeter: check-kubectl
 	kubectl delete --ignore-not-found --namespace=xds deployment greeter-intermediary greeter-leaf
 	kubectl delete --ignore-not-found --namespace=xds service greeter-intermediary greeter-leaf
 

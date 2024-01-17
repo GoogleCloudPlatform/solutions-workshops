@@ -9,7 +9,9 @@ Kubernetes cluster and container image registry.
 Follow the instructions below to create a multi-node Kubernetes cluster using
 [kind](docs/kind.md), with fake
 [zone labels (`topology.kubernetes.io/zone`)](https://kubernetes.io/docs/reference/labels-annotations-taints/#topologykubernetesiozone)
-for simulating a cluster with nodes across multiple cloud provider zones.
+for simulating a cluster with nodes across multiple cloud provider zones, and
+with [cert-manager](https://cert-manager.io/docs/) and a root certificate
+authority (CA) to issue workload certificates for TLS and mTLS.
 
 ## Docker Desktop setup
 
@@ -78,54 +80,29 @@ If you want to use kind with podman, follow the steps in this section.
 
 ## Creating the kind cluster
 
-1.  Create a kind configuration file for a Kubernetes cluster with fake
-    [zone labels](https://kubernetes.io/docs/reference/labels-annotations-taints/#topologykubernetesiozone):
+1.  Create the kind Kubernetes cluster with fake
+    [zone labels](https://kubernetes.io/docs/reference/labels-annotations-taints/#topologykubernetesiozone),
+    install cert-manager, and create a root CA issuer for workload TLS
+    certificates:
 
     ```shell
-    cat << EOF > kind-cluster-config.yaml
-    kind: Cluster
-    apiVersion: kind.x-k8s.io/v1alpha4
-    name: grpc-xds-workshop
-    nodes:
-    - role: control-plane
-    - role: worker
-      labels:
-        topology.kubernetes.io/zone: us-central1-a
-    - role: worker
-      labels:
-        topology.kubernetes.io/zone: us-central1-b
-    EOF
+    make kind-create
     ```
 
-    If you use Linux on ChromeOS ("Crostini"), follow these
-    [additional steps](https://kind.sigs.k8s.io/docs/user/known-issues/#chrome-os)
-    to enable nested containers and the `KubeletInUserNamespace` feature gate.
-
-2.  Create the kind Kubernetes cluster:
-
-    ```shell
-    kind create cluster --config=kind-cluster-config.yaml
-    ```
-
-    This command also creates a
+    This command creates a
     [kubeconfig context](https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/#context)
     called `kind-grpc-xds-workshop`.
 
-    The manifest rendering process assumes that the kubeconfig context name is
-    either `kind-grpc-xds-workhop` or `kind-kind`, if you use a kind cluster.
+    The manifest rendering process assumes that the kubeconfig context name
+    matches the regular expression `kind.*`, if you use a kind cluster.
 
-3.  You may find it useful to set the namespace of your current kubeconfig
-    context, so you don't need to specify the `xds` namespace for all
-    `kubectl` commands:
-
-    ```shell
-    kubectl config set-context --current --namespace=xds
-    ```
+    The command also sets the `xds` namespace as the default namespace
+    for the kubeconfig context.
 
 ## Cleaning up
 
 1.  When you are done, delete the kind Kubernetes cluster:
 
     ```shell
-    kind delete cluster --name grpc-xds-workshop
+    make kind-delete
     ```

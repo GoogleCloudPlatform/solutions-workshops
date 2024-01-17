@@ -14,19 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Deploy to a GKE cluster, with an in-cluster self-managed xDS control plane,
-# and use managed GKE workload TLS certificates ("mesh certificates").
-# A certificate authority (CA) must already be set up in Certificate Authority Service,
+# Deploy to a GKE cluster, with Traffic Director as the xDS control plane,
+# and use GKE workload TLS certificates ("mesh certificates").
+# Traffic Director must have been set up already,
+# see: https://cloud.google.com/traffic-director/docs/set-up-proxyless-gke-mesh
+# Requires that a certificate authority (CA) has been set up in Certificate Authority Service,
 # see: https://cloud.google.com/traffic-director/docs/security-proxyless-setup
 
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 metadata:
-  name: troubleshoot-gke
+  name: greeter-java-traffic-director
   annotations:
     config.kubernetes.io/local-config: "true"
 components:
-- ../../../greeter/components/bootstrap-diy
-- ../../../greeter/components/tls-gke-workload-certs
+- ../../../../k8s/greeter/meta-components/traffic-director
 resources:
 - ../../base

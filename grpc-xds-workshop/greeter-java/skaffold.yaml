@@ -74,37 +74,31 @@ profiles:
       namespace: xds # kpt-set: ${control-plane-namespace}
       localPort: 5008
       port: 5005 # JDWP debug port
-# Deploy to a GKE cluster, and use GKE workload TLS certificates ("mesh certificates").
-- name: gke
-  activation:
-  - kubeContext: gke.*
-  manifests:
-    kustomize:
-      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
-      paths: ["k8s/overlays/gke"]
-# Deploy to a GKE cluster, with workload TLS certificates from cert-manager.
-- name: gke-cert-manager
-  manifests:
-    kustomize:
-      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
-      paths: ["k8s/overlays/gke-cert-manager"]
-# Deploy to a GKE cluster and use Traffic Director as the xDS control plane.
-- name: gke-td
-  manifests:
-    kustomize:
-      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
-      paths: ["k8s/overlays/gke-td"]
-# Deploy to a kind Kubernetes cluster, with workload TLS certificates from cert-manager.
-- name: kind
-  activation:
-  - kubeContext: kind.*
-  manifests:
-    kustomize:
-      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
-      paths: ["k8s/overlays/kind"]
 # No xDS, use gRPC DNS resolver, kube-proxy, and headful services.
 - name: no-xds
   manifests:
     kustomize:
       buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
       paths: ["k8s/overlays/no-xds"]
+# Deploy to a GKE or kind Kubernetes cluster, with workload TLS certificates from cert-manager.
+- name: kind
+  activation:
+  - kubeContext: kind.*
+  manifests:
+    kustomize:
+      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+      paths: ["k8s/overlays/tls-cert-manager"]
+# Deploy to a GKE cluster, and use GKE workload TLS certificates ("mesh certificates").
+- name: tls-gke-workload-certs
+  activation:
+  - kubeContext: gke.*
+  manifests:
+    kustomize:
+      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+      paths: ["k8s/overlays/tls-gke-workload-certs"]
+# Deploy to a GKE cluster and use Traffic Director as the xDS control plane.
+- name: traffic-director
+  manifests:
+    kustomize:
+      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+      paths: ["k8s/overlays/traffic-director"]

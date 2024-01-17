@@ -14,18 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Deploy to a GKE cluster, use Traffic Director as the xDS control plane,
-# and use managed GKE workload TLS certificates.
-# Traffic Director must already be set up:
-# A certificate authority (CA) must already be set up in Certificate Authority Service,
-# see: https://cloud.google.com/traffic-director/docs/security-proxyless-setup
+# Deploy to a GKE or kind Kubernetes cluster, and use cert-manager for TLS certificates.
+# cert-manager and the `root-ca` ClusterIssuer must already be set up in the cluster,
+# the `make kind-create` target sets this up.
 
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
 metadata:
-  name: greeter-gke-td
+  name: greeter-tls-cert-manager
   annotations:
     config.kubernetes.io/local-config: "true"
 components:
-- ../../components/bootstrap-td
-- ../../components/tls-gke-workload-certs
+- ../../components/bootstrap-diy
+- ../../components/node-labels # not actually required for GKE
+- ../../components/tls-cert-manager

@@ -14,18 +14,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Deploy to a GKE cluster, with an in-cluster self-managed xDS control plane,
-# and use GKE workload TLS certificates ("mesh certificates").
-# Requires that a certificate authority (CA) has been set up in Certificate Authority Service,
-# see: https://cloud.google.com/traffic-director/docs/security-proxyless-setup
+# Deploy to a GKE or kind Kubernetes cluster with an in-cluster xDS control plane,
+# and use workload TLS certificates from cert-manager.
+# cert-manager and the `root-ca` ClusterIssuer must already be set up in the cluster,
+# the `make kind-create` target sets this up.
 
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 metadata:
-  name: greeter-go-gke
+  name: greeter-java-tls-cert-manager
   annotations:
     config.kubernetes.io/local-config: "true"
 components:
-- ../../../../k8s/greeter/meta-components/gke
+- ../../../../k8s/greeter/meta-components/tls-cert-manager
 resources:
 - ../../base

@@ -27,7 +27,8 @@ build:
       # since this is a sample implementation created for learning purposes.
       fromImage: gcr.io/distroless/static-debian12:debug-nonroot
       dependencies:
-        paths: ["cmd", "pkg", "third_party", "go.mod", "main.go"]
+        paths: ["cmd", "config", "pkg", "third_party", "go.mod", "main.go"]
+        ignore: [".gitignore", ".golangci.yaml", "control-plane-go", "go.sum", "Makefile", "NOTICE", "README.md"]
   tagPolicy:
     gitCommit: {}
 deploy:
