@@ -21,7 +21,6 @@ metadata:
   name: greeter
 spec:
   template:
-    spec:
-      metadata:
-        annotations:
-          security.cloud.google.com/use-workload-certificates: ""
+    metadata:
+      annotations:
+        security.cloud.google.com/use-workload-certificates: ""

@@ -203,6 +203,13 @@ to issue workload TLS certificates.
     make request-leaf-mtls
     ```
 
+    If you use GKE workload TLS certificates, bypass certificate validation,
+    as gRPCurl cannot validate the SPIFFE ID in the server certificates:
+
+    ```shell
+    make request-leaf-mtls-insecure
+    ```
+
 7.  Send a request to the `greeter-intermediary` server, using mTLS and the
     [DNS resolver](https://grpc.io/docs/guides/custom-name-resolution/):
 
@@ -221,6 +228,13 @@ to issue workload TLS certificates.
 
     ```shell
     make request-mtls
+    ```
+
+    If you use GKE workload TLS certificates, bypass certificate validation,
+    as gRPCurl cannot validate the SPIFFE ID in the server certificates:
+
+    ```shell
+    make request-mtls-insecure
     ```
 
 8.  Observe the control plane logs as you scale the greeter service

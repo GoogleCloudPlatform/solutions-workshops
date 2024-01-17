@@ -115,6 +115,22 @@ request-mtls: check-grpcurl certs/ca_certificates.pem
 request-leaf-mtls: check-grpcurl certs/ca_certificates.pem
 	grpcurl -authority greeter-leaf -cacert ./certs/ca_certificates.pem -cert ./certs/certificates.pem -key ./certs/private_key.pem -d '{"name": "World"}' dns:///localhost:50057 helloworld.Greeter/SayHello
 
+# request-mtls-insecure sends an mTLS request to the greeter-intermediary server using the DNS resolver,
+# with certificate validation turned off. Use this target with GKE workload TLS certificates,
+# as these certificates do not have common names or subject alternate names that grpcurl can verify.
+# Port forwarding must be running. Verify that the port in the command below matches the local forwarded port.
+.PHONY: request-mtls-insecure
+request-mtls-insecure: check-grpcurl certs/ca_certificates.pem
+	grpcurl -insecure -cacert ./certs/ca_certificates.pem -cert ./certs/certificates.pem -key ./certs/private_key.pem -d '{"name": "World"}' dns:///localhost:50055 helloworld.Greeter/SayHello
+
+# request-leaf-mtls-insecure sends an mTLS request to the greeter-leaf server using the DNS resolver,
+# with certificate validation turned off. Use this target with GKE workload TLS certificates,
+# as these certificates do not have common names or subject alternate names that grpcurl can verify.
+# Port forwarding must be running. Verify that the port in the command below matches the local forwarded port.
+.PHONY: request-leaf-mtls-insecure
+request-leaf-mtls-insecure: check-grpcurl certs/ca_certificates.pem
+	grpcurl -insecure -cacert ./certs/ca_certificates.pem -cert ./certs/certificates.pem -key ./certs/private_key.pem -d '{"name": "World"}' dns:///localhost:50057 helloworld.Greeter/SayHello
+
 # tail-control-plane tails the control-plane logs
 .PHONY: tail-control-plane
 tail-control-plane: check-kubectl

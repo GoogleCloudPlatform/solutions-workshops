@@ -116,30 +116,25 @@ manifests:
     buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
     paths: ["k8s/troubleshoot/base"]
 profiles:
-- name: gke
-  activation:
-  - kubeContext: gke.*
-  manifests:
-    kustomize:
-      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
-      paths: ["k8s/troubleshoot/overlays/gke"]
-- name: gke-cert-manager
-  manifests:
-    kustomize:
-      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
-      paths: ["k8s/troubleshoot/overlays/gke-cert-manager"]
-- name: gke-ts
-  manifests:
-    kustomize:
-      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
-      paths: ["k8s/troubleshoot/overlays/gke-td"]
-- name: kind
+- name: tls-cert-manager
   activation:
   - kubeContext: kind.*
   manifests:
     kustomize:
       buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
-      paths: ["k8s/troubleshoot/overlays/kind"]
+      paths: ["k8s/troubleshoot/overlays/tls-cert-manager"]
+- name: tls-gke-workload-certs
+  activation:
+  - kubeContext: gke.*
+  manifests:
+    kustomize:
+      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+      paths: ["k8s/troubleshoot/overlays/tls-gke-workload-certs"]
+- name: traffic-director
+  manifests:
+    kustomize:
+      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+      paths: ["k8s/troubleshoot/overlays/traffic-director"]
 ---
 apiVersion: skaffold/v3
 kind: Config
