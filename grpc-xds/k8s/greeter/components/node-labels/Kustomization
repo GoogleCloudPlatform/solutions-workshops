@@ -1,0 +1,40 @@
+# vi: set ft=yaml :
+#
+# Copyright 2024 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Patch and k8s resources for fetching labels from the k8s node where the pod runs.
+# Not required for GKE, since the bootstrap-generating initContainer can query
+# the GKE metadata server to look up the Compute Engine zone and other attributes.
+
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+metadata:
+  name: greeter-node-labels
+  annotations:
+    config.kubernetes.io/local-config: "true"
+images:
+- name: kubectl
+  newName: bitnami/kubectl
+  digest: sha256:121fa926a1304f34439082df44b0bdbe6eee583760abd2ae67949a2987322fe9
+patches:
+- path: patch-node-labels-init.yaml
+  target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: greeter-.*|bastion
+resources:
+- cluster-role.yaml
+- cluster-role-bindings.yaml

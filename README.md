@@ -7,7 +7,7 @@ Internal doc: [go/sa-workshop-repo](https://goto.google.com/sa-workshop-repo)
 
 ## Workshops
 
-- [gRPC xDS](grpc-xds-workshop): Sample implementations of
+- [gRPC xDS](grpc-xds): Sample implementations of
   [xDS](https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/operations/dynamic_configuration)
   control plane management servers for gRPC applications running on Kubernetes
   clusters.

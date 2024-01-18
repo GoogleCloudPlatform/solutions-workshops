@@ -1,0 +1,175 @@
+# Copyright 2023 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: skaffold/v3
+kind: Config
+metadata:
+  name: go
+  annotations:
+    config.kubernetes.io/local-config: "true"
+profiles:
+- name: tls-cert-manager
+  activation:
+  - kubeContext: kind.* # use cert-manager by default for kind Kubernetes clusters
+- name: tls-gke-workload-certs
+  activation:
+  - kubeContext: gke.* # use GKE workload TLS certificates by default for GKE clusters
+requires:
+- path: control-plane-go
+- path: greeter-go
+---
+apiVersion: skaffold/v3
+kind: Config
+metadata:
+  name: java
+  annotations:
+    config.kubernetes.io/local-config: "true"
+profiles:
+- name: tls-cert-manager
+  activation:
+  - kubeContext: kind.* # use cert-manager by default for kind Kubernetes clusters
+- name: tls-gke-workload-certs
+  activation:
+  - kubeContext: gke.* # use GKE workload TLS certificates by default for GKE clusters
+requires:
+- path: control-plane-java
+- path: greeter-java
+---
+apiVersion: skaffold/v3
+kind: Config
+metadata:
+  name: go-java
+  annotations:
+    config.kubernetes.io/local-config: "true"
+profiles:
+- name: tls-cert-manager
+  activation:
+  - kubeContext: kind.*
+- name: tls-gke-workload-certs
+  activation:
+  - kubeContext: gke.*
+requires:
+- path: control-plane-go
+- path: greeter-java
+---
+apiVersion: skaffold/v3
+kind: Config
+metadata:
+  name: java-go
+  annotations:
+    config.kubernetes.io/local-config: "true"
+profiles:
+- name: tls-cert-manager
+  activation:
+  - kubeContext: kind.*
+- name: tls-gke-workload-certs
+  activation:
+  - kubeContext: gke.*
+requires:
+- path: control-plane-java
+- path: greeter-go
+---
+apiVersion: skaffold/v3
+kind: Config
+metadata:
+  name: go-td
+  annotations:
+    config.kubernetes.io/local-config: "true"
+profiles:
+- name: traffic-director
+requires:
+- path: greeter-go
+---
+apiVersion: skaffold/v3
+kind: Config
+metadata:
+  name: java-td
+  annotations:
+    config.kubernetes.io/local-config: "true"
+profiles:
+- name: traffic-director
+requires:
+- path: greeter-java
+---
+apiVersion: skaffold/v3
+kind: Config
+metadata:
+  name: troubleshoot
+  annotations:
+    config.kubernetes.io/local-config: "true"
+build: {} # No images to build.
+deploy:
+  kubectl: {}
+manifests:
+  kustomize:
+    buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+    paths: ["k8s/troubleshoot/base"]
+profiles:
+- name: tls-cert-manager
+  activation:
+  - kubeContext: kind.*
+  manifests:
+    kustomize:
+      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+      paths: ["k8s/troubleshoot/overlays/tls-cert-manager"]
+- name: tls-gke-workload-certs
+  activation:
+  - kubeContext: gke.*
+  manifests:
+    kustomize:
+      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+      paths: ["k8s/troubleshoot/overlays/tls-gke-workload-certs"]
+- name: traffic-director
+  manifests:
+    kustomize:
+      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+      paths: ["k8s/troubleshoot/overlays/traffic-director"]
+---
+apiVersion: skaffold/v3
+kind: Config
+metadata:
+  name: cert-manager
+  annotations:
+    config.kubernetes.io/local-config: "true"
+build: {}
+deploy:
+  kubectl:
+    defaultNamespace: ""
+    hooks:
+      after:
+      - host:
+          command: ["kubectl", "wait", "--for=condition=established", "--timeout=30s", "crd", "certificates.cert-manager.io"]
+      - host:
+          command: ["kubectl", "rollout", "status", "--namespace=cert-manager", "deployment", "cert-manager-webhook"]
+manifests:
+  rawYaml:
+  - https://github.com/cert-manager/cert-manager/releases/download/v1.13.3/cert-manager.yaml # kpt-set: https://github.com/cert-manager/cert-manager/releases/download/${cert-manager-version}/cert-manager.yaml
+---
+apiVersion: skaffold/v3
+kind: Config
+metadata:
+  name: root-ca
+  annotations:
+    config.kubernetes.io/local-config: "true"
+build: {}
+deploy:
+  kubectl:
+    defaultNamespace: cert-manager
+    hooks:
+      after:
+      - host:
+          command: ["kubectl", "wait", "--for=condition=ready", "--timeout=30s", "clusterissuer", "root-ca"]
+manifests:
+  kustomize:
+      paths: ["k8s/cert-manager/base"]

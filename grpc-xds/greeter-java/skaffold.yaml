@@ -1,0 +1,104 @@
+# Copyright 2023 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: skaffold/v3
+kind: Config
+metadata:
+  name: greeter
+  annotations:
+    config.kubernetes.io/local-config: "true"
+build:
+  artifacts:
+  # https://skaffold.dev/docs/builders/builder-types/jib/#gradle
+  - image: greeter
+    context: ..
+    jib:
+      project: greeter
+      # Using a base image with a shell (`debug`) to enable exec-ing to containers,
+      # since this is a sample implementation created for learning purposes.
+      fromImage: gcr.io/distroless/java17-debian12:debug-nonroot
+  tagPolicy:
+    gitCommit: {}
+deploy:
+  kubectl: {}
+manifests:
+  kustomize:
+    buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+    paths: ["k8s/base"]
+portForward:
+- resourceType: Deployment
+  resourceName: greeter-intermediary
+  namespace: xds # kpt-set: ${greeter-namespace}
+  localPort: 50055
+  port: 50051 # serving port
+- resourceType: Deployment
+  resourceName: greeter-leaf
+  namespace: xds # kpt-set: ${greeter-namespace}
+  localPort: 50057
+  port: 50051 # serving port
+profiles:
+# Alter the Skaffold config when running `skaffold debug`.
+- name: debug # the name is not important
+  activation:
+  - command: debug
+  patches:
+  # Use a different base image when debugging.
+  - op: replace
+    path: /build/artifacts/0/jib/fromImage
+    value: gcr.io/distroless/java17-debian12:debug
+  # Add port forwarding to the debug ports.
+  - op: add
+    path: /portForward/-
+    value:
+      resourceType: Deployment
+      resourceName: greeter-intermediary
+      namespace: xds # kpt-set: ${control-plane-namespace}
+      localPort: 5007
+      port: 5005 # JDWP debug port
+  - op: add
+    path: /portForward/-
+    value:
+      resourceType: Deployment
+      resourceName: greeter-leaf
+      namespace: xds # kpt-set: ${control-plane-namespace}
+      localPort: 5008
+      port: 5005 # JDWP debug port
+# No xDS, use gRPC DNS resolver, kube-proxy, and headful services.
+- name: no-xds
+  manifests:
+    kustomize:
+      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+      paths: ["k8s/overlays/no-xds"]
+# Deploy to a GKE or kind Kubernetes cluster, with workload TLS certificates from cert-manager.
+- name: kind
+  activation:
+  - kubeContext: kind.*
+  manifests:
+    kustomize:
+      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+      paths: ["k8s/overlays/tls-cert-manager"]
+# Deploy to a GKE cluster, and use GKE workload TLS certificates ("mesh certificates").
+- name: tls-gke-workload-certs
+  activation:
+  - kubeContext: gke.*
+  manifests:
+    kustomize:
+      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+      paths: ["k8s/overlays/tls-gke-workload-certs"]
+# Deploy to a GKE cluster and use Traffic Director as the xDS control plane.
+- name: traffic-director
+  manifests:
+    kustomize:
+      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+      paths: ["k8s/overlays/traffic-director"]
