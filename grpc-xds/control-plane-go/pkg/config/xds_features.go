@@ -60,7 +60,7 @@ func validateXDSFeatureFlags(logger logr.Logger, xdsFeatures xds.Features) error
 		return errDataPlaneClientCertsRequireTLS
 	}
 	if xdsFeatures.ServerListenerUsesRDS {
-		logger.V(1).Info("Warning: gRPC-Go as of v1.60.1 does not support RouteConfiguration via RDS for server Listeners, see https://github.com/grpc/grpc-go/issues/6788")
+		logger.V(1).Info("Warning: xDS clients implemented using Go must use gRPC-Go v1.61.0 or later for dynamic RouteConfiguration via RDS for server Listeners, see https://github.com/grpc/grpc-go/issues/6788")
 	}
 	return nil
 }

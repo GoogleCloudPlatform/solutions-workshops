@@ -17,6 +17,6 @@
 # for the flags that can be used.
 # Unspecified flags default to `false`.
 
-serverListenerUsesRds: false # `false` value means that RouteConfiguration is inline in the server Listener instead of relying on RDS
+serverListenerUsesRds: true # `false` value means that RouteConfiguration is inline in the server Listener instead of relying on RDS
 enableDataPlaneTls: true
 requireDataPlaneClientCerts: true # `true` value requires enableDataPlaneTls=true

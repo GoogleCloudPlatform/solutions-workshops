@@ -87,11 +87,13 @@ spec:
           EOF
           #
           # Set `locality.zone` from a file if the GKE metadata server is not available,
-          # e.g., when running on a local kind cluster. Also handle the special case of
+          # e.g., when running on a local kind cluster. Also handle the special cases of
+          # Cloud Workstations (https://cloud.google.com/workstations/docs) and
           # gLinux Rodete (https://cloud.google.com/blog/topics/developers-practitioners/how-google-got-to-rolling-linux-releases-for-desktops).
           #
-          grep -v rodete <(uname -r) > /dev/null &&
-            wget --header Metadata-Flavor:Google --spider -q http://metadata.google.internal/computeMetadata/v1/instance/zone 2> /dev/null \
+          wget --header Metadata-Flavor:Google --spider -q http://metadata.google.internal/computeMetadata/v1/instance/zone 2> /dev/null \
+            && ( ! wget --header Metadata-Flavor:Google -qO- http://metadata.google.internal/computeMetadata/v1/instance/tags 2> /dev/null | grep '"cloud-workstations-instance"' > /dev/null ) \
+            && grep -v rodete <(uname -r) > /dev/null \
             || sed -i "s/\"zone\": \".*\"$/\"zone\": \"$(cat /etc/nodeinfo/zone)\"/" /etc/grpc-xds/bootstrap.json
         resources:
           requests:

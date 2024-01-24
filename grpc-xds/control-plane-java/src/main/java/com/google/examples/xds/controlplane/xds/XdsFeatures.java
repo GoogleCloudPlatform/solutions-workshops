@@ -40,7 +40,7 @@ public record XdsFeatures(
     }
     if (serverListenerUsesRds) {
       LOG.warn(
-          "gRPC-Go as of v1.60.1 does not support RouteConfiguration via RDS for server Listeners, see https://github.com/grpc/grpc-go/issues/6788");
+          "xDS clients implemented using Go must use gRPC-Go v1.61.0 or later for dynamic RouteConfiguration via RDS for server Listeners, see https://github.com/grpc/grpc-go/issues/6788");
     }
     this.serverListenerUsesRds = serverListenerUsesRds;
     this.enableDataPlaneTls = enableDataPlaneTls;
