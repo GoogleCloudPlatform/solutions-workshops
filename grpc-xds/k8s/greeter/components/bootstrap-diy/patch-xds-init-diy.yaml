@@ -50,7 +50,13 @@ spec:
                 "server_uri": "control-plane.xds:50051",
                 "channel_creds": [
                   {
-                    "type": "insecure"
+                    "type": "tls",
+                    "config": {
+                      "ca_certificate_file": "/var/run/secrets/workload-spiffe-credentials/ca_certificates.pem",
+                      "certificate_file": "/var/run/secrets/workload-spiffe-credentials/certificates.pem",
+                      "private_key_file": "/var/run/secrets/workload-spiffe-credentials/private_key.pem",
+                      "refresh_interval": "600s"
+                    }
                   }
                 ],
                 "server_features": [
@@ -75,9 +81,9 @@ spec:
               "google_cloud_private_spiffe": {
                 "plugin_name": "file_watcher",
                 "config": {
+                  "ca_certificate_file": "/var/run/secrets/workload-spiffe-credentials/ca_certificates.pem",
                   "certificate_file": "/var/run/secrets/workload-spiffe-credentials/certificates.pem",
                   "private_key_file": "/var/run/secrets/workload-spiffe-credentials/private_key.pem",
-                  "ca_certificate_file": "/var/run/secrets/workload-spiffe-credentials/ca_certificates.pem",
                   "refresh_interval": "600s"
                 }
               }

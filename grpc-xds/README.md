@@ -19,8 +19,8 @@ plane and the sample gRPC application on either a
 [Google Kubernetes Engine (GKE)](https://cloud.google.com/kubernetes-engine/docs)
 cluster, or on a local [kind](https://kind.sigs.k8s.io/) Kubernetes cluster.
 
-The code in this repository in not recommended for production environments, and
-there are no plans to make it production-ready. Instead, we recommend
+The code in this repository in not recommended for production environments.
+If you want a production-ready xDS control plane, we recommend
 [Traffic Director](https://cloud.google.com/traffic-director/docs) from Google Cloud.
 
 ## Directory structure

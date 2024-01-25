@@ -45,6 +45,7 @@ spec:
   - server auth # in case we want to run an xDS-enabled gRPC server on this pod
   - client auth
   privateKey:
+    algorithm: RSA # gRPC-Java as of v1.60.1 only supports RSA for xDS, use the same algorithm for root CA certificate.
     encoding: PKCS8 # Default is `PKCS1`. gRPC-Java requires PKCS #8
-    algorithm: RSA # gRPC-Java as of v1.60.1 only supports RSA for xDS
+    rotationPolicy: Always
     size: 4096

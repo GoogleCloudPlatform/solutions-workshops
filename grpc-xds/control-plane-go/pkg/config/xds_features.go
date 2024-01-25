@@ -30,7 +30,10 @@ const (
 	xdsFeaturesConfigFile = "xds_features.yaml"
 )
 
-var errDataPlaneClientCertsRequireTLS = errors.New("enableDataPlaneTls=true is required when requireDataPlaneClientCerts=true")
+var (
+	errControlPlaneClientCertsRequireTLS = errors.New("enableControlPlaneTls=true is required when requireControlPlaneClientCerts=true")
+	errDataPlaneClientCertsRequireTLS    = errors.New("enableDataPlaneTls=true is required when requireDataPlaneClientCerts=true")
+)
 
 func XDSFeatures(logger logr.Logger) (*xds.Features, error) {
 	configDir, exists := os.LookupEnv("CONFIG_DIR")
@@ -56,6 +59,9 @@ func XDSFeatures(logger logr.Logger) (*xds.Features, error) {
 }
 
 func validateXDSFeatureFlags(logger logr.Logger, xdsFeatures xds.Features) error {
+	if !xdsFeatures.EnableControlPlaneTLS && xdsFeatures.RequireControlPlaneClientCerts {
+		return errControlPlaneClientCertsRequireTLS
+	}
 	if !xdsFeatures.EnableDataPlaneTLS && xdsFeatures.RequireDataPlaneClientCerts {
 		return errDataPlaneClientCertsRequireTLS
 	}

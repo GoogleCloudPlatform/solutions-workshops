@@ -512,7 +512,8 @@ public class XdsSnapshotBuilder {
                                             .build())
                                     .build())
                             .build())
-                    // Traffic Director sets `alpn_protocols`, but it is ignored by gRPC according to gRFC A29.
+                    // Traffic Director sets `alpn_protocols`, but it is ignored by gRPC according
+                    // to gRFC A29.
                     .addAlpnProtocols("h2")
                     .build())
             .build();

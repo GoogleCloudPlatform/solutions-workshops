@@ -14,19 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Deploy to a GKE cluster, with an in-cluster self-managed xDS control plane,
-# and use GKE workload TLS certificates ("mesh certificates").
-# Requires that a certificate authority (CA) has been set up in Certificate Authority Service,
-# see: https://cloud.google.com/traffic-director/docs/security-proxyless-setup
-
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
 metadata:
-  name: greeter-java-tls-gke-workload-certs
+  name: greeter-java-no-control-plane-mtls
   annotations:
     config.kubernetes.io/local-config: "true"
-components:
-- ../../../../k8s/greeter/meta-components/tls-gke-workload-certs
-- ../../components/no-control-plane-mtls # gRPC-Java as of v1.61.0 does not support control plane mTLS (gRFC A65)
-resources:
-- ../../base
+images:
+- name: busybox
+  newName: busybox:stable-glibc
+  digest: sha256:e046063223f7eaafbfbc026aa3954d9a31b9f1053ba5db04a4f1fdc97abd8963
+patches:
+- path: patch-bootstrap-no-control-plane-mtls.yaml
+  target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: greeter-.*

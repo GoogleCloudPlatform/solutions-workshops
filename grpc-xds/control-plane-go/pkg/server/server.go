@@ -31,12 +31,15 @@ import (
 	"github.com/go-logr/logr"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/admin"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
-	xdscredentials "google.golang.org/grpc/credentials/xds"
+	"google.golang.org/grpc/credentials/tls/certprovider"
+	"google.golang.org/grpc/credentials/tls/certprovider/pemfile"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/security/advancedtls"
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/googlecloudplatform/solutions-workshops/grpc-xds/control-plane-go/pkg/informers"
@@ -53,26 +56,45 @@ const (
 	grpcMaxConcurrentStreams = 1000000
 )
 
+type transportCredentials struct {
+	credentials.TransportCredentials
+	providers []certprovider.Provider
+}
+
+// Close cleans up resources used by the credentials.
+func (c *transportCredentials) Close() {
+	for _, provider := range c.providers {
+		if provider != nil {
+			provider.Close()
+		}
+	}
+}
+
 func Run(ctx context.Context, servingPort int, healthPort int, informerConfigs []informers.Config, xdsFeatures *xds.Features) error {
 	logger := logging.FromContext(ctx)
-	grpcOptions, err := serverOptions(logger)
+	serverCredentials, err := createServerCredentials(logger, xdsFeatures)
 	if err != nil {
-		return fmt.Errorf("could not set gRPC server options: %w", err)
+		return fmt.Errorf("could not create server-side transport credentials: %w", err)
 	}
-	healthServer := health.NewServer()
+	defer serverCredentials.Close()
+
+	grpcOptions := serverOptions(logger, serverCredentials)
 	server := grpc.NewServer(grpcOptions...)
 	healthGRPCServer := grpc.NewServer()
+	healthServer := health.NewServer()
 	addServerStopBehavior(ctx, logger, server, healthGRPCServer, healthServer)
 	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
 	healthpb.RegisterHealthServer(server, healthServer)
 	healthpb.RegisterHealthServer(healthGRPCServer, healthServer)
 
-	cleanup, err := admin.Register(server)
+	cleanup, err := registerAdminServers(server, healthGRPCServer)
 	if err != nil {
 		return fmt.Errorf("could not register gRPC Channelz and CSDS admin services: %w", err)
 	}
 	defer cleanup()
+
 	reflection.Register(server)
+	reflection.Register(healthGRPCServer)
 
 	xdsCache := xds.NewSnapshotCache(ctx, true, xds.FixedHash{}, xdsFeatures)
 	xdsServer := serverv3.NewServer(ctx, xdsCache, xdsServerCallbackFuncs(logger))
@@ -104,6 +126,21 @@ func Run(ctx context.Context, servingPort int, healthPort int, informerConfigs [
 		}
 	}()
 	return healthGRPCServer.Serve(healthTCPListener)
+}
+
+func registerAdminServers(servingGRPCServer *grpc.Server, healthGRPCServer *grpc.Server) (func(), error) {
+	cleanupServing, err := admin.Register(servingGRPCServer)
+	if err != nil {
+		return func() {}, fmt.Errorf("could not register Channelz and CSDS admin services to serving server: %w", err)
+	}
+	cleanupHealth, err := admin.Register(healthGRPCServer)
+	if err != nil {
+		return func() {}, fmt.Errorf("could not register Channelz and CSDS admin services to health server: %w", err)
+	}
+	return func() {
+		cleanupServing()
+		cleanupHealth()
+	}, nil
 }
 
 func xdsServerCallbackFuncs(logger logr.Logger) *serverv3.CallbackFuncs {
@@ -158,15 +195,11 @@ func registerXDSServices(grpcServer *grpc.Server, xdsServer serverv3.Server) {
 // availability problems.
 // Keepalive timeouts based on connection_keepalive parameter https://www.envoyproxy.io/docs/envoy/latest/configuration/overview/examples#dynamic
 // Source: https://github.com/envoyproxy/go-control-plane/blob/v0.11.1/internal/example/server.go#L67
-func serverOptions(logger logr.Logger) ([]grpc.ServerOption, error) {
-	serverCredentials, err := xdscredentials.NewServerCredentials(xdscredentials.ServerOptions{FallbackCreds: insecure.NewCredentials()})
-	if err != nil {
-		return nil, fmt.Errorf("could not create server-side transport credentials for xDS: %w", err)
-	}
+func serverOptions(logger logr.Logger, transportCredentials credentials.TransportCredentials) []grpc.ServerOption {
 	return []grpc.ServerOption{
 		grpc.ChainStreamInterceptor(interceptors.StreamServerLogging(logger)),
 		grpc.ChainUnaryInterceptor(interceptors.UnaryServerLogging(logger)),
-		grpc.Creds(serverCredentials),
+		grpc.Creds(transportCredentials),
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
 			MinTime:             grpcKeepaliveMinTime,
 			PermitWithoutStream: true,
@@ -176,7 +209,70 @@ func serverOptions(logger logr.Logger) ([]grpc.ServerOption, error) {
 			Timeout: grpcKeepaliveTimeout,
 		}),
 		grpc.MaxConcurrentStreams(grpcMaxConcurrentStreams),
-	}, nil
+	}
+}
+
+func createServerCredentials(logger logr.Logger, xdsFeatures *xds.Features) (*transportCredentials, error) {
+	if !xdsFeatures.EnableControlPlaneTLS {
+		logger.V(2).Info("using insecure credentials for the control plane server")
+		return &transportCredentials{
+			TransportCredentials: insecure.NewCredentials(),
+		}, nil
+	}
+	logger.V(2).Info("using mTLS with automatic certificate reloading for the control plane server")
+	identityOptions := pemfile.Options{
+		CertFile:        "/var/run/secrets/workload-spiffe-credentials/certificates.pem",
+		KeyFile:         "/var/run/secrets/workload-spiffe-credentials/private_key.pem",
+		RefreshDuration: 600 * time.Second,
+	}
+	identityProvider, err := pemfile.NewProvider(identityOptions)
+	if err != nil {
+		return nil, fmt.Errorf("could not create a new certificate provider for identityOptions=%+v: %w", identityOptions, err)
+	}
+	providers := []certprovider.Provider{identityProvider}
+
+	options := &advancedtls.ServerOptions{
+		IdentityOptions: advancedtls.IdentityCertificateOptions{
+			IdentityProvider: identityProvider,
+		},
+		// VerifyPeer: func(params *advancedtls.VerificationFuncParams) (*advancedtls.VerificationResults, error) {
+		// 	return &advancedtls.VerificationResults{}, nil
+		// },
+		VerifyPeer: func(params *advancedtls.VerificationFuncParams) (*advancedtls.VerificationResults, error) {
+			// Not actually checking anything, just logging the client's SPIFFE ID.
+			// SPIFFE certificates must have exactly one URI SAN.
+			if len(params.Leaf.URIs) == 1 && params.Leaf.URIs[0] != nil {
+				logger.V(2).Info("Client TLS certificate", "spiffeID", *params.Leaf.URIs[0])
+			}
+			return &advancedtls.VerificationResults{}, nil
+		},
+		VType: advancedtls.CertVerification,
+	}
+
+	if xdsFeatures.RequireControlPlaneClientCerts {
+		rootOptions := pemfile.Options{
+			RootFile:        "/var/run/secrets/workload-spiffe-credentials/ca_certificates.pem",
+			RefreshDuration: 600 * time.Second,
+		}
+		rootProvider, err := pemfile.NewProvider(rootOptions)
+		if err != nil {
+			return nil, fmt.Errorf("could not create a new certificate provider for rootOptions=%+v: %w", rootOptions, err)
+		}
+		providers = append(providers, rootProvider)
+		options.RootOptions = advancedtls.RootCertificateOptions{
+			RootProvider: rootProvider,
+		}
+		options.RequireClientCert = true
+	}
+	logger.Info("advancedtls", "options", options)
+	serverCredentials, err := advancedtls.NewServerCreds(options)
+	if err != nil {
+		return nil, fmt.Errorf("could not create server credentials from options %+v: %w", options, err)
+	}
+	return &transportCredentials{
+		TransportCredentials: serverCredentials,
+		providers:            providers,
+	}, err
 }
 
 func addServerStopBehavior(ctx context.Context, logger logr.Logger, servingGRPCServer *grpc.Server, healthGRPCServer *grpc.Server, healthServer *health.Server) {
