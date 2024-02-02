@@ -23,7 +23,7 @@ metadata:
   labels:
     app.kubernetes.io/component: troubleshoot
 spec:
-  progressDeadlineSeconds: 300
+  progressDeadlineSeconds: 600
   replicas: 1
   selector:
     matchLabels:
@@ -45,8 +45,8 @@ spec:
         - name: GOTRACEBACK
           value: all
         # Set GRPC_GO_LOG_SEVERITY_LEVEL and GRPC_GO_LOG_VERBOSITY_LEVEL to see more log output from Go-based troubleshooting tools.
-        # - name: GRPC_GO_LOG_SEVERITY_LEVEL
-        #   value: info
-        # - name: GRPC_GO_LOG_VERBOSITY_LEVEL
-        #   value: "99"
+        - name: GRPC_GO_LOG_SEVERITY_LEVEL
+          value: info
+        - name: GRPC_GO_LOG_VERBOSITY_LEVEL
+          value: "99"
       serviceAccountName: bastion

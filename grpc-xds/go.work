@@ -14,6 +14,8 @@
 
 go 1.21.1
 
+toolchain go1.21.6
+
 use (
 	./control-plane-go
 	./greeter-go

@@ -19,8 +19,8 @@ plane and the sample gRPC application on either a
 [Google Kubernetes Engine (GKE)](https://cloud.google.com/kubernetes-engine/docs)
 cluster, or on a local [kind](https://kind.sigs.k8s.io/) Kubernetes cluster.
 
-The code in this repository in not recommended for production environments, and
-there are no plans to make it production-ready. Instead, we recommend
+The code in this repository in not recommended for production environments.
+If you want a production-ready xDS control plane, we recommend
 [Traffic Director](https://cloud.google.com/traffic-director/docs) from Google Cloud.
 
 ## Directory structure
@@ -72,7 +72,7 @@ If you want to build and deploy the Java control plane and sample application,
 you need [Java 17](https://adoptium.net/).
 
 If you want to build and deploy the Go control plane and sample application,
-you need [Go 1.20](https://go.dev/doc/install) or later.
+you need [Go 1.21](https://go.dev/doc/install) or later.
 
 You also need the following tools:
 
@@ -203,8 +203,8 @@ to issue workload TLS certificates.
     make request-leaf-mtls
     ```
 
-    If you use GKE workload TLS certificates, bypass certificate validation,
-    as gRPCurl cannot validate the SPIFFE ID in the server certificates:
+    If you use GKE workload TLS certificates, bypass certificate verification,
+    as gRPCurl cannot verify the SPIFFE ID in the server certificates:
 
     ```shell
     make request-leaf-mtls-insecure
@@ -230,8 +230,8 @@ to issue workload TLS certificates.
     make request-mtls
     ```
 
-    If you use GKE workload TLS certificates, bypass certificate validation,
-    as gRPCurl cannot validate the SPIFFE ID in the server certificates:
+    If you use GKE workload TLS certificates, bypass certificate verification,
+    as gRPCurl cannot verify the SPIFFE ID in the server certificates:
 
     ```shell
     make request-mtls-insecure
@@ -252,7 +252,8 @@ to issue workload TLS certificates.
     ```
 
 10. To delete the control plane and greeter pods, without deleting the `xds`
-    namespace or other resources, such as `cert-manager`:
+    namespace or other resources, such as the GKE workload certificate
+    configuration resources, or `cert-manager`:
 
     ```shell
     make delete
@@ -363,7 +364,7 @@ Some troubleshooting commands:
   ```
 
   Set the `GRPC_GO_LOG_SEVERITY_LEVEL` and `GRPC_GO_LOG_VERBOSITY_LEVEL`
-  environment variables to see addtional log messages from `grpcurl`'s
+  environment variables to see addtional log messages from gRPCurl's
   interaction with the xDS control plane management server:
 
   ```shell

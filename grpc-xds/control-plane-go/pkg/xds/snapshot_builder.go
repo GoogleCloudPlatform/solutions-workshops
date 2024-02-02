@@ -376,7 +376,7 @@ func createDownstreamTLSContext(requireClientCerts bool) *tlsv3.DownstreamTlsCon
 				// certificate name is ignored by gRPC according to gRFC A29.
 				CertificateName: "DEFAULT",
 			},
-			// AlpnProtocols is set by Traffic Director, but ignored by gRPC according to gRFC A29.
+			// AlpnProtocols is set by Traffic Director, but ignored by gRPC xDS according to gRFC A29.
 			AlpnProtocols: []string{"h2"},
 		},
 	}
@@ -535,6 +535,8 @@ func createUpstreamTLSContext(namespace string, serviceAccountName string, requi
 					},
 				},
 			},
+			// AlpnProtocols is set by Traffic Director, but ignored by gRPC xDS according to gRFC A29.
+			AlpnProtocols: []string{"h2"},
 		},
 	}
 

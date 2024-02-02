@@ -27,11 +27,14 @@ spec:
   subject:
     organizations:
     - Example LLC
-  commonName: grpc-xds-root-ca
+  commonName: root-ca
   duration: 8760h # 365d, see https://pkg.go.dev/time#ParseDuration
   renewBefore: 720h # 30d
   dnsNames:
   - root-ca
+  uris:
+  # https://github.com/spiffe/spiffe/blob/27b59b81ba8c56885ac5d4be73b35b9b3305fd7a/standards/X509-SVID.md#32-signing-certificates
+  - spiffe://cluster.local # kpt-set: spiffe://${project-id}.svc.id.goog
   secretName: root-ca-certificate
   issuerRef:
     name: selfsigned
@@ -41,9 +44,11 @@ spec:
   usages:
   # https://cert-manager.io/docs/reference/api-docs/#cert-manager.io/v1.KeyUsage
   # https://cloud.google.com/certificate-authority-service/docs/certificate-profile#root-unconstrained
+  # https://github.com/spiffe/spiffe/blob/27b59b81ba8c56885ac5d4be73b35b9b3305fd7a/standards/X509-SVID.md#43-key-usage
   - cert sign
   - crl sign
   privateKey:
-    encoding: PKCS8 # Default is `PKCS1`. gRPC-Java requires PKCS #8
     algorithm: RSA # gRPC-Java as of v1.60.1 only supports RSA for xDS, use the same algorithm for root CA certificate.
+    encoding: PKCS8 # Default is `PKCS1`. gRPC-Java requires PKCS #8
+    rotationPolicy: Always
     size: 4096

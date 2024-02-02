@@ -1,5 +1,3 @@
-# vi: set ft=yaml :
-#
 # Copyright 2024 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,26 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-metadata:
-  name: host-certs
-  annotations:
-    config.kubernetes.io/local-config: "true"
-commonLabels:
-  app.kubernetes.io/part-of: grpc-xds
-images:
-- name: busybox
-  newName: busybox:stable-glibc
-  digest: sha256:e046063223f7eaafbfbc026aa3954d9a31b9f1053ba5db04a4f1fdc97abd8963
-patches:
-- path: patch-resources.yaml
-  target:
-    group: apps
-    version: v1
-    kind: Deployment
-    name: host-certs
-resources:
-- namespace.yaml
-- service-account.yaml
-- deployment.yaml
+# Used when running the `apply-setters` KRM function.
+
+patch-*

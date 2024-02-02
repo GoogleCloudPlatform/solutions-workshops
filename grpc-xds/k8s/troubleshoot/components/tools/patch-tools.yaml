@@ -44,6 +44,9 @@ spec:
           curl -L -o /opt/tools/kubectl "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/$(go env GOOS)/$(go env GOARCH)/kubectl"
           chmod +x /opt/tools/kubectl
           #
+          curl -L -o /opt/tools/jq "https://github.com/jqlang/jq/releases/download/$(curl -sSL https://api.github.com/repos/jqlang/jq/releases | grep '"tag_name":' | head -n1 | grep -o 'jq-[0-9]*\.[0-9]*\.*[0-9]*')/jq-$(go env GOOS)-$(go env GOARCH)"
+          chmod +x /opt/tools/jq
+          #
           # Clone the Google RPC type definition protos, such as ErrorInfo, to /opt/protos/google/rpc:
           git clone --branch=master --depth=1 --no-checkout --single-branch https://github.com/googleapis/googleapis /opt/protos
           cd /opt/protos

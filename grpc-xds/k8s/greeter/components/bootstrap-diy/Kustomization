@@ -26,7 +26,7 @@ metadata:
 images:
 - name: busybox
   newName: busybox:stable-glibc
-  digest: sha256:51d373b90d58729e81641b49dcf52139090a89f1e2a4e631632db10cfbfd184d
+  digest: sha256:e046063223f7eaafbfbc026aa3954d9a31b9f1053ba5db04a4f1fdc97abd8963
 patches:
 - path: patch-xds-init-diy.yaml
   target:

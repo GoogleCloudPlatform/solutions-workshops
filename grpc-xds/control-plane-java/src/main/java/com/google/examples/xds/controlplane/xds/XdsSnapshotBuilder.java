@@ -95,6 +95,7 @@ public class XdsSnapshotBuilder {
       "grpc/server?xds.resource.listening_address=%s";
 
   /** Copied from {@link io.grpc.xds.XdsListenerResource}. */
+  @SuppressWarnings("JavadocReference")
   private static final String TRANSPORT_SOCKET_NAME_TLS = "envoy.transport_sockets.tls";
 
   /** Copied from {@link io.envoyproxy.controlplane.cache.Resources}. */
@@ -374,7 +375,8 @@ public class XdsSnapshotBuilder {
                     // certificate name is ignored by gRPC according to gRFC A29.
                     .setCertificateName("DEFAULT")
                     .build())
-            // Traffic Director sets AlpnProtocols, but it is ignored by gRPC according to gRFC A29.
+            // Traffic Director sets `alpn_protocols`, but it is ignored by gRPC according to gRFC
+            // A29.
             .addAlpnProtocols("h2");
 
     var downstreamTlsContextBuilder = DownstreamTlsContext.newBuilder();
@@ -510,6 +512,9 @@ public class XdsSnapshotBuilder {
                                             .build())
                                     .build())
                             .build())
+                    // Traffic Director sets `alpn_protocols`, but it is ignored by gRPC according
+                    // to gRFC A29.
+                    .addAlpnProtocols("h2")
                     .build())
             .build();
 

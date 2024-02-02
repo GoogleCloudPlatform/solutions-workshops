@@ -24,8 +24,8 @@ commonLabels:
   app.kubernetes.io/part-of: grpc-xds
 images:
 - name: golang
-  newName: golang:1.20
-  digest: sha256:c58c636721d1e30938f783f9daf1093a9939256f23f895f6b71b36580d0e46f9
+  newName: golang:1.21
+  digest: sha256:76aadd914a29a2ee7a6b0f3389bb2fdb87727291d688e1d972abe6c0fa6f2ee0
 patches:
 - path: patch-tools.yaml
   target:

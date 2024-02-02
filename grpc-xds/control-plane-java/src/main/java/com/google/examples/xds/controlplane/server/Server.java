@@ -18,21 +18,30 @@ import com.google.examples.xds.controlplane.config.ServerConfig;
 import com.google.examples.xds.controlplane.informers.InformerConfig;
 import com.google.examples.xds.controlplane.informers.InformerManager;
 import com.google.examples.xds.controlplane.interceptors.LoggingServerInterceptor;
+import com.google.examples.xds.controlplane.xds.XdsFeatures;
 import com.google.examples.xds.controlplane.xds.XdsSnapshotCache;
 import io.envoyproxy.controlplane.cache.NodeGroup;
 import io.envoyproxy.controlplane.server.V3DiscoveryServer;
 import io.grpc.BindableService;
 import io.grpc.Grpc;
 import io.grpc.InsecureServerCredentials;
+import io.grpc.ServerCredentials;
 import io.grpc.ServerInterceptors;
 import io.grpc.ServerServiceDefinition;
+import io.grpc.TlsServerCredentials;
+import io.grpc.TlsServerCredentials.ClientAuth;
 import io.grpc.health.v1.HealthCheckResponse.ServingStatus;
 import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder;
 import io.grpc.protobuf.services.HealthStatusManager;
 import io.grpc.protobuf.services.ProtoReflectionService;
 import io.grpc.services.AdminInterface;
+import io.grpc.util.AdvancedTlsX509KeyManager;
+import io.grpc.util.AdvancedTlsX509TrustManager;
+import java.io.File;
 import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.util.Collection;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
@@ -46,18 +55,33 @@ public class Server {
   /** Fixed node hash, so all xDS clients access the same cache snapshot. */
   private static final NodeGroup<String> FIXED_HASH = node -> "default";
 
+  /** Using the GKE workload certificate file paths for the server TLS certificate. */
+  private static final String CA_CERTIFICATES_FILE =
+      "/var/run/secrets/workload-spiffe-credentials/ca_certificates.pem";
+
+  private static final String CERTIFICATES_FILE =
+      "/var/run/secrets/workload-spiffe-credentials/certificates.pem";
+  private static final String PRIVATE_KEY_FILE =
+      "/var/run/secrets/workload-spiffe-credentials/private_key.pem";
+  private static final int CREDENTIALS_REFRESH_INTERVAL_SECONDS = 600;
+
   /** Runs the server. */
   public void run(@NotNull ServerConfig config) throws Exception {
-    var xdsCache = new XdsSnapshotCache<>(FIXED_HASH, config.xdsFeatures());
+    XdsFeatures xdsFeatures = config.xdsFeatures();
+    var xdsCache = new XdsSnapshotCache<>(FIXED_HASH, xdsFeatures);
     InformerManager<String> informers = setupInformers(xdsCache, config.informers());
     informers.start();
     Runtime.getRuntime().addShutdownHook(new Thread(informers::stop));
 
     int controlPlanePort = config.servingPort();
+    var serverCredentials =
+        createServerCredentials(
+            xdsFeatures.enableControlPlaneTls(), xdsFeatures.requireControlPlaneClientCerts());
     var discoveryServer = new V3DiscoveryServer(xdsCache);
     var health = new HealthStatusManager();
     health.setStatus("", ServingStatus.SERVING);
-    var server = createManagementServer(controlPlanePort, discoveryServer, health);
+    var server =
+        createManagementServer(controlPlanePort, serverCredentials, discoveryServer, health);
     server.start();
 
     // Serve health, admin and reflection services on the health port
@@ -86,9 +110,41 @@ public class Server {
   }
 
   @NotNull
+  private ServerCredentials createServerCredentials(
+      boolean enableControlPlaneTls, boolean requireControlPlaneClientCerts)
+      throws IOException, GeneralSecurityException {
+    if (!enableControlPlaneTls) {
+      return InsecureServerCredentials.create();
+    }
+    var keyManager = new AdvancedTlsX509KeyManager();
+    var scheduledExecutorService = Executors.newScheduledThreadPool(1);
+    keyManager.updateIdentityCredentialsFromFile(
+        new File(PRIVATE_KEY_FILE),
+        new File(CERTIFICATES_FILE),
+        CREDENTIALS_REFRESH_INTERVAL_SECONDS,
+        TimeUnit.SECONDS,
+        scheduledExecutorService);
+    var tlsCredsBuilder = TlsServerCredentials.newBuilder().keyManager(keyManager);
+    if (requireControlPlaneClientCerts) {
+      var trustManager = AdvancedTlsX509TrustManager.newBuilder().build();
+      trustManager.updateTrustCredentialsFromFile(
+          new File(CA_CERTIFICATES_FILE),
+          CREDENTIALS_REFRESH_INTERVAL_SECONDS,
+          TimeUnit.SECONDS,
+          scheduledExecutorService);
+      tlsCredsBuilder.trustManager(trustManager);
+      tlsCredsBuilder.clientAuth(ClientAuth.REQUIRE);
+    }
+    return tlsCredsBuilder.build();
+  }
+
+  @NotNull
   private io.grpc.Server createManagementServer(
-      int port, V3DiscoveryServer discoveryServer, @NotNull HealthStatusManager health) {
-    return NettyServerBuilder.forPort(port)
+      int port,
+      @NotNull ServerCredentials serverCredentials,
+      @NotNull V3DiscoveryServer discoveryServer,
+      @NotNull HealthStatusManager health) {
+    return NettyServerBuilder.forPort(port, serverCredentials)
         .addService(withLogging(discoveryServer.getAggregatedDiscoveryServiceImpl()))
         .addService(withLogging(discoveryServer.getClusterDiscoveryServiceImpl()))
         .addService(withLogging(discoveryServer.getEndpointDiscoveryServiceImpl()))
@@ -107,7 +163,9 @@ public class Server {
   }
 
   private void addServerShutdownHook(
-      io.grpc.Server server, io.grpc.Server healthServer, HealthStatusManager health) {
+      @NotNull io.grpc.Server server,
+      @NotNull io.grpc.Server healthServer,
+      @NotNull HealthStatusManager health) {
     Runtime.getRuntime()
         .addShutdownHook(
             new Thread(

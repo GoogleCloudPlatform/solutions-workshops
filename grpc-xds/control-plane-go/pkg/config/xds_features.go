@@ -30,7 +30,10 @@ const (
 	xdsFeaturesConfigFile = "xds_features.yaml"
 )
 
-var errDataPlaneClientCertsRequireTLS = errors.New("enableDataPlaneTls=true is required when requireDataPlaneClientCerts=true")
+var (
+	errControlPlaneClientCertsRequireTLS = errors.New("enableControlPlaneTls=true is required when requireControlPlaneClientCerts=true")
+	errDataPlaneClientCertsRequireTLS    = errors.New("enableDataPlaneTls=true is required when requireDataPlaneClientCerts=true")
+)
 
 func XDSFeatures(logger logr.Logger) (*xds.Features, error) {
 	configDir, exists := os.LookupEnv("CONFIG_DIR")
@@ -56,11 +59,14 @@ func XDSFeatures(logger logr.Logger) (*xds.Features, error) {
 }
 
 func validateXDSFeatureFlags(logger logr.Logger, xdsFeatures xds.Features) error {
+	if !xdsFeatures.EnableControlPlaneTLS && xdsFeatures.RequireControlPlaneClientCerts {
+		return errControlPlaneClientCertsRequireTLS
+	}
 	if !xdsFeatures.EnableDataPlaneTLS && xdsFeatures.RequireDataPlaneClientCerts {
 		return errDataPlaneClientCertsRequireTLS
 	}
 	if xdsFeatures.ServerListenerUsesRDS {
-		logger.V(1).Info("Warning: gRPC-Go as of v1.60.1 does not support RouteConfiguration via RDS for server Listeners, see https://github.com/grpc/grpc-go/issues/6788")
+		logger.V(1).Info("Warning: xDS clients implemented using Go must use gRPC-Go v1.61.0 or later for dynamic RouteConfiguration via RDS for server Listeners, see https://github.com/grpc/grpc-go/issues/6788")
 	}
 	return nil
 }

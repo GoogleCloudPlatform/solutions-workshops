@@ -1,0 +1,48 @@
+# Copyright 2023 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Patch to add JVM flags.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: greeter
+spec:
+  template:
+    spec:
+      initContainers:
+      - name: grpc-xds-init # https://github.com/kubernetes-sigs/kustomize/issues/3912
+      - name: grpc-xds-init-no-control-plane-mtls
+        image: busybox
+        command:
+        - /bin/sh
+        - -c
+        - |
+          #
+          # Update the gRPC xDS bootstrap configuration file to specify
+          # "insecure" channel credentials for control plane connection.
+          # Use this with xDS clients that do not support mTLS on control
+          # plane connections.
+          #
+          sed -i 's/"type": "tls"/"type": "insecure"/' /etc/grpc-xds/bootstrap.json
+        resources:
+          requests:
+            cpu: 10m
+            memory: 100Mi
+        volumeMounts:
+        - name: grpc-xds-conf
+          mountPath: /etc/grpc-xds
+      volumes:
+      - name: grpc-xds-conf
+        emptyDir: {}

@@ -27,9 +27,8 @@ spec:
   renewBefore: 8h
   dnsNames:
   - greeter-intermediary
-  - greeter-intermediary:50051
-  - greeter-intermediary.xds:50051 # kpt-set: greeter-intermediary.${greeter-namespace}:50051
-  - greeter-intermediary.xds.svc.cluster.local:50051 # kpt-set: greeter-intermediary.${greeter-namespace}.svc.cluster.local:50051
+  - greeter-intermediary.xds # kpt-set: greeter-intermediary.${greeter-namespace}
+  - greeter-intermediary.xds.svc.cluster.local # kpt-set: greeter-intermediary.${greeter-namespace}.svc.cluster.local
   uris:
   - spiffe://cluster.local/ns/xds/sa/greeter-intermediary # kpt-set: spiffe://${project-id}.svc.id.goog/ns/${greeter-namespace}/sa/greeter-intermediary
   secretName: greeter-intermediate-cert
@@ -47,8 +46,9 @@ spec:
   - server auth
   - client auth
   privateKey:
+    algorithm: RSA # gRPC-Java as of v1.60.1 only supports RSA for xDS, use the same algorithm for root CA certificate.
     encoding: PKCS8 # Default is `PKCS1`. gRPC-Java requires PKCS #8
-    algorithm: RSA # gRPC-Java as of v1.60.1 only supports RSA for xDS
+    rotationPolicy: Always
     size: 4096
 ---
 apiVersion: cert-manager.io/v1
@@ -64,9 +64,8 @@ spec:
   renewBefore: 8h
   dnsNames:
   - greeter-leaf
-  - greeter-leaf:50051
-  - greeter-leaf.xds:50051 # kpt-set: greeter-leaf.${greeter-namespace}:50051
-  - greeter-leaf.xds.svc.cluster.local:50051 # kpt-set: greeter-leaf.${greeter-namespace}.svc.cluster.local:50051
+  - greeter-leaf.xds # kpt-set: greeter-leaf.${greeter-namespace}
+  - greeter-leaf.xds.svc.cluster.local # kpt-set: greeter-leaf.${greeter-namespace}.svc.cluster.local
   uris:
   - spiffe://cluster.local/ns/xds/sa/greeter-leaf # kpt-set: spiffe://${project-id}.svc.id.goog/ns/${greeter-namespace}/sa/greeter-leaf
   secretName: greeter-leaf-cert
@@ -84,6 +83,7 @@ spec:
   - server auth
   - client auth
   privateKey:
+    algorithm: RSA # gRPC-Java as of v1.60.1 only supports RSA for xDS, use the same algorithm for root CA certificate.
     encoding: PKCS8 # Default is `PKCS1`. gRPC-Java requires PKCS #8
-    algorithm: RSA # gRPC-Java as of v1.60.1 only supports RSA for xDS
+    rotationPolicy: Always
     size: 4096

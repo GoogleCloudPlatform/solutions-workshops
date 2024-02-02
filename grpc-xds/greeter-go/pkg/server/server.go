@@ -67,13 +67,13 @@ type grpcserver interface {
 
 func Run(ctx context.Context, c Config) error {
 	logger := logging.FromContext(ctx)
-	grpcOptions, err := serverOptions(logger, c.UseXDSCredentials)
+	serverOptions, err := configureServerOptions(logger, c.UseXDSCredentials)
 	if err != nil {
 		return fmt.Errorf("could not set gRPC server options: %w", err)
 	}
 
 	healthServer := health.NewServer()
-	servingGRPCServer, err := newGRPCServer(logger, c.UseXDS, grpcOptions...)
+	servingGRPCServer, err := newGRPCServer(logger, c.UseXDS, serverOptions...)
 	if err != nil {
 		return fmt.Errorf("could not create the serving gRPC server: %w", err)
 	}
@@ -107,7 +107,7 @@ func Run(ctx context.Context, c Config) error {
 	return serve(logger, c, servingGRPCServer, healthServer, healthGRPCServer)
 }
 
-func serverOptions(logger logr.Logger, useXDSCredentials bool) ([]grpc.ServerOption, error) {
+func configureServerOptions(logger logr.Logger, useXDSCredentials bool) ([]grpc.ServerOption, error) {
 	// https://github.com/grpc/grpc-go/blob/v1.59.0/xds/server.go#L145
 	serverCredentials := insecure.NewCredentials()
 	if useXDSCredentials {
@@ -212,11 +212,11 @@ func registerAdminServers(useXDS bool, servingGRPCServer grpcserver, healthGRPCS
 }
 
 func serve(logger logr.Logger, c Config, servingGRPCServer grpcserver, healthServer *health.Server, healthGRPCServer *grpc.Server) error {
-	servingListener, err := net.Listen("tcp4", fmt.Sprintf(":%d", c.ServingPort))
+	servingListener, err := net.Listen("tcp", fmt.Sprintf(":%d", c.ServingPort))
 	if err != nil {
 		return fmt.Errorf("could not create TCP listener on serving port=%d: %w", c.ServingPort, err)
 	}
-	healthListener, err := net.Listen("tcp4", fmt.Sprintf(":%d", c.HealthPort))
+	healthListener, err := net.Listen("tcp", fmt.Sprintf(":%d", c.HealthPort))
 	if err != nil {
 		return fmt.Errorf("could not create TCP listener on health port=%d: %w", c.HealthPort, err)
 	}

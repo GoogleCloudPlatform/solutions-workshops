@@ -17,6 +17,8 @@
 # for the flags that can be used.
 # Unspecified flags default to `false`.
 
-serverListenerUsesRds: false # `false` value means that RouteConfiguration is inline in the server Listener instead of relying on RDS
+serverListenerUsesRds: true # `false` value means that RouteConfiguration is inline in the server Listener instead of relying on RDS
+enableControlPlaneTls: false # gRPC-Java as of v1.61.0 does _not_ fully support control plane mTLS for xDS clients
+requireControlPlaneClientCerts: false # `true` value requires enableControlPlaneTls=true
 enableDataPlaneTls: true
 requireDataPlaneClientCerts: true # `true` value requires enableDataPlaneTls=true
