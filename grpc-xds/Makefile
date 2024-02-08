@@ -12,9 +12,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# The `--build-concurrency=0`, `--detect-minikube=false`, and `--skip-tests`
-# flags in the commands below are optional. They are included only to speed up
-# the commands.
+# Speed up Skaffold commands
+export SKAFFOLD_BUILD_CONCURRENCY:=0
+export SKAFFOLD_CLEANUP:=false
+export SKAFFOLD_DETECT_MINIKUBE:=false
+export SKAFFOLD_INTERACTIVE:=false
+export SKAFFOLD_SKIP_TESTS:=true
+export SKAFFOLD_UPDATE_CHECK:=false
+
+# kind-create-multiple creates two kind Kubernetes cluster, each with multiple nodes.
+# It also installs prerequisites such as cert-manager in both clusters.
+.PHONY: kind-create-multiple
+kind-create-multiple: check-kind check-skaffold
+	./docs/kind-multi-cluster.sh
+
+# kind-delete-multiple deletes the two kind Kubernetes clusters.
+.PHONY: kind-delete-multiple
+kind-delete-multiple: check-kind
+	kind delete cluster --name=grpc-xds
+	kind delete cluster --name=grpc-xds-2
 
 # kind-create creates a kind Kubernetes cluster with multiple nodes.
 # It also installs prerequisites such as cert-manager.
@@ -35,46 +51,46 @@ kind-delete: check-kind
 # run-go builds and deploys control-plane-go and greeter-go.
 .PHONY: run-go
 run-go: check-skaffold check-go
-	skaffold run --build-concurrency=0 --detect-minikube=false --module=go --port-forward=user --skip-tests
+	skaffold run --module=go --port-forward=user
 
 # run-java builds and deploys control-plane-java and greeter-java.
 .PHONY: run-java
 run-java: check-skaffold check-javac
-	skaffold run --build-concurrency=0 --detect-minikube=false --module=java --port-forward=user --skip-tests
+	skaffold run --module=java --port-forward=user
 
 # run-go-tls-cert-manager builds and deploys control-plane-go and greeter-go,
 # with workload TLS certificates from CA managed by cert-manager,
 # even if the current kubecontext points to a GKE cluster.
 .PHONY: run-go-tls-cert-manager
 run-go-tls-cert-manager: check-skaffold check-go
-	skaffold run --build-concurrency=0 --detect-minikube=false --module=go --port-forward=user --profile=tls-gke-workload-certs,-tls-cert-manager --skip-tests
+	skaffold run --module=go --port-forward=user --profile=tls-gke-workload-certs,-tls-cert-manager
 
 # run-java-tls-cert-manager builds and deploys control-plane-java and greeter-java,
 # with workload TLS certificates from CA managed by cert-manager,
 # even if the current kubecontext points to a GKE cluster.
 .PHONY: run-java-tls-cert-manager
 run-java-tls-cert-manager: check-skaffold check-javac
-	skaffold run --build-concurrency=0 --detect-minikube=false --module=java --port-forward=user --profile=tls-gke-workload-certs,-tls-cert-manager --skip-tests
+	skaffold run --module=java --port-forward=user --profile=tls-gke-workload-certs,-tls-cert-manager
 
 # debug-go builds and deploys control-plane-go and greeter-go, with remote debugging enabled.
 .PHONY: debug-go
 debug-go: check-skaffold check-go
-	skaffold debug --build-concurrency=0 --cleanup=false --detect-minikube=false --module=go --port-forward=user --skip-tests
+	skaffold debug --module=go --port-forward=user
 
 # debug-java builds and deploys control-plane-java and greeter-java, with remote debugging enabled.
 .PHONY: debug-java
 debug-java: check-skaffold check-javac
-	skaffold debug --build-concurrency=0 --cleanup=false --detect-minikube=false --module=java --port-forward=user --skip-tests
+	skaffold debug --module=java --port-forward=user
 
 # dev-go sets up file watching with automatic image rebuilds and redeploys for control-plane-go and greeter-go.
 .PHONY: dev-go
 dev-go: check-skaffold check-go
-	skaffold dev --build-concurrency=0 --cleanup=false --detect-minikube=false --module=go --skip-tests
+	skaffold dev --module=go
 
 # dev-java sets up file watching with automatic image rebuilds and redeploys for control-plane-java and greeter-java.
 .PHONY: dev-java
 dev-java: check-skaffold check-javac
-	skaffold dev --build-concurrency=0 --cleanup=false --detect-minikube=false --module=java --skip-tests
+	skaffold dev --module=java
 
 # host-certs does the following:
 # 1. creates a temporary pod with a workload TLS certificate
@@ -82,8 +98,8 @@ dev-java: check-skaffold check-javac
 # 3. deletes the temporary pod and associated k8s resources
 .PHONY: host-certs
 host-certs: check-skaffold
-	skaffold run --detect-minikube=false --filename=k8s/host-certs/skaffold.yaml --skip-tests
-	skaffold delete --detect-minikube=false --filename=k8s/host-certs/skaffold.yaml
+	skaffold run --filename=k8s/host-certs/skaffold.yaml
+	skaffold delete --filename=k8s/host-certs/skaffold.yaml
 
 # copy-bastion-certs copies the workload TLS certificates from the bastion pod to the local developer workstation.
 .PHONY: copy-bastion-certs
@@ -169,13 +185,13 @@ xds-config-leaf: check-grpcdebug check-yq
 # cert-manager deploys cert-manager and its custom resource definitions (CRDs) to the Kubernetes cluster.
 .PHONY: cert-manager
 cert-manager: check-skaffold
-	skaffold run --detect-minikube=false --module=cert-manager --skip-tests
-	skaffold run --detect-minikube=false --module=root-ca --skip-tests
+	skaffold run --filename=k8s/cert-manager/skaffold.yaml --module=cert-manager
+	skaffold run --filename=k8s/cert-manager/skaffold.yaml --module=root-ca
 
 # run-bastion deploys a bastion Pod with troubleshooting tools.
 .PHONY: run-bastion
 run-bastion: check-skaffold
-	skaffold run --detect-minikube=false --module=troubleshoot --skip-tests
+	skaffold run --module=troubleshoot
 
 # troubleshoot executes a shell in the bastion Pod, in raw terminal mode.
 .PHONY: troubleshoot
@@ -201,10 +217,10 @@ delete: delete-control-plane delete-greeter
 
 # clean removes running instances of control-plane-[go|java], greeter-[go|java], and bastion.
 .PHONY: clean
-clean:
-	skaffold delete --detect-minikube=false --module=go
-	skaffold delete --detect-minikube=false --module=java
-	skaffold delete --detect-minikube=false --module=troubleshoot
+clean: check-skaffold
+	skaffold delete --module=go
+	skaffold delete --module=java
+	skaffold delete --module=troubleshoot
 
 .PHONY: check-go
 check-go:
@@ -237,7 +253,7 @@ check-javac:
 .PHONY: check-kind
 check-kind:
 	@if ! which kind > /dev/null; then \
-		echo "error: kind is not installed: https://kind.sigs.k8s.io/" >&2; \
+		echo "error: kind is not installed: https://kind.sigs.k8s.io/#installation-and-usage" >&2; \
 		exit 1; \
 	fi
 
@@ -265,6 +281,6 @@ check-skaffold: check-kubectl check-kustomize
 .PHONY: check-yq
 check-yq:
 	@if ! which yq > /dev/null; then \
-		echo "error: yq is not installed: https://github.com/mikefarah/yq#install" >&2; \
+		echo "error: yq is not installed: https://mikefarah.gitbook.io/yq/#install" >&2; \
 		exit 1; \
 	fi

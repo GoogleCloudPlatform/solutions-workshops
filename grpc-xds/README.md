@@ -80,6 +80,7 @@ You also need the following tools:
 - [Kustomize](https://kustomize.io/)
 - [Skaffold](https://skaffold.dev/)
 - [gRPCurl](https://github.com/fullstorydev/grpcurl)
+- [yq](https://mikefarah.gitbook.io/yq/)
 
 If you have already installed the
 [Google Cloud SDK](https://cloud.google.com/sdk/docs/install),
@@ -90,10 +91,10 @@ gcloud components install kubectl kustomize skaffold
 ```
 
 If you use macOS, you can use `brew` to install kubectl, Kustomize, Skaffold,
-and gRPCurl:
+gRPCurl, and yq:
 
 ```shell
-brew install kubectl kustomize skaffold grpcurl
+brew install kubectl kustomize skaffold grpcurl yq
 ```
 
 Follow the steps in the documents
