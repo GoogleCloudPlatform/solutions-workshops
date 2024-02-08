@@ -28,7 +28,6 @@ spec:
   dnsNames:
   - greeter-intermediary
   - greeter-intermediary.xds # kpt-set: greeter-intermediary.${greeter-namespace}
-  - greeter-intermediary.xds.svc.cluster.local # kpt-set: greeter-intermediary.${greeter-namespace}.svc.cluster.local
   uris:
   - spiffe://cluster.local/ns/xds/sa/greeter-intermediary # kpt-set: spiffe://${project-id}.svc.id.goog/ns/${greeter-namespace}/sa/greeter-intermediary
   secretName: greeter-intermediate-cert
@@ -65,7 +64,6 @@ spec:
   dnsNames:
   - greeter-leaf
   - greeter-leaf.xds # kpt-set: greeter-leaf.${greeter-namespace}
-  - greeter-leaf.xds.svc.cluster.local # kpt-set: greeter-leaf.${greeter-namespace}.svc.cluster.local
   uris:
   - spiffe://cluster.local/ns/xds/sa/greeter-leaf # kpt-set: spiffe://${project-id}.svc.id.goog/ns/${greeter-namespace}/sa/greeter-leaf
   secretName: greeter-leaf-cert

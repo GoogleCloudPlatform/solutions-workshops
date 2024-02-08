@@ -28,15 +28,23 @@ authority (CA) to issue workload certificates for TLS and mTLS.
 If you want to use kind with podman, follow the steps in this section.
 
 1.  Increase the virtual machine CPU and memory allocation, so that the
-    Kubernetes cluster will have sufficient capacity.
+    Kubernetes cluster(s) will have sufficient capacity.
 
     For podman, use the
     [`podman machine set` command](https://docs.podman.io/en/latest/markdown/podman-machine-set.1.html)
-    to update your existing virtual machine:
+    to update your existing virtual machine.
 
-    ```shell
-    podman machine set --cpus 2 --memory 4096
-    ```
+    1.  For running one kind Kubernetes cluster:
+
+        ```shell
+        podman machine set --cpus 2 --memory 4096
+        ```
+
+    2.  For running two kind Kubernetes clusters:
+
+        ```shell
+        podman machine set --cpus 4 --memory 8096
+        ```
 
     Verify the settings by inspecting the machine:
 
