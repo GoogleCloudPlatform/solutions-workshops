@@ -23,6 +23,7 @@ fi
 
 # Workaround for
 # https://kind.sigs.k8s.io/docs/user/known-issues/#pod-errors-due-to-too-many-open-files
+KIND_EXPERIMENTAL_PROVIDER=${KIND_EXPERIMENTAL_PROVIDER:-}
 if [ "$KIND_EXPERIMENTAL_PROVIDER" == "podman" ] ; then
   podman machine ssh \
     'grep -v "fs.inotify.max_user_[instances|watches]" /etc/sysctl.conf | sudo tee /etc/sysctl.conf > /dev/null &&
@@ -38,10 +39,12 @@ elif [ "$(uname -s)" != "Linux" ] ; then
      sudo sysctl -p /etc/sysctl.conf'
 else
   # In case of Docker Engine on a Linux host, don't just change the host.
-  echo "It looks like you are using Docker Engine on a machine running Linux.
-If you encounter problems starting the two Kubernetes clusters,
-update your inotify limis as per these instructions:
-https://kind.sigs.k8s.io/docs/user/known-issues/#pod-errors-due-to-too-many-open-files"
+  echo "******************************************************************************************
+* It looks like you are using Docker Engine on a machine running Linux.                  *
+* If you encounter problems starting the two Kubernetes clusters,                        *
+* update your inotify limis as per these instructions:                                   *
+* https://kind.sigs.k8s.io/docs/user/known-issues/#pod-errors-due-to-too-many-open-files *
+******************************************************************************************"
 fi
 
 # Speed up `skaffold` commands.
@@ -87,14 +90,6 @@ for node in $(kind get nodes --name=grpc-xds-2) ; do
   docker exec "$node" ip route replace "$cluster1_service_cidr" via "$cluster1_control_plane_node_ip"
 done
 
-
-#for cluster in grpc-xds grpc-xds-2 ; do
-#  for node in $(kind get nodes --name $cluster) ; do
-#    echo "$cluster $node"
-#  done
-#done
-
-#    docker exec ${node} ip route add <POD_SUBNET> via <NODE_IP>
-#    # Add static route to the service in the other cluster
-#    # We just need to add one route only for services
-#    docker exec ${n} ip route add <SCV_SUBNET> via <NODE_IP>
+# Generate kubeconfig files for the two clusters, for internal cluster control plane connectivity.
+kind get kubeconfig --internal --name=grpc-xds > control-plane-go/k8s/components/kubeconfig/kubeconfig-1.yaml
+kind get kubeconfig --internal --name=grpc-xds-2 > control-plane-go/k8s/components/kubeconfig/kubeconfig-2.yaml

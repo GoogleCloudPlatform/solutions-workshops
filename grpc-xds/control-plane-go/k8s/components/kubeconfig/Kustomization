@@ -1,4 +1,6 @@
-# Copyright 2023 Google LLC
+# vi: set ft=yaml :
+#
+# Copyright 2024 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,15 +14,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# List of kubeconfig contexts,
-# each with a list of EndpointSlices to watch,
-# specified by Namespace and owning Service name.
-#
-# If the kubeconfig context name is blank or omitted,
-# the `current-context` value is used.
-
-- informers:
-  - namespace: xds
-    services:
-    - greeter-intermediary
-    - greeter-leaf
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+metadata:
+  name: control-plane-go-kubeconfig
+  annotations:
+    config.kubernetes.io/local-config: "true"
+configMapGenerator:
+- name: kubeconfig
+  namespace: xds # kpt-set: ${control-plane-namespace}
+  files:
+  - kubeconfig-1.yaml
+  - kubeconfig-2.yaml
+patches:
+- path: patch-kubeconfig-env.yaml
+  target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: control-plane

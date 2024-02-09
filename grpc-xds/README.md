@@ -153,6 +153,13 @@ to issue workload TLS certificates.
 
     Leave Skaffold running so that port forwarding keeps working.
 
+    You may see messages similar to the following during deployment:
+
+    `xds:deployment/greeter-leaf: FailedMount: MountVolume.SetUp failed for volume "workload-certs" : secret "greeter-leaf-cert" not found`
+
+    You can safely ignore these messages as long as the deployment proceeds,
+    and you eventually see the message `Deployments stabilized in __ seconds`.
+
 2.  In a new terminal, tail the control plane logs:
 
     ```shell
@@ -382,7 +389,9 @@ Some troubleshooting commands:
     -cert /var/run/secrets/workload-spiffe-credentials/certificates.pem \
     -key /var/run/secrets/workload-spiffe-credentials/private_key.pem \
     -d '{"name": "World"}' \
-    -import-path /opt/protos -proto helloworld/greeter.proto -proto google/rpc/error_details.proto \
+    -import-path /opt/protos \
+    -proto helloworld/greeter.proto \
+    -proto google/rpc/error_details.proto \
     xds:///greeter-intermediary \
     helloworld.Greeter/SayHello
   ```

@@ -43,6 +43,3 @@ out/
 # Certificates and keys
 *.pem
 /certs/
-kubeconfig
-kubeconfig.yaml
-

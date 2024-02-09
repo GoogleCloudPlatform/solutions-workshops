@@ -43,13 +43,15 @@ metadata:
     config.kubernetes.io/local-config: "true"
 build: {}
 deploy:
-  kubeContext: kind-grpc-xds # generate the root CA certificate in the first cluster
+  kubeContext: kind-grpc-xds # generate the root CA certificate in the first cluster, and export it for use in the second cluster
   kubectl:
     defaultNamespace: cert-manager
     hooks:
       after:
       - host:
           command: ["kubectl", "wait", "--for=condition=ready", "--timeout=30s", "clusterissuer", "root-ca"]
+      - host:
+          command: ["sh", "-c", "kubectl --context=kind-grpc-xds --namespace=cert-manager get secret root-ca-certificate --output=yaml > k8s/cert-manager/root-ca-external/secret-root-ca.yaml"]
 manifests:
   kustomize:
       paths: ["k8s/cert-manager/root-ca"]
@@ -62,13 +64,10 @@ metadata:
     config.kubernetes.io/local-config: "true"
 build: {}
 deploy:
-  kubeContext: kind-grpc-xds-2 # export the root CA certificate from the first cluster and install it in the second cluster
+  kubeContext: kind-grpc-xds-2 # install the exported root CA certificate from the first cluster in the second cluster
   kubectl:
     defaultNamespace: cert-manager
     hooks:
-      before:
-      - host:
-          command: ["/bin/sh", "-c", "kubectl --context=kind-grpc-xds --namespace=cert-manager get secret root-ca-certificate --output=yaml > k8s/cert-manager/root-ca-external/secret-root-ca.yaml"]
       after:
       - host:
           command: ["kubectl", "--context=kind-grpc-xds-2", "wait", "--for=condition=ready", "--timeout=30s", "clusterissuer", "root-ca"]

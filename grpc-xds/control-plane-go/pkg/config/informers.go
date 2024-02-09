@@ -33,11 +33,13 @@ const (
 
 var (
 	errNoConfig           = errors.New("no informer configurations provided")
+	errNoContext          = errors.New("no kubeconfig contexts provided")
 	errNoServices         = errors.New("no services listed in informer configuration")
+	errDuplicateContext   = errors.New("context name used more than once in the informer configuration")
 	errDuplicateNamespace = errors.New("namespace used more than once in the informer configuration")
 )
 
-func Informers(logger logr.Logger) ([]informers.Config, error) {
+func Kubecontexts(logger logr.Logger) ([]informers.Kubecontext, error) {
 	configDir, exists := os.LookupEnv("CONFIG_DIR")
 	if !exists {
 		configDir = defaultConfigDir
@@ -48,16 +50,33 @@ func Informers(logger logr.Logger) ([]informers.Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("could not read informer configurations from file %s: %w", informersConfigFilePath, err)
 	}
-	var configs []informers.Config
-	err = yaml.Unmarshal(yamlBytes, &configs)
+	var kubecontexts []informers.Kubecontext
+	err = yaml.Unmarshal(yamlBytes, &kubecontexts)
 	if err != nil {
-		return nil, fmt.Errorf("could not unmarshall informer configuration YAML file contents [%s]: %w", yamlBytes, err)
+		return nil, fmt.Errorf("could not unmarshal informer configuration YAML file contents [%s]: %w", yamlBytes, err)
 	}
-	if err := validateInformerConfigs(configs); err != nil {
+	if err := validateKubeContexts(kubecontexts); err != nil {
 		return nil, fmt.Errorf("informer configuration validation failed: %w", err)
 	}
-	logger.V(2).Info("Informer", "configurations", configs)
-	return configs, err
+	logger.V(2).Info("Informer", "configurations", kubecontexts)
+	return kubecontexts, err
+}
+
+func validateKubeContexts(contexts []informers.Kubecontext) error {
+	if len(contexts) == 0 {
+		return errNoContext
+	}
+	contextNames := map[string]bool{}
+	for _, context := range contexts {
+		if _, exists := contextNames[context.ContextName]; exists {
+			return fmt.Errorf("%w: context=%s", errDuplicateContext, context.ContextName)
+		}
+		if err := validateInformerConfigs(context.Informers); err != nil {
+			return fmt.Errorf("invalid informer config for context=%s: %w", context.ContextName, err)
+		}
+		contextNames[context.ContextName] = true
+	}
+	return nil
 }
 
 func validateInformerConfigs(configs []informers.Config) error {
