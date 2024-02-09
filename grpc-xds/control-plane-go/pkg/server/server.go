@@ -70,7 +70,7 @@ func (c *transportCredentials) Close() {
 	}
 }
 
-func Run(ctx context.Context, servingPort int, healthPort int, informerConfigs []informers.Config, xdsFeatures *xds.Features) error {
+func Run(ctx context.Context, servingPort int, healthPort int, kubecontexts []informers.Kubecontext, xdsFeatures *xds.Features) error {
 	logger := logging.FromContext(ctx)
 	serverCredentials, err := createServerCredentials(logger, xdsFeatures)
 	if err != nil {
@@ -100,14 +100,9 @@ func Run(ctx context.Context, servingPort int, healthPort int, informerConfigs [
 	xdsServer := serverv3.NewServer(ctx, xdsCache, xdsServerCallbackFuncs(logger))
 
 	registerXDSServices(server, xdsServer)
-	informerManager, err := informers.NewManager(ctx, xdsCache)
-	if err != nil {
-		return fmt.Errorf("could not create the Kubernetes informer manager: %w", err)
-	}
-	for _, informerConfig := range informerConfigs {
-		if err := informerManager.AddEndpointSliceInformer(ctx, informerConfig); err != nil {
-			return fmt.Errorf("could not create Kubernetes informer for %+v: %w", informerConfig, err)
-		}
+
+	if err := createInformers(ctx, kubecontexts, xdsCache); err != nil {
+		return fmt.Errorf("could not create Kubernetes informer managers: %w", err)
 	}
 
 	tcpListener, err := net.Listen("tcp", fmt.Sprintf(":%d", servingPort))
@@ -185,6 +180,21 @@ func registerXDSServices(grpcServer *grpc.Server, xdsServer serverv3.Server) {
 	listenerv3.RegisterListenerDiscoveryServiceServer(grpcServer, xdsServer)
 	secretv3.RegisterSecretDiscoveryServiceServer(grpcServer, xdsServer)
 	runtimev3.RegisterRuntimeDiscoveryServiceServer(grpcServer, xdsServer)
+}
+
+func createInformers(ctx context.Context, kubecontexts []informers.Kubecontext, xdsCache *xds.SnapshotCache) error {
+	for _, kubecontext := range kubecontexts {
+		informerManager, err := informers.NewManager(ctx, kubecontext.ContextName, xdsCache)
+		if err != nil {
+			return fmt.Errorf("could not create Kubernetes informer manager for context=%s: %w", kubecontext.ContextName, err)
+		}
+		for _, informer := range kubecontext.Informers {
+			if err := informerManager.AddEndpointSliceInformer(ctx, informer); err != nil {
+				return fmt.Errorf("could not create Kubernetes informer for context=%s for %+v: %w", kubecontext.ContextName, informer, err)
+			}
+		}
+	}
+	return nil
 }
 
 // serverOptions sets gRPC server options.

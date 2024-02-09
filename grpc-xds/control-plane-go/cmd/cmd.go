@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/googlecloudplatform/solutions-workshops/grpc-xds/control-plane-go/pkg/config"
+	"github.com/googlecloudplatform/solutions-workshops/grpc-xds/control-plane-go/pkg/informers"
 	"github.com/googlecloudplatform/solutions-workshops/grpc-xds/control-plane-go/pkg/logging"
 	"github.com/googlecloudplatform/solutions-workshops/grpc-xds/control-plane-go/pkg/server"
 	"github.com/googlecloudplatform/solutions-workshops/grpc-xds/control-plane-go/pkg/signals"
@@ -28,6 +29,7 @@ import (
 func Run(ctx context.Context, flagset *flag.FlagSet, args []string) error {
 	ctx = signals.SetupSignalHandler(ctx)
 	logging.InitFlags(flagset)
+	informers.InitFlags(flagset)
 	if err := flagset.Parse(args); err != nil {
 		return fmt.Errorf("could not parse command line flags args=%+v: %w", args, err)
 	}
@@ -42,7 +44,7 @@ func Run(ctx context.Context, flagset *flag.FlagSet, args []string) error {
 	if err != nil {
 		return fmt.Errorf("could not configure management server health checking port: %w", err)
 	}
-	informerConfigs, err := config.Informers(logger)
+	kubecontexts, err := config.Kubecontexts(logger)
 	if err != nil {
 		return fmt.Errorf("could not initialize informer configuration: %w", err)
 	}
@@ -50,5 +52,5 @@ func Run(ctx context.Context, flagset *flag.FlagSet, args []string) error {
 	if err != nil {
 		return fmt.Errorf("could not initialize xDS feature flags: %w", err)
 	}
-	return server.Run(ctx, servingPort, healthPort, informerConfigs, xdsFeatures)
+	return server.Run(ctx, servingPort, healthPort, kubecontexts, xdsFeatures)
 }

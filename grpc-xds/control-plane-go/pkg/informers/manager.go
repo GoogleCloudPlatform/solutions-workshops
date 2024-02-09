@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -29,9 +28,7 @@ import (
 	"k8s.io/client-go/informers"
 	discoveryinformers "k8s.io/client-go/informers/discovery/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	informercache "k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/googlecloudplatform/solutions-workshops/grpc-xds/control-plane-go/pkg/logging"
 	"github.com/googlecloudplatform/solutions-workshops/grpc-xds/control-plane-go/pkg/xds"
@@ -54,37 +51,17 @@ type Manager struct {
 }
 
 // NewManager creates an instance that manages a collection of informers.
-func NewManager(ctx context.Context, xdsCache *xds.SnapshotCache) (*Manager, error) {
+func NewManager(ctx context.Context, kubecontextName string, xdsCache *xds.SnapshotCache) (*Manager, error) {
 	logger := logging.FromContext(ctx)
-	config, err := clientConfig(logger)
+	clientset, err := NewClientSet(ctx, kubecontextName)
 	if err != nil {
-		return nil, fmt.Errorf("could not create kubernetes config: %w", err)
-	}
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil, fmt.Errorf("could not create kubernetes clientset for config=%+v: %w", config, err)
+		return nil, err
 	}
 	return &Manager{
 		clientset: clientset,
 		logger:    logger,
 		xdsCache:  xdsCache,
 	}, nil
-}
-
-// clientConfig uses in-cluster config if the directory
-// `/var/run/secrets/kubernetes.io` exists and the user has the
-// appropriate permissions. This directory exists in Kubernetes Pods, unless
-// `automountServiceAccountToken` is `false`, and `true` is the default value.
-// [Reference]: https://kubernetes.io/docs/reference/access-authn-authz/service-accounts-admin/
-//
-// If the directory does not exist, configuration is read from a kubeconfig file.
-func clientConfig(logger logr.Logger) (*rest.Config, error) {
-	if _, err := os.Stat("/var/run/secrets/kubernetes.io"); os.IsNotExist(err) {
-		logger.V(2).Info("using kubeconfig file", "kubeconfig", kubeconfig)
-		return clientcmd.BuildConfigFromFlags("", kubeconfig)
-	}
-	logger.V(2).Info("using in-cluster config")
-	return rest.InClusterConfig()
 }
 
 func (m *Manager) AddEndpointSliceInformer(ctx context.Context, config Config) error {

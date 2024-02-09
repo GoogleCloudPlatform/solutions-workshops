@@ -16,9 +16,21 @@ package informers
 
 import (
 	"flag"
+	"os"
 	"path/filepath"
 
+	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
+)
+
+const (
+	configPathFlagUsage = "absolute path to the kubeconfig file(s), colon-separated if multiple files"
+
+	// Do not change the values below from their recommended values in clientcmd:.
+	configPathEnvVar = clientcmd.RecommendedConfigPathEnvVar
+	configPathFlag   = clientcmd.RecommendedConfigPathFlag
+	configHomeDir    = clientcmd.RecommendedHomeDir
+	configFileName   = clientcmd.RecommendedFileName
 )
 
 var (
@@ -27,10 +39,21 @@ var (
 )
 
 func init() {
-	if home := homedir.HomeDir(); home != "" {
-		commandLine.StringVar(&kubeconfig, "kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
+	usagePrefix := "(optional) "
+	if _, err := os.Stat("/var/run/secrets/kubernetes.io"); os.IsNotExist(err) {
+		// Not running in a Kubernetes Pod, or the Kubernetes Service Account is not mounted,
+		// or the user does not have the appropriate permissions to read the service account token.
+		// [Reference]: https://kubernetes.io/docs/reference/access-authn-authz/service-accounts-admin/
+		// In-cluster config is impossible in this case, and a kubeconfig file is required.
+		usagePrefix = ""
+	}
+	usage := usagePrefix + configPathFlagUsage
+	if kubeconfigEnvVarValue, exists := os.LookupEnv(configPathEnvVar); exists {
+		commandLine.StringVar(&kubeconfig, configPathFlag, kubeconfigEnvVarValue, usage)
+	} else if home := homedir.HomeDir(); home != "" {
+		commandLine.StringVar(&kubeconfig, configPathFlag, filepath.Join(home, configHomeDir, configFileName), usage)
 	} else {
-		commandLine.StringVar(&kubeconfig, "kubeconfig", "", "absolute path to the kubeconfig file")
+		commandLine.StringVar(&kubeconfig, configPathFlag, "", usage)
 	}
 }
 
