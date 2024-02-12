@@ -29,7 +29,7 @@ spec:
   - bastion
   - bastion.xds # kpt-set: bastion.${bastion-namespace}
   uris:
-  - spiffe://cluster.local/ns/xds/sa/bastion # kpt-set: spiffe://${project-id}.svc.id.goog/ns/${bastion-namespace}/sa/bastion
+  - spiffe://grpc-xds.example.com/ns/xds/sa/bastion # kpt-set: spiffe://${project-id}.svc.id.goog/ns/${bastion-namespace}/sa/bastion
   secretName: bastion-certificate
   issuerRef:
     name: root-ca

@@ -14,6 +14,8 @@
 
 # The Kubernetes resource file paths in this file assume that you execute
 # Skaffold from the base directory.
+#
+# TODO: Create separate intermediate CAs and issuers in each cluster.
 
 apiVersion: skaffold/v3
 kind: Config

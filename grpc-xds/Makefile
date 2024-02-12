@@ -23,7 +23,7 @@ export SKAFFOLD_UPDATE_CHECK:=false
 # kind-create-multiple creates two kind Kubernetes cluster, each with multiple nodes.
 # It also installs prerequisites such as cert-manager in both clusters.
 .PHONY: kind-create-multiple
-kind-create-multiple: check-kind check-skaffold
+kind-create-multiple: check-kind check-skaffold check-yq
 	./docs/kind-multi-cluster.sh
 
 # kind-delete-multiple deletes the two kind Kubernetes clusters.

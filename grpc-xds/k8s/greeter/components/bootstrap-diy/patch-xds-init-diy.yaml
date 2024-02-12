@@ -14,7 +14,7 @@
 
 # Patch to add an init container that creates a gRPC xDS bootstrap config file,
 # with an in-cluster self-managed xDS control plane management server on
-# `control-plane.xds:50051`.
+# `control-plane.xds.svc.cluster.local:50051`.
 
 apiVersion: apps/v1
 kind: Deployment
@@ -47,16 +47,10 @@ spec:
           {
             "xds_servers": [
               {
-                "server_uri": "control-plane.xds:50051",
+                "server_uri": "control-plane.xds.svc.cluster.local:50051",
                 "channel_creds": [
                   {
-                    "type": "tls",
-                    "config": {
-                      "ca_certificate_file": "/var/run/secrets/workload-spiffe-credentials/ca_certificates.pem",
-                      "certificate_file": "/var/run/secrets/workload-spiffe-credentials/certificates.pem",
-                      "private_key_file": "/var/run/secrets/workload-spiffe-credentials/private_key.pem",
-                      "refresh_interval": "600s"
-                    }
+                    "type": "insecure"
                   }
                 ],
                 "server_features": [
@@ -91,6 +85,17 @@ spec:
             "server_listener_resource_name_template": "grpc/server?xds.resource.listening_address=%s"
           }
           EOF
+          #
+          # Use the following block in `xds_servers[0].channel_creds` when the control plane requires mTLS:
+          #         {
+          #           "type": "tls",
+          #           "config": {
+          #             "ca_certificate_file": "/var/run/secrets/workload-spiffe-credentials/ca_certificates.pem",
+          #             "certificate_file": "/var/run/secrets/workload-spiffe-credentials/certificates.pem",
+          #             "private_key_file": "/var/run/secrets/workload-spiffe-credentials/private_key.pem",
+          #             "refresh_interval": "600s"
+          #           }
+          #         }
           #
           # Set `locality.zone` from a file if the GKE metadata server is not available,
           # e.g., when running on a local kind cluster. Also handle the special cases of

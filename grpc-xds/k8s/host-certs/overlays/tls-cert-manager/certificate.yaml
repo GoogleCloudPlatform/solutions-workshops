@@ -27,9 +27,9 @@ spec:
   renewBefore: 8h
   dnsNames:
   - host
-  - host.host-certs
+  - host.host-certs # kpt-set: host.${host-certs-namespace}
   uris:
-  - spiffe://cluster.local/ns/host-certs/sa/host # kpt-set: spiffe://${project-id}.svc.id.goog/ns/${host-certs-namespace}/sa/host
+  - spiffe://grpc-xds.example.com/ns/host-certs/sa/host # kpt-set: spiffe://${project-id}.svc.id.goog/ns/${host-certs-namespace}/sa/host
   secretName: host-certificate
   issuerRef:
     name: root-ca

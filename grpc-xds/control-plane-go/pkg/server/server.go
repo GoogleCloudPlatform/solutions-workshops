@@ -184,13 +184,13 @@ func registerXDSServices(grpcServer *grpc.Server, xdsServer serverv3.Server) {
 
 func createInformers(ctx context.Context, kubecontexts []informers.Kubecontext, xdsCache *xds.SnapshotCache) error {
 	for _, kubecontext := range kubecontexts {
-		informerManager, err := informers.NewManager(ctx, kubecontext.ContextName, xdsCache)
+		informerManager, err := informers.NewManager(ctx, kubecontext.Context, xdsCache)
 		if err != nil {
-			return fmt.Errorf("could not create Kubernetes informer manager for context=%s: %w", kubecontext.ContextName, err)
+			return fmt.Errorf("could not create Kubernetes informer manager for context=%s: %w", kubecontext.Context, err)
 		}
 		for _, informer := range kubecontext.Informers {
 			if err := informerManager.AddEndpointSliceInformer(ctx, informer); err != nil {
-				return fmt.Errorf("could not create Kubernetes informer for context=%s for %+v: %w", kubecontext.ContextName, informer, err)
+				return fmt.Errorf("could not create Kubernetes informer for context=%s for %+v: %w", kubecontext.Context, informer, err)
 			}
 		}
 	}

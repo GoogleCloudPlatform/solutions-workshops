@@ -23,6 +23,6 @@ type Config struct {
 // Kubecontext represents a kubeconfig context,
 // containing a list of `informer.Config`s.
 type Kubecontext struct {
-	ContextName string   `yaml:"contextName"`
-	Informers   []Config `yaml:"informers"`
+	Context   string   `yaml:"context"`
+	Informers []Config `yaml:"informers"`
 }

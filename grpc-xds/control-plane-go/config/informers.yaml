@@ -16,10 +16,17 @@
 # each with a list of EndpointSlices to watch,
 # specified by Namespace and owning Service name.
 #
-# If the kubeconfig context name is blank or omitted,
+# If the kubeconfig `context`` name is blank or omitted,
 # the `current-context` value is used.
 
-- informers:
+- context: grpc-xds
+  informers:
+  - namespace: xds
+    services:
+    - greeter-intermediary
+    - greeter-leaf
+- context: grpc-xds-2
+  informers:
   - namespace: xds
     services:
     - greeter-intermediary

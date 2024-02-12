@@ -27,6 +27,7 @@ metadata:
     config.kubernetes.io/local-config: "true"
 components:
 - ../../../greeter/components/bootstrap-diy
+- ../../../greeter/components/no-control-plane-mtls # grpcurl as of v1.8.9 does not support control plane mTLS
 - ../../../greeter/components/tls-gke-workload-certs
 resources:
 - ../../base

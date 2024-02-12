@@ -35,11 +35,16 @@ spec:
         - /bin/sh
         - -c
         - |
+          apt-get update --assume-yes
+          apt-get install --assume-yes ca-certificates curl jq
+          #
           go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
           #
           go install github.com/grpc-ecosystem/grpcdebug@latest
           #
-          go install github.com/mikefarah/yq/v4@latest
+          curl -L "https://github.com/mikefarah/yq/releases/download/$(curl -sL https://api.github.com/repos/mikefarah/yq/releases/latest | jq -r .tag_name)/yq_$(go env GOOS)_$(go env GOARCH).tar.gz" | tar zx -C /opt/tools ./yq_$(go env GOOS)_$(go env GOARCH)
+          mv /opt/tools/yq_$(go env GOOS)_$(go env GOARCH) /opt/tools/yq
+          chmod +x /opt/tools/yq
           #
           curl -L -o /opt/tools/kubectl "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/$(go env GOOS)/$(go env GOARCH)/kubectl"
           chmod +x /opt/tools/kubectl
@@ -58,6 +63,8 @@ spec:
           mkdir -p /opt/protos/helloworld
           curl -sSLo /opt/protos/helloworld/greeter.proto https://raw.githubusercontent.com/grpc/grpc/v1.60.0/examples/protos/helloworld.proto
         env:
+        - name: DEBIAN_FRONTEND
+          value: noninteractive
         - name: GOBIN
           value: /opt/tools
         volumeMounts:
