@@ -29,7 +29,7 @@ spec:
   - greeter-intermediary
   - greeter-intermediary.xds # kpt-set: greeter-intermediary.${greeter-namespace}
   uris:
-  - spiffe://cluster.local/ns/xds/sa/greeter-intermediary # kpt-set: spiffe://${project-id}.svc.id.goog/ns/${greeter-namespace}/sa/greeter-intermediary
+  - spiffe://grpc-xds.example.com/ns/xds/sa/greeter-intermediary # kpt-set: spiffe://${project-id}.svc.id.goog/ns/${greeter-namespace}/sa/greeter-intermediary
   secretName: greeter-intermediate-cert
   issuerRef:
     name: root-ca
@@ -65,7 +65,7 @@ spec:
   - greeter-leaf
   - greeter-leaf.xds # kpt-set: greeter-leaf.${greeter-namespace}
   uris:
-  - spiffe://cluster.local/ns/xds/sa/greeter-leaf # kpt-set: spiffe://${project-id}.svc.id.goog/ns/${greeter-namespace}/sa/greeter-leaf
+  - spiffe://grpc-xds.example.com/ns/xds/sa/greeter-leaf # kpt-set: spiffe://${project-id}.svc.id.goog/ns/${greeter-namespace}/sa/greeter-leaf
   secretName: greeter-leaf-cert
   issuerRef:
     name: root-ca

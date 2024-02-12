@@ -65,31 +65,73 @@ kubectl config set-context --current --namespace=xds
 skaffold run --filename=k8s/cert-manager/skaffold.yaml --module=cert-manager
 skaffold run --filename=k8s/cert-manager/skaffold.yaml --module=root-ca-external
 
-# Switch the current kubectl context back to the first cluster.
-kubectl config use-context kind-grpc-xds
-
 # Set up routing rules between pod and service IP ranges of the two clusters.
+#
+# Cluster 1 -> Cluster 2
 for node in $(kind get nodes --name=grpc-xds) ; do
   # Add static routes to the pod subnets of each node in the other cluster.
   # `ip route replace` performs an upsert, so using that instead of `ip route add`.
-  kubectl --context kind-grpc-xds-2 get nodes -o=jsonpath='{range .items[*]}{"ip route replace "}{.spec.podCIDR}{" via "}{.status.addresses[?(@.type=="InternalIP")].address}{"\n"}{end}' \
+  kubectl --context=kind-grpc-xds-2 get nodes --output=jsonpath='{range .items[*]}{"ip route replace "}{.spec.podCIDR}{" via "}{.status.addresses[?(@.type=="InternalIP")].address}{"\n"}{end}' \
     | xargs -L1 docker exec "$node"
   # Add a static route to the service subnet in the other cluster, pointing at the control-plane node (could be any node).
   cluster2_service_cidr="10.220.0.0/16" # Match networking.serviceSubnet from `kind-cluster-config-2.yaml`
-  cluster2_control_plane_node_ip=$(kubectl --context kind-grpc-xds-2 get nodes -l node-role.kubernetes.io/control-plane -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+  cluster2_control_plane_node_ip=$(kubectl --context=kind-grpc-xds-2 get nodes --selector=node-role.kubernetes.io/control-plane --output=jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
   docker exec "$node" ip route replace "$cluster2_service_cidr" via "$cluster2_control_plane_node_ip"
 done
+#
+# Cluster 2 -> Cluster 1
 for node in $(kind get nodes --name=grpc-xds-2) ; do
   # Add static routes to the pod subnets of each node in the other cluster.
   # `ip route replace` performs an upsert, so using that instead of `ip route add`.
-  kubectl --context kind-grpc-xds get nodes -o=jsonpath='{range .items[*]}{"ip route replace "}{.spec.podCIDR}{" via "}{.status.addresses[?(@.type=="InternalIP")].address}{"\n"}{end}' \
+  kubectl --context=kind-grpc-xds get nodes --output=jsonpath='{range .items[*]}{"ip route replace "}{.spec.podCIDR}{" via "}{.status.addresses[?(@.type=="InternalIP")].address}{"\n"}{end}' \
     | xargs -L1 docker exec "$node"
   # Add a static route to the service subnet in the other cluster, pointing at the control-plane node (could be any node).
   cluster1_service_cidr="10.110.0.0/16" # Match networking.serviceSubnet from `kind-cluster-config.yaml`
-  cluster1_control_plane_node_ip=$(kubectl --context kind-grpc-xds get nodes -l node-role.kubernetes.io/control-plane -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+  cluster1_control_plane_node_ip=$(kubectl --context=kind-grpc-xds get nodes --selector=node-role.kubernetes.io/control-plane --output=jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
   docker exec "$node" ip route replace "$cluster1_service_cidr" via "$cluster1_control_plane_node_ip"
 done
 
+# Patch CoreDNS to forward DNS requests between the two clusters (cluster.local and cluster2.local)
+# See https://coredns.io/plugins/forward/ and 
+# https://kubernetes.io/docs/tasks/administer-cluster/dns-custom-nameservers/#configuration-of-stub-domain-and-upstream-nameserver-using-coredns
+#
+# Cluster 1 -> Cluster 2
+cluster2_kube_dns_ip=$(kubectl --context=kind-grpc-xds-2 --namespace=kube-system get service kube-dns --output=go-template='{{.spec.clusterIP}}')
+corefile_cluster1=$(mktemp)
+kubectl --context=kind-grpc-xds --namespace=kube-system get configmap coredns --output=go-template='{{index .data "Corefile"}}' > "$corefile_cluster1"
+cat << EOF >> "$corefile_cluster1"
+cluster2.local:53 {
+    errors
+    cache 30
+    forward . $cluster2_kube_dns_ip
+}
+EOF
+kubectl --context=kind-grpc-xds --namespace=kube-system patch configmap coredns --type=merge \
+  --patch-file=<(kubectl create configmap coredns --from-file=Corefile=$corefile_cluster1 --dry-run=client --output=yaml --show-managed-fields=false)
+#
+# Cluster 2 -> Cluster 1
+cluster1_kube_dns_ip=$(kubectl --context=kind-grpc-xds --namespace=kube-system get service kube-dns --output=go-template='{{.spec.clusterIP}}')
+corefile_cluster2=$(mktemp)
+kubectl --context=kind-grpc-xds-2 --namespace=kube-system get configmap coredns --output=go-template='{{index .data "Corefile"}}' > "$corefile_cluster2"
+cat << EOF >> "$corefile_cluster2"
+cluster.local:53 {
+    errors
+    cache 30
+    forward . $cluster1_kube_dns_ip
+}
+EOF
+kubectl --context=kind-grpc-xds-2 --namespace=kube-system patch configmap coredns --type=merge \
+  --patch-file=<(kubectl create configmap coredns --from-file=Corefile=$corefile_cluster2 --dry-run=client --output=yaml --show-managed-fields=false)
+
 # Generate kubeconfig files for the two clusters, for internal cluster control plane connectivity.
-kind get kubeconfig --internal --name=grpc-xds > control-plane-go/k8s/components/kubeconfig/kubeconfig-1.yaml
-kind get kubeconfig --internal --name=grpc-xds-2 > control-plane-go/k8s/components/kubeconfig/kubeconfig-2.yaml
+kind get kubeconfig --internal --name=grpc-xds \
+  | yq eval '(.current-context = "grpc-xds") | (.contexts[0].name = "grpc-xds")' \
+  > control-plane-go/k8s/components/kubeconfig/kubeconfig-1.yaml
+# When merging kubeconfigs, the first `current-context` will take precedence.
+# So changing `current-context` for the second cluster kubeconfig is actually redundant.
+kind get kubeconfig --internal --name=grpc-xds-2 \
+  | yq eval '(.current-context = "grpc-xds-2") | (.contexts[0].name = "grpc-xds-2")' \
+  > control-plane-go/k8s/components/kubeconfig/kubeconfig-2.yaml
+
+# Set the current kubectl context to the first cluster.
+kubectl config use-context kind-grpc-xds

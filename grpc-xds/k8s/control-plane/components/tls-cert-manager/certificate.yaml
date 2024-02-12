@@ -28,8 +28,9 @@ spec:
   dnsNames:
   - control-plane
   - control-plane.xds # kpt-set: control-plane.${control-plane-namespace}
+  - control-plane.xds.svc.cluster.local # kpt-set: control-plane.${control-plane-namespace}.svc.cluster.local
   uris:
-  - spiffe://cluster.local/ns/xds/sa/control-plane # kpt-set: spiffe://${project-id}.svc.id.goog/ns/${control-plane-namespace}/sa/control-plane
+  - spiffe://grpc-xds.example.com/ns/xds/sa/control-plane # kpt-set: spiffe://${project-id}.svc.id.goog/ns/${control-plane-namespace}/sa/control-plane
   secretName: control-plane-certificate
   issuerRef:
     name: root-ca

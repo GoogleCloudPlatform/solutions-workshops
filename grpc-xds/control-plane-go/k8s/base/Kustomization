@@ -25,5 +25,6 @@ metadata:
 components:
 - ../components/app-config
 - ../components/go-flags
+- ../components/kubeconfig
 resources:
 - ../../../k8s/control-plane/base

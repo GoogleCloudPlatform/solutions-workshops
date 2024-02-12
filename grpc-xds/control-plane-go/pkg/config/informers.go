@@ -68,13 +68,13 @@ func validateKubeContexts(contexts []informers.Kubecontext) error {
 	}
 	contextNames := map[string]bool{}
 	for _, context := range contexts {
-		if _, exists := contextNames[context.ContextName]; exists {
-			return fmt.Errorf("%w: context=%s", errDuplicateContext, context.ContextName)
+		if _, exists := contextNames[context.Context]; exists {
+			return fmt.Errorf("%w: context=%s", errDuplicateContext, context.Context)
 		}
 		if err := validateInformerConfigs(context.Informers); err != nil {
-			return fmt.Errorf("invalid informer config for context=%s: %w", context.ContextName, err)
+			return fmt.Errorf("invalid informer config for context=%s: %w", context.Context, err)
 		}
-		contextNames[context.ContextName] = true
+		contextNames[context.Context] = true
 	}
 	return nil
 }
