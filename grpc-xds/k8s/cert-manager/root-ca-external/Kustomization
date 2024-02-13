@@ -22,16 +22,11 @@ metadata:
   name: cert-manager-root-ca-issuer-external
   annotations:
     config.kubernetes.io/local-config: "true"
-commonLabels:
-  app.kubernetes.io/part-of: grpc-xds
+labels:
+- pairs:
+    app.kubernetes.io/part-of: grpc-xds
+  includeSelectors: false
+  includeTemplates: true
 resources:
 - secret-root-ca.yaml # root CA certificate and key exported from the first cluster
 - ../root-ca/root-ca-cluster-issuer.yaml
-#secretGenerator:
-#- name: root-ca-certificate
-#  namespace: cert-manager
-#  type: kubernetes.io/tls
-#  files:
-#  - ca.crt=ca.crt
-#  - tls.crt=tls.crt
-#  - tls.key=tls.key

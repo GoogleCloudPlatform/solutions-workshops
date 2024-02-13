@@ -106,14 +106,20 @@ func (c *SnapshotCache) CreateWatch(request *cachev3.Request, state stream.Strea
 	return c.delegate.CreateWatch(request, state, responses)
 }
 
-// UpdateResources creates a new snapshot for each node hash in the cache, based on the provided gRPC application configuration,
+// UpdateResources creates a new snapshot for each node hash in the cache,
+// based on the provided gRPC application configuration,
 // with the addition of server listeners and their associated route configurations.
-func (c *SnapshotCache) UpdateResources(ctx context.Context, apps []GRPCApplication) error {
+func (c *SnapshotCache) UpdateResources(ctx context.Context, logger logr.Logger, kubecontextName string, namespace string, apps []GRPCApplication) error {
 	var errs []error
 	for _, nodeHash := range c.delegate.GetStatusKeys() {
-		snapshotBuilder, err := NewSnapshotBuilder(c.features).AddGRPCApplications(apps)
+		snapshotBuilder, err := NewSnapshotBuilder(c.features).AddGRPCApplications(logger, apps)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("could not create xDS resource snapshot builder for gRPC application configuration %v+: %w", apps, err))
+			errs = append(errs, fmt.Errorf("could not create xDS resource snapshot builder for updated gRPC application configuration %v+: %w", apps, err))
+		}
+		cachedApps := c.appsCache.GetOthers(kubecontextName, namespace)
+		snapshotBuilder, err = snapshotBuilder.AddGRPCApplications(logger, cachedApps)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("could not add cached gRPC applications to xDS resource snapshot builder %v+: %w", cachedApps, err))
 		}
 		snapshotForNodeHash, err := snapshotBuilder.
 			AddServerListenerAddresses(c.serverListenerCache.Get(nodeHash)).
@@ -128,7 +134,7 @@ func (c *SnapshotCache) UpdateResources(ctx context.Context, apps []GRPCApplicat
 	if len(errs) > 0 {
 		return errors.Join(errs...)
 	}
-	c.appsCache.Set(apps)
+	c.appsCache.Set(kubecontextName, namespace, apps)
 	return nil
 }
 
@@ -137,8 +143,8 @@ func (c *SnapshotCache) UpdateResources(ctx context.Context, apps []GRPCApplicat
 func (c *SnapshotCache) createNewSnapshotForNode(nodeHash string, newServerListenerAddresses []EndpointAddress) error {
 	c.logger.Info("Creating a new snapshot", "nodeHash", nodeHash, "serverListenerAddressesFromRequest", newServerListenerAddresses)
 	snapshotBuilder := NewSnapshotBuilder(c.features)
-	apps := c.appsCache.Get()
-	snapshotBuilder, err := snapshotBuilder.AddGRPCApplications(apps)
+	apps := c.appsCache.GetAll()
+	snapshotBuilder, err := snapshotBuilder.AddGRPCApplications(c.logger, apps)
 	if err != nil {
 		return fmt.Errorf("could not add cached gRPC application configuration %v+ to new xDS resource snapshot for nodeHash=%s: %w", apps, nodeHash, err)
 	}

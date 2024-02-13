@@ -20,8 +20,11 @@ metadata:
   name: control-plane
   annotations:
     config.kubernetes.io/local-config: "true"
-commonLabels:
-  app.kubernetes.io/part-of: grpc-xds
+labels:
+- pairs:
+    app.kubernetes.io/part-of: grpc-xds
+  includeSelectors: false
+  includeTemplates: true
 patches:
 - path: patch-config.yaml
   target:
