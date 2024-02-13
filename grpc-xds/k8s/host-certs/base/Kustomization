@@ -20,8 +20,11 @@ metadata:
   name: host-certs
   annotations:
     config.kubernetes.io/local-config: "true"
-commonLabels:
-  app.kubernetes.io/part-of: grpc-xds
+labels:
+- pairs:
+    app.kubernetes.io/part-of: grpc-xds
+  includeSelectors: false
+  includeTemplates: true
 images:
 - name: busybox
   newName: busybox:stable-glibc

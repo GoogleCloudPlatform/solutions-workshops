@@ -30,7 +30,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	informercache "k8s.io/client-go/tools/cache"
 
-	"github.com/googlecloudplatform/solutions-workshops/grpc-xds/control-plane-go/pkg/logging"
 	"github.com/googlecloudplatform/solutions-workshops/grpc-xds/control-plane-go/pkg/xds"
 )
 
@@ -45,36 +44,35 @@ var (
 // Manager manages a collection of informers.
 type Manager struct {
 	clientset *kubernetes.Clientset
-	logger    logr.Logger
 	xdsCache  *xds.SnapshotCache
 	informers []informercache.SharedIndexInformer
 }
 
-// NewManager creates an instance that manages a collection of informers.
+// NewManager creates an instance that manages a collection of informers
+// for one kubecontext.
 func NewManager(ctx context.Context, kubecontextName string, xdsCache *xds.SnapshotCache) (*Manager, error) {
-	logger := logging.FromContext(ctx)
 	clientset, err := NewClientSet(ctx, kubecontextName)
 	if err != nil {
 		return nil, err
 	}
 	return &Manager{
 		clientset: clientset,
-		logger:    logger,
 		xdsCache:  xdsCache,
 	}, nil
 }
 
-func (m *Manager) AddEndpointSliceInformer(ctx context.Context, config Config) error {
+func (m *Manager) AddEndpointSliceInformer(ctx context.Context, logger logr.Logger, kubecontextName string, config Config) error {
+	logger = logger.WithValues("kubecontext", kubecontextName, "namespace", config.Namespace)
 	if config.Services == nil {
 		config.Services = make([]string, 0)
 	}
 	labelSelector := fmt.Sprintf("%s in (%s)", discoveryv1.LabelServiceName, strings.Join(config.Services, ", "))
-	m.logger.V(2).Info("Creating informer for EndpointSlices", "namespace", config.Namespace, "labelSelector", labelSelector)
+	logger.V(2).Info("Creating informer for EndpointSlices", "labelSelector", labelSelector)
 
 	stop := make(chan struct{})
 	go func() {
 		<-ctx.Done()
-		m.logger.V(1).Info("Stopping informer for EndpointSlices", "namespace", config.Namespace, "labelSelector", labelSelector)
+		logger.V(1).Info("Stopping informer for EndpointSlices", "labelSelector", labelSelector)
 		close(stop)
 	}()
 
@@ -89,13 +87,13 @@ func (m *Manager) AddEndpointSliceInformer(ctx context.Context, config Config) e
 
 	_, err := informer.AddEventHandler(informercache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			m.handleEndpointSliceEvent(ctx, "add", obj)
+			m.handleEndpointSliceEvent(ctx, logger.WithValues("event", "add"), kubecontextName, config.Namespace, obj)
 		},
 		UpdateFunc: func(oldObj, obj interface{}) {
-			m.handleEndpointSliceEvent(ctx, "update", obj)
+			m.handleEndpointSliceEvent(ctx, logger.WithValues("event", "update"), kubecontextName, config.Namespace, obj)
 		},
 		DeleteFunc: func(obj interface{}) {
-			m.handleEndpointSliceEvent(ctx, "delete", obj)
+			m.handleEndpointSliceEvent(ctx, logger.WithValues("event", "delete"), kubecontextName, config.Namespace, obj)
 		},
 	})
 	if err != nil {
@@ -103,28 +101,28 @@ func (m *Manager) AddEndpointSliceInformer(ctx context.Context, config Config) e
 	}
 
 	go func() {
-		m.logger.V(2).Info("Starting informer", "config", config)
+		logger.V(2).Info("Starting informer", "services", config.Services)
 		informer.Run(stop)
 	}()
 	return nil
 }
 
-func (m *Manager) handleEndpointSliceEvent(ctx context.Context, event string, obj interface{}) {
-	if m.logger.V(4).Enabled() {
+func (m *Manager) handleEndpointSliceEvent(ctx context.Context, logger logr.Logger, kubecontextName string, namespace string, obj interface{}) {
+	if logger.V(4).Enabled() {
 		jsonBytes, err := json.MarshalIndent(obj, "", "  ")
 		if err != nil {
-			m.logger.Error(err, "could not marshal EndpointSlice to JSON", "endpointSlice", obj)
+			logger.Error(err, "could not marshal EndpointSlice to JSON", "endpointSlice", obj)
 		}
-		m.logger.V(4).Info(event, "endpointSlice", string(jsonBytes))
+		logger.V(4).Info("Informer", "endpointSlice", string(jsonBytes))
 	}
 	var apps []xds.GRPCApplication
 	for _, informer := range m.informers {
-		appsForInformer := getAppsForInformer(m.logger, informer)
+		appsForInformer := getAppsForInformer(logger, informer)
 		apps = append(apps, appsForInformer...)
 	}
-	if err := m.xdsCache.UpdateResources(ctx, apps); err != nil {
+	if err := m.xdsCache.UpdateResources(ctx, logger, kubecontextName, namespace, apps); err != nil {
 		// Can't propagate this error, and we probably shouldn't end the goroutine anyway.
-		m.logger.Error(err, "Could not update the xDS resource cache with new gRPC application configuration", "apps", apps)
+		logger.Error(err, "Could not update the xDS resource cache with new gRPC application configuration", "apps", apps)
 	}
 }
 

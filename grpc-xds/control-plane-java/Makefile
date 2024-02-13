@@ -41,6 +41,7 @@ tail:
 delete:
 	kubectl delete --ignore-not-found --namespace=xds deployment control-plane
 	kubectl delete --ignore-not-found --namespace=xds service control-plane
+	kubectl delete --ignore-not-found --namespace=xds configmaps --selector="app.kubernetes.io/part-of"=grpc-xds
 
 .PHONY: build
 build:
