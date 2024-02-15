@@ -12,24 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Patch to add the KUBECONFIG environment variable.
-
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: control-plane
-spec:
-  template:
-    spec:
-      containers:
-      - name: app
-        env:
-        - name: KUBECONFIG
-          value: /app/resources/kubeconfig/kubeconfig-1.yaml:/app/resources/kubeconfig/kubeconfig-2.yaml
-        volumeMounts:
-        - mountPath: /app/resources/kubeconfig
-          name: kubeconfig
-      volumes:
-      - name: kubeconfig
-        configMap:
-          name: kubeconfig
+# Exported kubeconfig files that may contain credentials
+kubeconfig*.yaml

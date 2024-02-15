@@ -93,13 +93,18 @@ tasks.withType(Checkstyle) {
     }
 }
 
-def grpcVersion = '1.61.0'
-def junitJupiterVersion = '5.10.1'
+def grpcVersion = '1.61.1'
+def gsonVersion = '2.10.1'
+def jetbrainsAnnotationsVersion = '24.1.0'
+def junitJupiterVersion = '5.10.2'
+def junitVersion = '4.13.2'
+def log4jVersion = '2.22.1'
 def protobufVersion = '3.25.2'
-def slf4jVersion = '2.0.11'
+def slf4jVersion = '2.0.12'
+def tomcatAnnotationsApiVersion = '6.0.53'
 
 dependencies {
-    implementation("com.google.code.gson:gson:2.10.1")
+    implementation("com.google.code.gson:gson:${gsonVersion}")
     implementation("com.google.protobuf:protobuf-java-util:${protobufVersion}")
     implementation("io.grpc:grpc-protobuf:${grpcVersion}")
     implementation("io.grpc:grpc-stub:${grpcVersion}")
@@ -107,12 +112,12 @@ dependencies {
     implementation("io.grpc:grpc-xds:${grpcVersion}") {
         exclude(module: 'commons-logging')
     }
-    implementation("org.apache.logging.log4j:log4j-to-slf4j:2.22.1")
+    implementation("org.apache.logging.log4j:log4j-to-slf4j:${log4jVersion}")
     implementation("org.slf4j:jcl-over-slf4j:${slf4jVersion}")
     implementation("org.slf4j:slf4j-jdk14:${slf4jVersion}")
 
-    compileOnly("org.apache.tomcat:annotations-api:6.0.53")
-    compileOnly("org.jetbrains:annotations:24.1.0")
+    compileOnly("org.apache.tomcat:annotations-api:${tomcatAnnotationsApiVersion}")
+    compileOnly("org.jetbrains:annotations:${jetbrainsAnnotationsVersion}")
 
     runtimeOnly("io.grpc:grpc-netty-shaded:${grpcVersion}")
 
@@ -121,7 +126,7 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter-params")
     testImplementation("io.grpc:grpc-testing:${grpcVersion}")
 
-    testCompileOnly("junit:junit:4.13.2")
+    testCompileOnly("junit:junit:${junitVersion}")
 
     testRuntimeOnly("org.junit.vintage:junit-vintage-engine:${junitJupiterVersion}")
 }

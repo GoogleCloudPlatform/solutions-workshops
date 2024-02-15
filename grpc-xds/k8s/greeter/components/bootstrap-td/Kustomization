@@ -25,8 +25,8 @@ metadata:
     config.kubernetes.io/local-config: "true"
 images:
 - name: td-grpc-bootstrap
-  newName: gcr.io/trafficdirector-prod/td-grpc-bootstrap:0.15.0
-  digest: sha256:16f3ebacb6f5541f93474908ac2be08adfb427b263587200e2a0ea94e0d61ec3
+  newName: gcr.io/trafficdirector-prod/td-grpc-bootstrap:0.16.0
+  digest: sha256:a1ac1aa71924c88743c614372e7bbeacf90d697aaed280a18948ad8dc8c6c90f
 patches:
 - path: patch-xds-init-td.yaml
   target:

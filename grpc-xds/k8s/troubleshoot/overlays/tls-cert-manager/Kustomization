@@ -26,8 +26,7 @@ metadata:
     config.kubernetes.io/local-config: "true"
 components:
 - ../../../greeter/components/bootstrap-diy
-- ../../../greeter/components/no-control-plane-mtls # grpcurl as of v1.8.9 does not support control plane mTLS
-- ../../../greeter/components/node-labels # not actually required for GKE
+- ../../../greeter/components/node-labels # required for kind, not required for GKE
 - ../../components/tls-cert-manager
 resources:
 - ../../base

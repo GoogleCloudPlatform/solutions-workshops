@@ -23,11 +23,16 @@ import io.kubernetes.client.informer.SharedInformer;
 import io.kubernetes.client.informer.SharedInformerFactory;
 import io.kubernetes.client.openapi.ApiClient;
 import io.kubernetes.client.openapi.apis.DiscoveryV1Api;
-import io.kubernetes.client.openapi.models.V1Endpoint;
 import io.kubernetes.client.openapi.models.V1EndpointSlice;
 import io.kubernetes.client.openapi.models.V1EndpointSliceList;
 import io.kubernetes.client.util.Config;
+import io.kubernetes.client.util.KubeConfig;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -60,15 +65,18 @@ public class InformerManager<T> {
   /** EndpointSlices belong to the <code>discovery.k8s.io/v1</code> API group/version. */
   private final DiscoveryV1Api discoveryV1Api;
 
+  private final String kubecontext;
+
   /** This class updates the snapshot cache when there are changes to the watched EndpointSlices. */
   private final @NotNull XdsSnapshotCache<T> cache;
 
   private final List<SharedIndexInformer<V1EndpointSlice>> informers;
 
   /** Creates the Kubernetes client informer gubbins. */
-  public InformerManager(@NotNull XdsSnapshotCache<T> cache) throws IOException {
+  public InformerManager(@NotNull String kubecontext, @NotNull XdsSnapshotCache<T> cache) {
+    this.kubecontext = kubecontext;
     this.cache = cache;
-    this.client = createK8sApiClient();
+    this.client = createK8sApiClient(kubecontext);
     this.discoveryV1Api = new DiscoveryV1Api(this.client);
     this.informers = new ArrayList<>();
   }
@@ -83,7 +91,9 @@ public class InformerManager<T> {
       @NotNull String namespace, @NotNull Collection<String> services) {
     var labelSelector = LABEL_SERVICE_NAME + " in (" + String.join(", ", services) + ")";
     LOG.info(
-        "Creating informer for EndpointSlices in namespace=[{}] with labelSelector=[{}]",
+        "Creating informer for EndpointSlices in kubecontext={} namespace={} "
+            + "with labelSelector=[{}]",
+        kubecontext,
         namespace,
         labelSelector);
 
@@ -91,19 +101,14 @@ public class InformerManager<T> {
         new SharedInformerFactory(client)
             .sharedIndexInformerFor(
                 params ->
-                    discoveryV1Api.listNamespacedEndpointSliceCall(
-                        namespace,
-                        null,
-                        Boolean.TRUE,
-                        null,
-                        null,
-                        labelSelector,
-                        null,
-                        params.resourceVersion,
-                        null,
-                        params.timeoutSeconds,
-                        params.watch,
-                        null),
+                    discoveryV1Api
+                        .listNamespacedEndpointSlice(namespace)
+                        .allowWatchBookmarks(Boolean.TRUE)
+                        .labelSelector(labelSelector)
+                        .resourceVersion(params.resourceVersion)
+                        .timeoutSeconds(params.timeoutSeconds)
+                        .watch(params.watch)
+                        .buildCall(null),
                 V1EndpointSlice.class,
                 V1EndpointSliceList.class);
 
@@ -113,20 +118,20 @@ public class InformerManager<T> {
         new ResourceEventHandler<>() {
           @Override
           public void onAdd(V1EndpointSlice endpointSlice) {
-            LOG.debug("informer event={} {}", "add", endpointSlice);
-            handleEndpointSliceEvent();
+            LOG.debug("informer kubecontext={} event={} endpointSlice={}", kubecontext, "add", endpointSlice);
+            handleEndpointSliceEvent(informer, namespace);
           }
 
           @Override
           public void onUpdate(V1EndpointSlice previous, V1EndpointSlice endpointSlice) {
-            LOG.debug("informer event={} {}", "update", endpointSlice);
-            handleEndpointSliceEvent();
+            LOG.debug("informer kubecontext={} event={} endpointSlice={}", kubecontext, "update", endpointSlice);
+            handleEndpointSliceEvent(informer, namespace);
           }
 
           @Override
           public void onDelete(V1EndpointSlice endpointSlice, boolean deletedFinalStateUnknown) {
-            LOG.debug("informer event={} {}", "delete", endpointSlice);
-            handleEndpointSliceEvent();
+            LOG.debug("informer kubecontext={} event={} endpointSlice={}", kubecontext, "delete", endpointSlice);
+            handleEndpointSliceEvent(informer, namespace);
           }
         });
   }
@@ -141,17 +146,13 @@ public class InformerManager<T> {
     informers.forEach(SharedInformer::stop);
   }
 
-  private void handleEndpointSliceEvent() {
-    var apps =
-        informers.stream()
-            .flatMap(informer -> informer.getIndexer().list().stream())
-            .filter(this::isValid)
-            .map(this::toGrpcApplication)
-            .collect(Collectors.toSet());
-    cache.updateResources(apps);
+  private void handleEndpointSliceEvent(@NotNull SharedIndexInformer<V1EndpointSlice> informer, @NotNull String namespace) {
+    var appsForInformer = informer.getIndexer().list().stream().filter(this::isValid).map(this::toGrpcApplication).collect(Collectors.toSet());
+    cache.updateResources(kubecontext, namespace, appsForInformer);
   }
 
-  @SuppressWarnings("null") // https://github.com/redhat-developer/vscode-java/issues/3124
+  @SuppressWarnings({"null"})
+  // https://github.com/redhat-developer/vscode-java/issues/3124
   @NotNull
   private GrpcApplication toGrpcApplication(@NotNull V1EndpointSlice endpointSlice) {
     List<GrpcApplicationEndpoint> applicationEndpoints = toGrpcApplicationEndpoints(endpointSlice);
@@ -164,7 +165,9 @@ public class InformerManager<T> {
     GrpcApplication app =
         new GrpcApplication(namespace, k8sServiceName, port, applicationEndpoints);
     LOG.debug(
-        "endpointSlice={} service={} port={} endpoints={}",
+        "kubecontext={} namespace={} endpointSlice={} service={} port={} endpoints={}",
+        kubecontext,
+        namespace,
         endpointSliceName,
         k8sServiceName,
         port,
@@ -175,8 +178,7 @@ public class InformerManager<T> {
   @NotNull
   private List<GrpcApplicationEndpoint> toGrpcApplicationEndpoints(
       @NotNull V1EndpointSlice endpointSlice) {
-    return Objects.requireNonNullElse(endpointSlice.getEndpoints(), new ArrayList<V1Endpoint>())
-        .stream()
+    return endpointSlice.getEndpoints().stream()
         .filter(
             // https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/#ready
             endpoint ->
@@ -217,19 +219,56 @@ public class InformerManager<T> {
     return true;
   }
 
-  private ApiClient createK8sApiClient() throws IOException {
-    ApiClient client = Config.defaultClient();
+  private ApiClient createK8sApiClient(String kubecontext) {
+    ApiClient client = createApiClient(kubecontext);
     OkHttpClient httpClient =
         client
             .getHttpClient()
             .newBuilder()
             // Level.HEADERS and Level.BODY will include sensitive information, such as the
-            // authorization bearer token. See `logging.properties` for a filter that can mask this
-            // token.
+            // authorization bearer token. See `logging.properties` for a filter that can mask
+            // this token.
             .addInterceptor(new HttpLoggingInterceptor().setLevel(Level.BASIC))
             .readTimeout(0, TimeUnit.SECONDS)
             .build();
     client.setHttpClient(httpClient);
     return client;
+  }
+
+  private ApiClient createApiClient(String kubecontext) {
+    String kubeConfigEnv = System.getenv(Config.ENV_KUBECONFIG);
+    if (kubeConfigEnv == null || kubeConfigEnv.isBlank()) {
+      LOG.info("Using in-cluster Kubernetes client configuration");
+      try {
+        return Config.defaultClient();
+      } catch (IOException e) {
+        throw new InformerException(
+            "Could not create Kubernetes client using in-cluster config", e);
+      }
+    }
+    String[] filePaths = kubeConfigEnv.split(File.pathSeparator);
+    String kubeConfigPath = filePaths[0];
+    if (filePaths.length > 1) {
+      LOG.warn(
+          "Found multiple kubeconfig files, using first file only, KUBECONFIG={}", kubeConfigEnv);
+    }
+    LOG.info("Using Kubernetes client configuration from file {}", kubeConfigPath);
+    try (BufferedReader bufferedReader =
+        new BufferedReader(
+            new InputStreamReader(new FileInputStream(kubeConfigPath), StandardCharsets.UTF_8))) {
+      KubeConfig config = KubeConfig.loadKubeConfig(bufferedReader);
+      config.setFile(new File(kubeConfigPath));
+      if (kubecontext != null && !kubecontext.isBlank()) {
+        LOG.info("Using kubeconfig context {}", kubecontext);
+        config.setContext(kubecontext);
+      }
+      return Config.fromConfig(config);
+    } catch (IOException e) {
+      throw new InformerException(
+          "Could not create Kubernetes client using kubeconfig="
+              + kubeConfigPath
+              + " and kubecontext="
+              + kubecontext);
+    }
   }
 }

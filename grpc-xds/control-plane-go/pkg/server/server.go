@@ -189,7 +189,7 @@ func createInformers(ctx context.Context, logger logr.Logger, kubecontexts []inf
 			return fmt.Errorf("could not create Kubernetes informer manager for context=%s: %w", kubecontext.Context, err)
 		}
 		for _, informer := range kubecontext.Informers {
-			if err := informerManager.AddEndpointSliceInformer(ctx, logger, kubecontext.Context, informer); err != nil {
+			if err := informerManager.AddEndpointSliceInformer(ctx, logger, informer); err != nil {
 				return fmt.Errorf("could not create Kubernetes informer for context=%s for %+v: %w", kubecontext.Context, informer, err)
 			}
 		}

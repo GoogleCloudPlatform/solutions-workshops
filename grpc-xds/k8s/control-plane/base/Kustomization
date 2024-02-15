@@ -20,6 +20,8 @@ metadata:
   name: control-plane
   annotations:
     config.kubernetes.io/local-config: "true"
+components:
+- ../components/kubeconfig
 labels:
 - pairs:
     app.kubernetes.io/part-of: grpc-xds

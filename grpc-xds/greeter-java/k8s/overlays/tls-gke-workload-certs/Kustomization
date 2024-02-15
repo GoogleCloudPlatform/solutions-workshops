@@ -27,6 +27,5 @@ metadata:
     config.kubernetes.io/local-config: "true"
 components:
 - ../../../../k8s/greeter/meta-components/tls-gke-workload-certs
-- ../../../../k8s/greeter/components/no-control-plane-mtls # gRPC-Java as of v1.61.0 does not support control plane mTLS (gRFC A65)
 resources:
 - ../../base

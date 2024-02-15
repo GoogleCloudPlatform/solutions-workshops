@@ -43,9 +43,10 @@ var (
 
 // Manager manages a collection of informers.
 type Manager struct {
-	clientset *kubernetes.Clientset
-	xdsCache  *xds.SnapshotCache
-	informers []informercache.SharedIndexInformer
+	kubecontext string
+	clientset   *kubernetes.Clientset
+	xdsCache    *xds.SnapshotCache
+	informers   []informercache.SharedIndexInformer
 }
 
 // NewManager creates an instance that manages a collection of informers
@@ -56,13 +57,14 @@ func NewManager(ctx context.Context, kubecontextName string, xdsCache *xds.Snaps
 		return nil, err
 	}
 	return &Manager{
-		clientset: clientset,
-		xdsCache:  xdsCache,
+		kubecontext: kubecontextName,
+		clientset:   clientset,
+		xdsCache:    xdsCache,
 	}, nil
 }
 
-func (m *Manager) AddEndpointSliceInformer(ctx context.Context, logger logr.Logger, kubecontextName string, config Config) error {
-	logger = logger.WithValues("kubecontext", kubecontextName, "namespace", config.Namespace)
+func (m *Manager) AddEndpointSliceInformer(ctx context.Context, logger logr.Logger, config Config) error {
+	logger = logger.WithValues("kubecontext", m.kubecontext, "namespace", config.Namespace)
 	if config.Services == nil {
 		config.Services = make([]string, 0)
 	}
@@ -87,13 +89,13 @@ func (m *Manager) AddEndpointSliceInformer(ctx context.Context, logger logr.Logg
 
 	_, err := informer.AddEventHandler(informercache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			m.handleEndpointSliceEvent(ctx, logger.WithValues("event", "add"), kubecontextName, config.Namespace, obj)
+			m.handleEndpointSliceEvent(ctx, logger.WithValues("event", "add"), informer, config.Namespace, obj)
 		},
 		UpdateFunc: func(oldObj, obj interface{}) {
-			m.handleEndpointSliceEvent(ctx, logger.WithValues("event", "update"), kubecontextName, config.Namespace, obj)
+			m.handleEndpointSliceEvent(ctx, logger.WithValues("event", "update"), informer, config.Namespace, obj)
 		},
 		DeleteFunc: func(obj interface{}) {
-			m.handleEndpointSliceEvent(ctx, logger.WithValues("event", "delete"), kubecontextName, config.Namespace, obj)
+			m.handleEndpointSliceEvent(ctx, logger.WithValues("event", "delete"), informer, config.Namespace, obj)
 		},
 	})
 	if err != nil {
@@ -107,7 +109,7 @@ func (m *Manager) AddEndpointSliceInformer(ctx context.Context, logger logr.Logg
 	return nil
 }
 
-func (m *Manager) handleEndpointSliceEvent(ctx context.Context, logger logr.Logger, kubecontextName string, namespace string, obj interface{}) {
+func (m *Manager) handleEndpointSliceEvent(ctx context.Context, logger logr.Logger, informer informercache.SharedIndexInformer, namespace string, obj interface{}) {
 	if logger.V(4).Enabled() {
 		jsonBytes, err := json.MarshalIndent(obj, "", "  ")
 		if err != nil {
@@ -115,12 +117,8 @@ func (m *Manager) handleEndpointSliceEvent(ctx context.Context, logger logr.Logg
 		}
 		logger.V(4).Info("Informer", "endpointSlice", string(jsonBytes))
 	}
-	var apps []xds.GRPCApplication
-	for _, informer := range m.informers {
-		appsForInformer := getAppsForInformer(logger, informer)
-		apps = append(apps, appsForInformer...)
-	}
-	if err := m.xdsCache.UpdateResources(ctx, logger, kubecontextName, namespace, apps); err != nil {
+	apps := getAppsForInformer(logger, informer)
+	if err := m.xdsCache.UpdateResources(ctx, logger, m.kubecontext, namespace, apps); err != nil {
 		// Can't propagate this error, and we probably shouldn't end the goroutine anyway.
 		logger.Error(err, "Could not update the xDS resource cache with new gRPC application configuration", "apps", apps)
 	}
