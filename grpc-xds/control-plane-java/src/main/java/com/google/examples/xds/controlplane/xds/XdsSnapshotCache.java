@@ -82,7 +82,7 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
 
   /**
    * appsCache stores the most recent gRPC application configuration information from k8s cluster
-   * EndpointSlices. The appsCache is used to populate new entries (previously unseen `nodeHash`es
+   * EndpointSlices. The appsCache is used to populate new entries (previously unseen `nodeHash`es)
    * in the xDS resource snapshot cache, so that the new subscribers don't have to wait for an
    * EndpointSlice update before they can receive xDS resource.
    */
@@ -141,7 +141,7 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
       if (isAdded) {
         var snapshot =
             new XdsSnapshotBuilder(xdsFeatures)
-                .addGrpcApplications(appsCache.get())
+                .addGrpcApplications(appsCache.getAll())
                 .addServerListenerAddresses(serverListenerCache.get(nodeHash))
                 .build();
         LOG.info("Creating a new snapshot for nodeHash={}", nodeHash);
@@ -188,9 +188,20 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
    * gRPC application configuration, with the addition of server listeners and their associated
    * route configurations.
    *
-   * @param apps gRPC application configuration to add to the new snapshot
+   * @param kubecontext the kubeconfig context where the gRPC applications came from
+   * @param namespace
+   * @param appsForContextAndNamespace gRPC application configuration to add to the new snapshot
    */
-  public void updateResources(@NotNull Set<GrpcApplication> apps) {
+  public void updateResources(
+      String kubecontext, @NotNull String namespace, @NotNull Set<GrpcApplication> appsForContextAndNamespace) {
+    boolean changesMade = appsCache.set(kubecontext, namespace, appsForContextAndNamespace);
+    if (!changesMade) {
+      LOG.info("No changes to the application configuration, " +
+              "so not creating new xDS resource snapshots.");
+      return;
+    }
+    LOG.info("Creating new xDS resource snapshots");
+    var apps = appsCache.getAll();
     delegate
         .groups()
         .forEach(
@@ -202,7 +213,6 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
                       .build();
               delegate.setSnapshot(nodeHash, snapshot);
             });
-    appsCache.set(apps);
   }
 
   /** Just delegating, since delta xDS is not supported by this control plane implementation. */

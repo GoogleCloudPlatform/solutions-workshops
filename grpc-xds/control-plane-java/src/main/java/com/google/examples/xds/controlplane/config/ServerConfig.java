@@ -15,9 +15,9 @@
 package com.google.examples.xds.controlplane.config;
 
 import com.google.examples.xds.controlplane.informers.InformerConfig;
+import com.google.examples.xds.controlplane.informers.Kubecontext;
 import com.google.examples.xds.controlplane.xds.XdsFeatures;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import org.jetbrains.annotations.NotNull;
@@ -76,22 +76,29 @@ public class ServerConfig {
     return DEFAULT_HEALTH_PORT;
   }
 
-  /** Reads informer (watch) configurations from a file on the classpath. */
+  /**
+   * Reads the list of kubecontexts and informer (watch) configurations from a file on the
+   * classpath.
+   */
   @SuppressWarnings("unchecked")
   @NotNull
-  public Collection<InformerConfig> informers() {
-    var configs =
+  public List<Kubecontext> kubecontexts() {
+    var contexts =
         (List<Map<String, Object>>)
             new Load(LoadSettings.builder().build())
                 .loadFromInputStream(getClassLoader().getResourceAsStream(INFORMERS_CONFIG_FILE));
-    var informerConfigurations = new ArrayList<InformerConfig>();
-    for (Map<String, Object> config : configs) {
-      informerConfigurations.add(
-          new InformerConfig(
-              (String) config.get("namespace"), (List<String>) config.get("services")));
+    var kubecontexts = new ArrayList<Kubecontext>();
+    for (Map<String, Object> context : contexts) {
+      var informers = new ArrayList<InformerConfig>();
+      for (Map<String, Object> config : (List<Map<String, Object>>) context.get("informers")) {
+        informers.add(
+            new InformerConfig(
+                (String) config.get("namespace"), (List<String>) config.get("services")));
+      }
+      kubecontexts.add(new Kubecontext((String) context.get("context"), informers));
     }
-    LOG.info("Informer configurations: {}", informerConfigurations);
-    return informerConfigurations;
+    LOG.info("Informer configurations by kubecontext: {}", kubecontexts);
+    return kubecontexts;
   }
 
   /** Reads xDS feature flags from a file on the classpath. */

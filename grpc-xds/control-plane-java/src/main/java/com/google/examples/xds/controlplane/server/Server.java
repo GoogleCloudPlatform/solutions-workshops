@@ -15,8 +15,8 @@
 package com.google.examples.xds.controlplane.server;
 
 import com.google.examples.xds.controlplane.config.ServerConfig;
-import com.google.examples.xds.controlplane.informers.InformerConfig;
 import com.google.examples.xds.controlplane.informers.InformerManager;
+import com.google.examples.xds.controlplane.informers.Kubecontext;
 import com.google.examples.xds.controlplane.interceptors.LoggingServerInterceptor;
 import com.google.examples.xds.controlplane.xds.XdsFeatures;
 import com.google.examples.xds.controlplane.xds.XdsSnapshotCache;
@@ -69,9 +69,7 @@ public class Server {
   public void run(@NotNull ServerConfig config) throws Exception {
     XdsFeatures xdsFeatures = config.xdsFeatures();
     var xdsCache = new XdsSnapshotCache<>(FIXED_HASH, xdsFeatures);
-    InformerManager<String> informers = setupInformers(xdsCache, config.informers());
-    informers.start();
-    Runtime.getRuntime().addShutdownHook(new Thread(informers::stop));
+    setupInformers(xdsCache, config.kubecontexts());
 
     int controlPlanePort = config.servingPort();
     var serverCredentials =
@@ -100,13 +98,20 @@ public class Server {
   }
 
   @NotNull
-  private InformerManager<String> setupInformers(
-      @NotNull XdsSnapshotCache<String> cache, @NotNull Collection<InformerConfig> informerConfigs)
+  private void setupInformers(
+      @NotNull XdsSnapshotCache<String> cache, @NotNull Collection<Kubecontext> kubecontexts)
       throws IOException {
-    var informers = new InformerManager<>(cache);
-    informerConfigs.forEach(
-        conf -> informers.addEndpointSliceInformer(conf.namespace(), conf.services()));
-    return informers;
+    kubecontexts.forEach(
+        kubecontext -> {
+          var informerManager = new InformerManager<>(kubecontext.context(), cache);
+          kubecontext
+              .informers()
+              .forEach(
+                  conf ->
+                      informerManager.addEndpointSliceInformer(conf.namespace(), conf.services()));
+          informerManager.start();
+          Runtime.getRuntime().addShutdownHook(new Thread(informerManager::stop));
+        });
   }
 
   @NotNull

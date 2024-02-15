@@ -107,7 +107,7 @@ cluster2.local:53 {
 }
 EOF
 kubectl --context=kind-grpc-xds --namespace=kube-system patch configmap coredns --type=merge \
-  --patch-file=<(kubectl create configmap coredns --from-file=Corefile=$corefile_cluster1 --dry-run=client --output=yaml --show-managed-fields=false)
+  --patch-file=<(kubectl create configmap coredns --from-file=Corefile="$corefile_cluster1" --dry-run=client --output=yaml --show-managed-fields=false)
 #
 # Cluster 2 -> Cluster 1
 cluster1_kube_dns_ip=$(kubectl --context=kind-grpc-xds --namespace=kube-system get service kube-dns --output=go-template='{{.spec.clusterIP}}')
@@ -121,17 +121,24 @@ cluster.local:53 {
 }
 EOF
 kubectl --context=kind-grpc-xds-2 --namespace=kube-system patch configmap coredns --type=merge \
-  --patch-file=<(kubectl create configmap coredns --from-file=Corefile=$corefile_cluster2 --dry-run=client --output=yaml --show-managed-fields=false)
+  --patch-file=<(kubectl create configmap coredns --from-file=Corefile="$corefile_cluster2" --dry-run=client --output=yaml --show-managed-fields=false)
 
-# Generate kubeconfig files for the two clusters, for internal cluster control plane connectivity.
+# Generate kubeconfig files for accessing the two Kubernetes clusters.
+kubeconfig_dir=k8s/control-plane/components/kubeconfig
 kind get kubeconfig --internal --name=grpc-xds \
   | yq eval '(.current-context = "grpc-xds") | (.contexts[0].name = "grpc-xds")' \
-  > control-plane-go/k8s/components/kubeconfig/kubeconfig-1.yaml
+  > "$kubeconfig_dir/kubeconfig-1.yaml"
 # When merging kubeconfigs, the first `current-context` will take precedence.
-# So changing `current-context` for the second cluster kubeconfig is actually redundant.
+# So changing `current-context` for the second cluster kubeconfig file is actually redundant.
 kind get kubeconfig --internal --name=grpc-xds-2 \
   | yq eval '(.current-context = "grpc-xds-2") | (.contexts[0].name = "grpc-xds-2")' \
-  > control-plane-go/k8s/components/kubeconfig/kubeconfig-2.yaml
+  > "$kubeconfig_dir/kubeconfig-2.yaml"
+# kubernetes/client-go allows for multiple kubeconfig files via the KUBECONFIG envvar,
+# but kubernetes-client/java as of v20.0.0 only accepts one kubeconfig file.
+# See: https://github.com/kubernetes-client/java/blob/7956f5b81388a763fdd7cdff72d0541defd0d59c/util/src/main/java/io/kubernetes/client/util/ClientBuilder.java#L161-L165
+# So merge the two kubeconfig files into one:
+KUBECONFIG="$kubeconfig_dir/kubeconfig-1.yaml:$kubeconfig_dir/kubeconfig-2.yaml" \
+  kubectl config view --flatten --merge --raw > "$kubeconfig_dir/kubeconfig.yaml"
 
 # Set the current kubectl context to the first cluster.
 kubectl config use-context kind-grpc-xds

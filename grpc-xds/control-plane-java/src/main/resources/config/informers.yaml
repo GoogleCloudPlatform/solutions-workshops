@@ -12,9 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# EndpointSlices to watch, specified by Namespace and owning Service name.
+# List of kubeconfig contexts,
+# each with a list of EndpointSlices to watch,
+# specified by Namespace and owning Service name.
+#
+# If the kubeconfig `context` name is blank or omitted,
+# the `current-context` value is used.
 
-- namespace: xds
-  services:
-  - greeter-intermediary
-  - greeter-leaf
+- context: ""
+  informers:
+  - namespace: xds
+    services:
+    - greeter-intermediary
+    - greeter-leaf
+- context: grpc-xds-2
+  informers:
+  - namespace: xds
+    services:
+    - greeter-intermediary
+    - greeter-leaf
