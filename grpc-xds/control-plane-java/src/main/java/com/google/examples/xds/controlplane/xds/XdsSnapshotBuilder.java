@@ -72,10 +72,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** Builds xDS resource snapshots for the cache. */
 public class XdsSnapshotBuilder {
+
+  private static final Logger LOG = LoggerFactory.getLogger(XdsSnapshotBuilder.class);
 
   /**
    * Listener name template used xDS clients that are gRPC servers.
@@ -129,6 +132,9 @@ public class XdsSnapshotBuilder {
   private final Map<String, Cluster> clusters = new HashMap<>();
   private final Map<String, ClusterLoadAssignment> clusterLoadAssignments = new HashMap<>();
 
+  /** Enable merging of endpoints for applications from multiple EndpointSlices. */
+  private final Map<String, Set<GrpcApplicationEndpoint>> endpointsByCluster = new HashMap<>();
+
   /** Addresses for server listeners to be added to the snapshot. */
   private final Set<EndpointAddress> serverListenerAddresses = new HashSet<>();
 
@@ -140,35 +146,7 @@ public class XdsSnapshotBuilder {
   }
 
   /**
-   * Add the Listener, RouteConfiguration, Cluster, and ClusterLoadAssignment resources from the
-   * provided snapshot to the builder.
-   */
-  @SuppressWarnings("UnusedReturnValue")
-  @NotNull
-  public XdsSnapshotBuilder addSnapshot(@Nullable Snapshot snapshot) {
-    if (snapshot == null) {
-      return this;
-    }
-    if (snapshot.listeners() != null && snapshot.listeners().resources() != null) {
-      listeners.putAll(snapshot.listeners().resources());
-    }
-    if (snapshot.routes() != null && snapshot.routes().resources() != null) {
-      routeConfigurations.putAll(snapshot.routes().resources());
-    }
-    if (snapshot.clusters() != null && snapshot.clusters().resources() != null) {
-      clusters.putAll(snapshot.clusters().resources());
-    }
-    if (snapshot.endpoints() != null && snapshot.endpoints().resources() != null) {
-      clusterLoadAssignments.putAll(snapshot.endpoints().resources());
-    }
-    return this;
-  }
-
-  /**
    * Add the provided application configurations to the xDS resource snapshot.
-   *
-   * <p>TODO: There can be more than one EndpointSlice for a k8s Service. Check if there's already
-   * an application with the same name and merge.
    *
    * @param apps configuration for gRPC applications
    */
@@ -176,16 +154,28 @@ public class XdsSnapshotBuilder {
   @NotNull
   public XdsSnapshotBuilder addGrpcApplications(@NotNull Set<GrpcApplication> apps) {
     for (GrpcApplication app : apps) {
-      Listener listener = createApiListener(app.listenerName(), app.routeName());
-      listeners.put(listener.getName(), listener);
-      RouteConfiguration routeConfiguration =
-          createRouteConfiguration(
-              app.routeName(), app.listenerName(), app.pathPrefix(), app.clusterName());
-      routeConfigurations.put(routeConfiguration.getName(), routeConfiguration);
-      Cluster cluster = createCluster(app.clusterName(), app.namespace(), app.serviceAccountName());
-      clusters.put(cluster.getName(), cluster);
-      ClusterLoadAssignment clusterLoadAssignment =
-          createClusterLoadAssignment(app.clusterName(), app.port(), app.endpoints());
+      if (!listeners.containsKey(app.listenerName())) {
+        var listener = createApiListener(app.listenerName(), app.routeName());
+        listeners.put(listener.getName(), listener);
+        }
+      if (!routeConfigurations.containsKey(app.routeName())) {
+        var routeConfiguration =
+            createRouteConfiguration(
+                app.routeName(), app.listenerName(), app.pathPrefix(), app.clusterName());
+        routeConfigurations.put(routeConfiguration.getName(), routeConfiguration);
+      }
+      if (!clusters.containsKey(app.clusterName())) {
+        var cluster =
+            createCluster(app.clusterName(), app.namespace(), app.serviceAccountName());
+        clusters.put(cluster.getName(), cluster);
+      }
+      var endpointsByClusterKey = app.clusterName() + "-" + app.port();
+      if (endpointsByCluster.containsKey(endpointsByClusterKey) && !endpointsByCluster.get(endpointsByClusterKey).isEmpty()) {
+        LOG.info("Merging endpoints for app={} existingEndpoints=[{}], newEndpoints[{}]", app.listenerName(), endpointsByCluster.get(endpointsByClusterKey), app.endpoints());
+      }
+      endpointsByCluster.computeIfAbsent(endpointsByClusterKey, key -> new HashSet<>()).addAll(app.endpoints());
+      var clusterLoadAssignment =
+          createClusterLoadAssignment(app.clusterName(), app.port(), endpointsByCluster.get(endpointsByClusterKey));
       clusterLoadAssignments.put(clusterLoadAssignment.getClusterName(), clusterLoadAssignment);
     }
     return this;
