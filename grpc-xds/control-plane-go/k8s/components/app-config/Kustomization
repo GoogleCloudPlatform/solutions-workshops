@@ -26,6 +26,11 @@ configMapGenerator:
   files:
   - ../../../config/informers.yaml
   - ../../../config/xds_features.yaml
+labels:
+- pairs:
+    app.kubernetes.io/part-of: grpc-xds
+  includeSelectors: false
+  includeTemplates: true
 patches:
 - path: patch-config-dir-env.yaml
   target:

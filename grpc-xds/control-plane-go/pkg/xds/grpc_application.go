@@ -14,15 +14,20 @@
 
 package xds
 
+import (
+	"slices"
+	"strings"
+)
+
 type GRPCApplication struct {
-	namespace              string
-	serviceAccountName     string
-	listenerName           string
-	routeConfigurationName string
-	clusterName            string
-	pathPrefix             string
-	port                   uint32
-	endpoints              []GRPCApplicationEndpoints
+	Namespace              string
+	ServiceAccountName     string
+	ListenerName           string
+	RouteConfigurationName string
+	ClusterName            string
+	PathPrefix             string
+	Port                   uint32
+	Endpoints              []GRPCApplicationEndpoints
 }
 
 // NewGRPCApplication is a convenience function that creates a GRPCApplication where the
@@ -30,48 +35,53 @@ type GRPCApplication struct {
 func NewGRPCApplication(namespace string, name string, port uint32, endpoints []GRPCApplicationEndpoints) GRPCApplication {
 	endpointsCopy := make([]GRPCApplicationEndpoints, len(endpoints))
 	copy(endpointsCopy, endpoints)
+	slices.SortFunc(endpointsCopy, func(a GRPCApplicationEndpoints, b GRPCApplicationEndpoints) int {
+		return a.Compare(b)
+	})
 	return GRPCApplication{
-		namespace:              namespace,
-		serviceAccountName:     name,
-		listenerName:           name,
-		routeConfigurationName: name,
-		clusterName:            name,
-		pathPrefix:             "",
-		port:                   port,
-		endpoints:              endpointsCopy,
+		Namespace:              namespace,
+		ServiceAccountName:     name,
+		ListenerName:           name,
+		RouteConfigurationName: name,
+		ClusterName:            name,
+		PathPrefix:             "",
+		Port:                   port,
+		Endpoints:              endpointsCopy,
 	}
 }
 
-func (a *GRPCApplication) Namespace() string {
-	return a.namespace
+// Compare assumes that the list of endpoints is sorted,
+// as done in `NewGRPCApplication()`.
+func (a GRPCApplication) Compare(b GRPCApplication) int {
+	if a.Namespace != b.Namespace {
+		return strings.Compare(a.Namespace, b.Namespace)
+	}
+	if a.ServiceAccountName != b.ServiceAccountName {
+		return strings.Compare(a.ServiceAccountName, b.ServiceAccountName)
+	}
+	if a.ListenerName != b.ListenerName {
+		return strings.Compare(a.ListenerName, b.ListenerName)
+	}
+	if a.RouteConfigurationName != b.RouteConfigurationName {
+		return strings.Compare(a.RouteConfigurationName, b.RouteConfigurationName)
+	}
+	if a.ClusterName != b.ClusterName {
+		return strings.Compare(a.ClusterName, b.ClusterName)
+	}
+	if a.PathPrefix != b.PathPrefix {
+		return strings.Compare(a.PathPrefix, b.PathPrefix)
+	}
+	if a.Port != b.Port {
+		return int(a.Port - b.Port)
+	}
+	return slices.CompareFunc(a.Endpoints, b.Endpoints,
+		func(e GRPCApplicationEndpoints, f GRPCApplicationEndpoints) int {
+			return e.Compare(f)
+		})
 }
 
-func (a *GRPCApplication) ServiceAccountName() string {
-	return a.serviceAccountName
-}
-
-func (a *GRPCApplication) ListenerName() string {
-	return a.listenerName
-}
-
-func (a *GRPCApplication) RouteConfigurationName() string {
-	return a.routeConfigurationName
-}
-
-func (a *GRPCApplication) ClusterName() string {
-	return a.clusterName
-}
-
-func (a *GRPCApplication) PathPrefix() string {
-	return a.pathPrefix
-}
-
-func (a *GRPCApplication) Port() uint32 {
-	return a.port
-}
-
-func (a *GRPCApplication) Endpoints() []GRPCApplicationEndpoints {
-	endpointsCopy := make([]GRPCApplicationEndpoints, len(a.endpoints))
-	copy(endpointsCopy, a.endpoints)
-	return endpointsCopy
+// Equal assumes that the list of endpoints is sorted,
+// as done in `NewGRPCApplication()`.
+func (a GRPCApplication) Equal(b GRPCApplication) bool {
+	return a.Compare(b) == 0
 }

@@ -27,7 +27,7 @@ metadata:
 images:
 - name: kubectl
   newName: bitnami/kubectl
-  digest: sha256:33d3ce6bca95357f3e6285deb461e6a199a0bfaec5e48a97a2deeb36466d2674
+  digest: sha256:0fdc1ab053addba12b63c232f7085ea1b3103d3bfea06c6210069e22b10d9555
 patches:
 - path: patch-node-labels-init.yaml
   target:

@@ -14,8 +14,9 @@
 
 package xds
 
-// EndpointAddress represents a socket ipAddress, with an IP address (e.g., "0.0.0.0" or "[::]") and a port.
+// EndpointAddress represents a socket ipAddress,
+// with an IP address (e.g., "0.0.0.0" or "[::]"), and a port.
 type EndpointAddress struct {
-	host string
-	port uint32
+	Host string
+	Port uint32
 }

@@ -46,7 +46,6 @@ type Manager struct {
 	kubecontext string
 	clientset   *kubernetes.Clientset
 	xdsCache    *xds.SnapshotCache
-	informers   []informercache.SharedIndexInformer
 }
 
 // NewManager creates an instance that manages a collection of informers
@@ -85,23 +84,30 @@ func (m *Manager) AddEndpointSliceInformer(ctx context.Context, logger logr.Logg
 			listOptions.LabelSelector = labelSelector
 		})
 	})
-	m.informers = append(m.informers, informer)
 
 	_, err := informer.AddEventHandler(informercache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			m.handleEndpointSliceEvent(ctx, logger.WithValues("event", "add"), informer, config.Namespace, obj)
+			logger := logger.WithValues("event", "add")
+			logEndpointSlice(logger, obj)
+			apps := getAppsForInformer(logger, informer)
+			m.handleEndpointSliceEvent(ctx, logger, config.Namespace, apps)
 		},
 		UpdateFunc: func(oldObj, obj interface{}) {
-			m.handleEndpointSliceEvent(ctx, logger.WithValues("event", "update"), informer, config.Namespace, obj)
+			logger := logger.WithValues("event", "update")
+			logEndpointSlice(logger, obj)
+			apps := getAppsForInformer(logger, informer)
+			m.handleEndpointSliceEvent(ctx, logger, config.Namespace, apps)
 		},
 		DeleteFunc: func(obj interface{}) {
-			m.handleEndpointSliceEvent(ctx, logger.WithValues("event", "delete"), informer, config.Namespace, obj)
+			logger := logger.WithValues("event", "delete")
+			logEndpointSlice(logger, obj)
+			apps := getAppsForInformer(logger, informer)
+			m.handleEndpointSliceEvent(ctx, logger, config.Namespace, apps)
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("could not add informer event handler for namespace=%s services=%+v: %w", config.Namespace, config.Services, err)
+		return fmt.Errorf("could not add informer event handler for kubecontext=%s namespace=%s services=%+v: %w", m.kubecontext, config.Namespace, config.Services, err)
 	}
-
 	go func() {
 		logger.V(2).Info("Starting informer", "services", config.Services)
 		informer.Run(stop)
@@ -109,7 +115,7 @@ func (m *Manager) AddEndpointSliceInformer(ctx context.Context, logger logr.Logg
 	return nil
 }
 
-func (m *Manager) handleEndpointSliceEvent(ctx context.Context, logger logr.Logger, informer informercache.SharedIndexInformer, namespace string, obj interface{}) {
+func logEndpointSlice(logger logr.Logger, obj interface{}) {
 	if logger.V(4).Enabled() {
 		jsonBytes, err := json.MarshalIndent(obj, "", "  ")
 		if err != nil {
@@ -117,10 +123,13 @@ func (m *Manager) handleEndpointSliceEvent(ctx context.Context, logger logr.Logg
 		}
 		logger.V(4).Info("Informer", "endpointSlice", string(jsonBytes))
 	}
-	apps := getAppsForInformer(logger, informer)
+}
+
+func (m *Manager) handleEndpointSliceEvent(ctx context.Context, logger logr.Logger, namespace string, apps []xds.GRPCApplication) {
+	logger.V(2).Info("Informer resource update", "apps", apps)
 	if err := m.xdsCache.UpdateResources(ctx, logger, m.kubecontext, namespace, apps); err != nil {
 		// Can't propagate this error, and we probably shouldn't end the goroutine anyway.
-		logger.Error(err, "Could not update the xDS resource cache with new gRPC application configuration", "apps", apps)
+		logger.Error(err, "Could not update the xDS resource cache with gRPC application configuration", "apps", apps)
 	}
 }
 
@@ -137,8 +146,8 @@ func getAppsForInformer(logger logr.Logger, informer informercache.SharedIndexIn
 		// TODO: Handle more than one port?
 		port := uint32(*endpointSlice.Ports[0].Port)
 		appEndpoints := getReadyApplicationEndpoints(endpointSlice)
-		logger.V(4).Info("Ready endpoints for service", "name", k8sServiceName, "namespace", namespace, "appEndpoints", appEndpoints)
-		apps = append(apps, xds.NewGRPCApplication(namespace, k8sServiceName, port, appEndpoints))
+		app := xds.NewGRPCApplication(namespace, k8sServiceName, port, appEndpoints)
+		apps = append(apps, app)
 	}
 	return apps
 }
