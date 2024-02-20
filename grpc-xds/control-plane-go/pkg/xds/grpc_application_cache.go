@@ -16,6 +16,7 @@ package xds
 
 import (
 	"fmt"
+	"slices"
 	"sync"
 )
 
@@ -31,13 +32,23 @@ func NewGRPCApplicationCache() *GRPCApplicationCache {
 	}
 }
 
-func (c *GRPCApplicationCache) Set(kubecontextName string, namespace string, apps []GRPCApplication) {
+// Put returns true iff the update changed the cache.
+// Use the return value to avoid sending xDS updates to clients when nothing has changed.
+func (c *GRPCApplicationCache) Put(kubecontextName string, namespace string, apps []GRPCApplication) bool {
 	if apps == nil {
 		apps = []GRPCApplication{}
 	}
+	slices.SortFunc(apps, func(a GRPCApplication, b GRPCApplication) int {
+		return a.Compare(b)
+	})
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.cache[key(kubecontextName, namespace)] = apps
+	key := key(kubecontextName, namespace)
+	oldApps := c.cache[key]
+	c.cache[key] = apps
+	return !slices.EqualFunc(oldApps, apps, func(a GRPCApplication, b GRPCApplication) bool {
+		return a.Equal(b)
+	})
 }
 
 func (c *GRPCApplicationCache) Get(kubecontextName string, namespace string) []GRPCApplication {
@@ -52,22 +63,6 @@ func (c *GRPCApplicationCache) GetAll() []GRPCApplication {
 	defer c.mu.RUnlock()
 	for _, appsForKey := range c.cache {
 		apps = append(apps, appsForKey...)
-	}
-	return apps
-}
-
-// GetOthers returns all cached gRPC applications _except_ the ones for the provided kubecontext and namespace.
-// Use this method when building a new xDS resource snapshot with existing apps and
-// updates from the Kubernetes informer for the provided kubecontext and namespace.
-func (c *GRPCApplicationCache) GetOthers(kubecontextName string, namespace string) []GRPCApplication {
-	apps := []GRPCApplication{}
-	keyToSkip := key(kubecontextName, namespace)
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	for key, appsForKey := range c.cache {
-		if key != keyToSkip {
-			apps = append(apps, appsForKey...)
-		}
 	}
 	return apps
 }

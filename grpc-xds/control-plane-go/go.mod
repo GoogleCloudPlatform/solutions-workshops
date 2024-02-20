@@ -23,12 +23,12 @@ require (
 	github.com/go-logr/logr v1.4.1
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.0.1
 	google.golang.org/grpc v1.61.1
-	google.golang.org/grpc/security/advancedtls v0.0.0-20240212163858-05db80f11850
+	google.golang.org/grpc/security/advancedtls v0.0.0-20240216210838-c63d9258db23
 	google.golang.org/protobuf v1.32.0
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.29.1
-	k8s.io/apimachinery v0.29.1
-	k8s.io/client-go v0.29.1
+	k8s.io/api v0.29.2
+	k8s.io/apimachinery v0.29.2
+	k8s.io/client-go v0.29.2
 	k8s.io/klog/v2 v2.120.1
 )
 

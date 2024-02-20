@@ -33,7 +33,6 @@ import (
 	"github.com/envoyproxy/go-control-plane/pkg/cache/types"
 	cachev3 "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
 	"github.com/envoyproxy/go-control-plane/pkg/resource/v3"
-	"github.com/go-logr/logr"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -80,44 +79,25 @@ func NewSnapshotBuilder(features *Features) *SnapshotBuilder {
 	}
 }
 
-// NewSnapshotBuilderFromSnapshot creates a new SnapshotBuilder and adds Listener, RouteConfiguration,
-// Cluster, and ClusterLoadAssignment resources from the provided snapshot.
-func NewSnapshotBuilderFromSnapshot(features *Features, snapshot cachev3.ResourceSnapshot) *SnapshotBuilder {
-	b := NewSnapshotBuilder(features)
-	for name, listener := range snapshot.GetResources(resource.ListenerType) {
-		b.listeners[name] = listener
-	}
-	for name, routeConfiguration := range snapshot.GetResources(resource.RouteType) {
-		b.routeConfigurations[name] = routeConfiguration
-	}
-	for name, cluster := range snapshot.GetResources(resource.ClusterType) {
-		b.clusters[name] = cluster
-	}
-	for name, clusterLoadAssignment := range snapshot.GetResources(resource.EndpointType) {
-		b.clusterLoadAssignments[name] = clusterLoadAssignment
-	}
-	return b
-}
-
 // AddGRPCApplications adds the provided application configurations to the xDS resource snapshot.
-func (b *SnapshotBuilder) AddGRPCApplications(logger logr.Logger, apps []GRPCApplication) (*SnapshotBuilder, error) {
+func (b *SnapshotBuilder) AddGRPCApplications(apps []GRPCApplication) (*SnapshotBuilder, error) {
 	for _, app := range apps {
-		if b.listeners[app.ListenerName()] == nil {
-			apiListener, err := createAPIListener(app.ListenerName(), app.RouteConfigurationName())
+		if b.listeners[app.ListenerName] == nil {
+			apiListener, err := createAPIListener(app.ListenerName, app.RouteConfigurationName)
 			if err != nil {
 				return nil, fmt.Errorf("could not create LDS API listener for gRPC application %+v: %w", app, err)
 			}
 			b.listeners[apiListener.Name] = apiListener
 		}
-		if b.routeConfigurations[app.RouteConfigurationName()] == nil {
-			routeConfiguration := createRouteConfiguration(app.RouteConfigurationName(), app.ListenerName(), app.PathPrefix(), app.ClusterName())
+		if b.routeConfigurations[app.RouteConfigurationName] == nil {
+			routeConfiguration := createRouteConfiguration(app.RouteConfigurationName, app.ListenerName, app.PathPrefix, app.ClusterName)
 			b.routeConfigurations[routeConfiguration.Name] = routeConfiguration
 		}
-		if b.clusters[app.ClusterName()] == nil {
+		if b.clusters[app.ClusterName] == nil {
 			cluster, err := createCluster(
-				app.ClusterName(),
-				app.Namespace(),
-				app.ServiceAccountName(),
+				app.ClusterName,
+				app.Namespace,
+				app.ServiceAccountName,
 				b.features.EnableDataPlaneTLS,
 				b.features.RequireDataPlaneClientCerts)
 			if err != nil {
@@ -126,12 +106,9 @@ func (b *SnapshotBuilder) AddGRPCApplications(logger logr.Logger, apps []GRPCApp
 			b.clusters[cluster.Name] = cluster
 		}
 		// Merge endpoints from multiple informers for the same app:
-		endpointsByClusterKey := fmt.Sprintf("%s-%d", app.ClusterName(), app.Port())
-		if len(b.endpointsByCluster[endpointsByClusterKey]) > 0 {
-			logger.V(2).Info("Merging endpoints", "app", app.listenerName, "existingEndpoints", b.endpointsByCluster[endpointsByClusterKey], "newEndpoints", app.Endpoints())
-		}
-		b.endpointsByCluster[endpointsByClusterKey] = append(b.endpointsByCluster[endpointsByClusterKey], app.Endpoints()...)
-		clusterLoadAssignment := createClusterLoadAssignment(app.ClusterName(), app.Port(), b.endpointsByCluster[endpointsByClusterKey])
+		endpointsByClusterKey := fmt.Sprintf("%s-%d", app.ClusterName, app.Port)
+		b.endpointsByCluster[endpointsByClusterKey] = append(b.endpointsByCluster[endpointsByClusterKey], app.Endpoints...)
+		clusterLoadAssignment := createClusterLoadAssignment(app.ClusterName, app.Port, b.endpointsByCluster[endpointsByClusterKey])
 		b.clusterLoadAssignments[clusterLoadAssignment.ClusterName] = clusterLoadAssignment
 	}
 	return b, nil
@@ -150,14 +127,14 @@ func (b *SnapshotBuilder) AddServerListenerAddresses(addresses []EndpointAddress
 func (b *SnapshotBuilder) Build() (cachev3.ResourceSnapshot, error) {
 	for address := range b.serverListenerAddresses {
 		serverListener, err := createServerListener(
-			address.host,
-			address.port,
+			address.Host,
+			address.Port,
 			serverListenerRouteConfigurationName,
 			b.features.ServerListenerUsesRDS,
 			b.features.EnableDataPlaneTLS,
 			b.features.RequireDataPlaneClientCerts)
 		if err != nil {
-			return nil, fmt.Errorf("could not create server Listener for address %s:%d: %w", address.host, address.port, err)
+			return nil, fmt.Errorf("could not create server Listener for address %s:%d: %w", address.Host, address.Port, err)
 		}
 		b.listeners[serverListener.Name] = serverListener
 	}
@@ -566,7 +543,7 @@ func createUpstreamTLSContext(namespace string, serviceAccountName string, requi
 func createClusterLoadAssignment(clusterName string, port uint32, endpoints []GRPCApplicationEndpoints) *endpointv3.ClusterLoadAssignment {
 	addressesByZone := map[string][]string{}
 	for _, endpoint := range endpoints {
-		addressesByZone[endpoint.Zone()] = append(addressesByZone[endpoint.Zone()], endpoint.Addresses()...)
+		addressesByZone[endpoint.Zone] = append(addressesByZone[endpoint.Zone], endpoint.Addresses...)
 	}
 	cla := &endpointv3.ClusterLoadAssignment{
 		ClusterName: clusterName,

@@ -25,4 +25,4 @@ spec:
       - name: app
         args:
         - -add_dir_header
-        - -v=4
+        - -vmodule=balancer=1,balancergroup=1,balancer_priority=1,controlbuf=1,http2_server=1,resolver_conn_wrapper=1,transport=99,*=99

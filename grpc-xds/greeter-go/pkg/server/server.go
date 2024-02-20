@@ -24,6 +24,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/admin"
 	channelzservice "google.golang.org/grpc/channelz/service"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	xdscredentials "google.golang.org/grpc/credentials/xds"
 	helloworldpb "google.golang.org/grpc/examples/helloworld/helloworld"
@@ -67,12 +68,12 @@ type grpcserver interface {
 
 func Run(ctx context.Context, c Config) error {
 	logger := logging.FromContext(ctx)
-	serverOptions, err := configureServerOptions(logger, c.UseXDSCredentials)
+	healthServer := health.NewServer()
+	serverOptions, err := configureServerOptions(logger, c.UseXDSCredentials, healthServer)
 	if err != nil {
 		return fmt.Errorf("could not set gRPC server options: %w", err)
 	}
 
-	healthServer := health.NewServer()
 	servingGRPCServer, err := newGRPCServer(logger, c.UseXDS, serverOptions...)
 	if err != nil {
 		return fmt.Errorf("could not create the serving gRPC server: %w", err)
@@ -85,8 +86,10 @@ func Run(ctx context.Context, c Config) error {
 	}
 
 	// Register health server on both serving and health ports
+	// Set serving status for k8s startup and liveness probes:
 	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
-	healthServer.SetServingStatus(helloworldpb.Greeter_ServiceDesc.ServiceName, healthpb.HealthCheckResponse_SERVING)
+	// Set serving status for k8s readiness probes:
+	healthServer.SetServingStatus(helloworldpb.Greeter_ServiceDesc.ServiceName, healthpb.HealthCheckResponse_NOT_SERVING)
 	healthpb.RegisterHealthServer(servingGRPCServer, healthServer)
 	healthpb.RegisterHealthServer(healthGRPCServer, healthServer)
 
@@ -107,7 +110,7 @@ func Run(ctx context.Context, c Config) error {
 	return serve(logger, c, servingGRPCServer, healthServer, healthGRPCServer)
 }
 
-func configureServerOptions(logger logr.Logger, useXDSCredentials bool) ([]grpc.ServerOption, error) {
+func configureServerOptions(logger logr.Logger, useXDSCredentials bool, healthServer *health.Server) ([]grpc.ServerOption, error) {
 	// https://github.com/grpc/grpc-go/blob/v1.59.0/xds/server.go#L145
 	serverCredentials := insecure.NewCredentials()
 	if useXDSCredentials {
@@ -130,6 +133,17 @@ func configureServerOptions(logger logr.Logger, useXDSCredentials bool) ([]grpc.
 			Timeout: grpcKeepaliveTimeout,
 		}),
 		grpc.MaxConcurrentStreams(grpcMaxConcurrentStreams),
+		xds.ServingModeCallback(func(addr net.Addr, args xds.ServingModeChangeArgs) {
+			switch args.Mode {
+			case connectivity.ServingModeServing:
+				logger.Info("Greeter service", "servingMode", args.Mode.String())
+				healthServer.SetServingStatus(helloworldpb.Greeter_ServiceDesc.ServiceName, healthpb.HealthCheckResponse_SERVING)
+			case connectivity.ServingModeNotServing:
+				// Make k8s readiness probes fail:
+				logger.Error(args.Err, "Greeter service", "servingMode", args.Mode.String())
+				healthServer.SetServingStatus(helloworldpb.Greeter_ServiceDesc.ServiceName, healthpb.HealthCheckResponse_NOT_SERVING)
+			}
+		}),
 	}, nil
 }
 
@@ -212,11 +226,11 @@ func registerAdminServers(useXDS bool, servingGRPCServer grpcserver, healthGRPCS
 }
 
 func serve(logger logr.Logger, c Config, servingGRPCServer grpcserver, healthServer *health.Server, healthGRPCServer *grpc.Server) error {
-	servingListener, err := net.Listen("tcp", fmt.Sprintf(":%d", c.ServingPort))
+	servingListener, err := net.Listen("tcp4", fmt.Sprintf(":%d", c.ServingPort))
 	if err != nil {
 		return fmt.Errorf("could not create TCP listener on serving port=%d: %w", c.ServingPort, err)
 	}
-	healthListener, err := net.Listen("tcp", fmt.Sprintf(":%d", c.HealthPort))
+	healthListener, err := net.Listen("tcp4", fmt.Sprintf(":%d", c.HealthPort))
 	if err != nil {
 		return fmt.Errorf("could not create TCP listener on health port=%d: %w", c.HealthPort, err)
 	}

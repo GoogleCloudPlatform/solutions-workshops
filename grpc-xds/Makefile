@@ -203,7 +203,7 @@ troubleshoot: check-kubectl
 delete-control-plane: check-kubectl
 	kubectl delete --ignore-not-found --namespace=xds deployment control-plane
 	kubectl delete --ignore-not-found --namespace=xds service control-plane
-	kubectl delete --ignore-not-found --namespace=xds configmaps --selector="app.kubernetes.io/part-of"=grpc-xds
+	kubectl delete --ignore-not-found --namespace=xds configmaps --selector='app.kubernetes.io/part-of=grpc-xds'
 
 # delete-greeter deletes the Services and Deployments for greeter-[intermediary|leaf].
 .PHONY: delete-greeter

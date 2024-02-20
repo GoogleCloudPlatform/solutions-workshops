@@ -94,11 +94,12 @@ func (c *SnapshotCache) CreateWatch(request *cachev3.Request, state stream.Strea
 			c.logger.Error(err, "Problem encountered when looking for server listener addresses in new Listener stream request", "nodeHash", nodeHash)
 			return func() {}
 		}
-		addressesAdded := c.serverListenerCache.Add(nodeHash, addressesFromRequest)
+		changes := c.serverListenerCache.Add(nodeHash, addressesFromRequest)
 		_, err = c.delegate.GetSnapshot(nodeHash)
-		if err != nil || addressesAdded {
-			if err := c.createNewSnapshotForNode(nodeHash, addressesFromRequest); err != nil {
-				c.logger.Error(err, "Could not set new xDS resource snapshot", "nodeHash", nodeHash, "serverListenerAddressesFromRequest", addressesFromRequest)
+		if err != nil || changes {
+			apps := c.appsCache.GetAll()
+			if err := c.createNewSnapshot(nodeHash, apps); err != nil {
+				c.logger.Error(err, "Could not set new xDS resource snapshot", "nodeHash", nodeHash, "apps", apps)
 				return func() {}
 			}
 		}
@@ -109,52 +110,40 @@ func (c *SnapshotCache) CreateWatch(request *cachev3.Request, state stream.Strea
 // UpdateResources creates a new snapshot for each node hash in the cache,
 // based on the provided gRPC application configuration,
 // with the addition of server listeners and their associated route configurations.
-func (c *SnapshotCache) UpdateResources(ctx context.Context, logger logr.Logger, kubecontextName string, namespace string, apps []GRPCApplication) error {
+func (c *SnapshotCache) UpdateResources(ctx context.Context, logger logr.Logger, kubecontextName string, namespace string, updatedApps []GRPCApplication) error {
 	var errs []error
+	changed := c.appsCache.Put(kubecontextName, namespace, updatedApps)
+	if !changed {
+		logger.V(2).Info("No application updates, so not generating new xDS resource snapshots")
+		return nil
+	}
+	apps := c.appsCache.GetAll()
+	logger.V(2).Info("Application updates, generating new xDS resource snapshots", "apps", apps)
 	for _, nodeHash := range c.delegate.GetStatusKeys() {
-		snapshotBuilder, err := NewSnapshotBuilder(c.features).AddGRPCApplications(logger, apps)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("could not create xDS resource snapshot builder for updated gRPC application configuration %v+: %w", apps, err))
-		}
-		cachedApps := c.appsCache.GetOthers(kubecontextName, namespace)
-		snapshotBuilder, err = snapshotBuilder.AddGRPCApplications(logger, cachedApps)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("could not add cached gRPC applications to xDS resource snapshot builder %v+: %w", cachedApps, err))
-		}
-		snapshotForNodeHash, err := snapshotBuilder.
-			AddServerListenerAddresses(c.serverListenerCache.Get(nodeHash)).
-			Build()
-		if err != nil {
-			errs = append(errs, fmt.Errorf("could not create xDS resource snapshot with server Listeners for nodeHash=%s: %w", nodeHash, err))
-		}
-		if err = c.delegate.SetSnapshot(ctx, nodeHash, snapshotForNodeHash); err != nil {
-			errs = append(errs, fmt.Errorf("could not set xDS resource snapshot for nodeHash=%s: %w", nodeHash, err))
+		if err := c.createNewSnapshot(nodeHash, apps); err != nil {
+			errs = append(errs, err)
 		}
 	}
 	if len(errs) > 0 {
 		return errors.Join(errs...)
 	}
-	c.appsCache.Set(kubecontextName, namespace, apps)
 	return nil
 }
 
-// createNewSnapshotForNode sets a new snapshot for the provided `nodeHash`,
-// based on the previous `oldSnapshot` (can be nil), and a slice of new server Listener addresses.
-func (c *SnapshotCache) createNewSnapshotForNode(nodeHash string, newServerListenerAddresses []EndpointAddress) error {
-	c.logger.Info("Creating a new snapshot", "nodeHash", nodeHash, "serverListenerAddressesFromRequest", newServerListenerAddresses)
-	snapshotBuilder := NewSnapshotBuilder(c.features)
-	apps := c.appsCache.GetAll()
-	snapshotBuilder, err := snapshotBuilder.AddGRPCApplications(c.logger, apps)
+// createNewSnapshot sets a new snapshot for the provided `nodeHash` and gRPC application configuration.
+func (c *SnapshotCache) createNewSnapshot(nodeHash string, apps []GRPCApplication) error {
+	c.logger.Info("Creating a new snapshot", "nodeHash", nodeHash, "apps", apps)
+	snapshotBuilder, err := NewSnapshotBuilder(c.features).AddGRPCApplications(apps)
 	if err != nil {
-		return fmt.Errorf("could not add cached gRPC application configuration %v+ to new xDS resource snapshot for nodeHash=%s: %w", apps, nodeHash, err)
+		return fmt.Errorf("could not create xDS resource snapshot builder for nodeHash=%s: %w", nodeHash, err)
 	}
-	newSnapshot, err := snapshotBuilder.
-		AddServerListenerAddresses(newServerListenerAddresses).
+	snapshot, err := snapshotBuilder.
+		AddServerListenerAddresses(c.serverListenerCache.Get(nodeHash)).
 		Build()
 	if err != nil {
 		return fmt.Errorf("could not create new xDS resource snapshot for nodeHash=%s: %w", nodeHash, err)
 	}
-	if err := c.delegate.SetSnapshot(c.ctx, nodeHash, newSnapshot); err != nil {
+	if err := c.delegate.SetSnapshot(c.ctx, nodeHash, snapshot); err != nil {
 		return fmt.Errorf("could not set new xDS resource snapshot for nodeHash=%s: %w", nodeHash, err)
 	}
 	return nil
@@ -176,8 +165,8 @@ func findServerListenerAddresses(names []string) ([]EndpointAddress, error) {
 				return nil, fmt.Errorf("could not extract port from server Listener name: %w", err)
 			}
 			addresses = append(addresses, EndpointAddress{
-				host: host,
-				port: uint32(port),
+				Host: host,
+				Port: uint32(port),
 			})
 		}
 	}

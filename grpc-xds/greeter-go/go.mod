@@ -25,9 +25,9 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.0.1
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240213162025-012b6fc9bca9
 	google.golang.org/grpc v1.61.1
-	google.golang.org/grpc/examples v0.0.0-20240212163858-05db80f11850
+	google.golang.org/grpc/examples v0.0.0-20240216210838-c63d9258db23
 	google.golang.org/protobuf v1.32.0
-	k8s.io/client-go v0.29.1
+	k8s.io/client-go v0.29.2
 	k8s.io/klog/v2 v2.120.1
 )
 
@@ -58,7 +58,7 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20240213162025-012b6fc9bca9 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	k8s.io/apimachinery v0.29.1 // indirect
+	k8s.io/apimachinery v0.29.2 // indirect
 	k8s.io/utils v0.0.0-20240102154912-e7106e64919e // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect

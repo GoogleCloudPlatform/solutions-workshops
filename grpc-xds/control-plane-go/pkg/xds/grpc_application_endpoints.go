@@ -14,32 +14,42 @@
 
 package xds
 
+import (
+	"slices"
+	"strings"
+)
+
 type GRPCApplicationEndpoints struct {
-	node      string
-	zone      string
-	addresses []string
+	Node      string
+	Zone      string
+	Addresses []string
 }
 
 func NewGRPCApplicationEndpoints(node string, zone string, addresses []string) GRPCApplicationEndpoints {
 	addressesCopy := make([]string, len(addresses))
 	copy(addressesCopy, addresses)
+	slices.Sort(addressesCopy)
 	return GRPCApplicationEndpoints{
-		node:      node,
-		zone:      zone,
-		addresses: addressesCopy,
+		Node:      node,
+		Zone:      zone,
+		Addresses: addressesCopy,
 	}
 }
 
-func (e *GRPCApplicationEndpoints) Node() string {
-	return e.node
+// Compare assumes that the list of addresses is sorted,
+// as done in `NewGRPCApplicationEndpoints()`.
+func (e GRPCApplicationEndpoints) Compare(f GRPCApplicationEndpoints) int {
+	if e.Node != f.Node {
+		return strings.Compare(e.Node, f.Node)
+	}
+	if e.Zone != f.Zone {
+		return strings.Compare(e.Zone, f.Zone)
+	}
+	return slices.Compare(e.Addresses, f.Addresses)
 }
 
-func (e *GRPCApplicationEndpoints) Zone() string {
-	return e.zone
-}
-
-func (e *GRPCApplicationEndpoints) Addresses() []string {
-	addressesCopy := make([]string, len(e.addresses))
-	copy(addressesCopy, e.addresses)
-	return addressesCopy
+// Equal assumes that the list of addresses is sorted,
+// as done in `NewGRPCApplicationEndpoints()`.
+func (e GRPCApplicationEndpoints) Equal(f GRPCApplicationEndpoints) bool {
+	return e.Compare(f) == 0
 }

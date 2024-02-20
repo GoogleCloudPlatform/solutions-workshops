@@ -24,8 +24,12 @@ configMapGenerator:
 - name: kubeconfig
   namespace: xds # kpt-set: ${control-plane-namespace}
   files:
-  - kubeconfig-1.yaml
-  - kubeconfig-2.yaml
+  - kubeconfig.yaml
+labels:
+- pairs:
+    app.kubernetes.io/part-of: grpc-xds
+  includeSelectors: false
+  includeTemplates: true
 patches:
 - path: patch-kubeconfig-env.yaml
   target:
