@@ -157,7 +157,7 @@ public class XdsSnapshotBuilder {
       if (!listeners.containsKey(app.listenerName())) {
         var listener = createApiListener(app.listenerName(), app.routeName());
         listeners.put(listener.getName(), listener);
-        }
+      }
       if (!routeConfigurations.containsKey(app.routeName())) {
         var routeConfiguration =
             createRouteConfiguration(
@@ -165,17 +165,24 @@ public class XdsSnapshotBuilder {
         routeConfigurations.put(routeConfiguration.getName(), routeConfiguration);
       }
       if (!clusters.containsKey(app.clusterName())) {
-        var cluster =
-            createCluster(app.clusterName(), app.namespace(), app.serviceAccountName());
+        var cluster = createCluster(app.clusterName(), app.namespace(), app.serviceAccountName());
         clusters.put(cluster.getName(), cluster);
       }
       var endpointsByClusterKey = app.clusterName() + "-" + app.port();
-      if (endpointsByCluster.containsKey(endpointsByClusterKey) && !endpointsByCluster.get(endpointsByClusterKey).isEmpty()) {
-        LOG.info("Merging endpoints for app={} existingEndpoints=[{}], newEndpoints[{}]", app.listenerName(), endpointsByCluster.get(endpointsByClusterKey), app.endpoints());
+      if (endpointsByCluster.containsKey(endpointsByClusterKey)
+          && !endpointsByCluster.get(endpointsByClusterKey).isEmpty()) {
+        LOG.info(
+            "Merging endpoints for app={} existingEndpoints=[{}], newEndpoints[{}]",
+            app.listenerName(),
+            endpointsByCluster.get(endpointsByClusterKey),
+            app.endpoints());
       }
-      endpointsByCluster.computeIfAbsent(endpointsByClusterKey, key -> new HashSet<>()).addAll(app.endpoints());
+      endpointsByCluster
+          .computeIfAbsent(endpointsByClusterKey, key -> new HashSet<>())
+          .addAll(app.endpoints());
       var clusterLoadAssignment =
-          createClusterLoadAssignment(app.clusterName(), app.port(), endpointsByCluster.get(endpointsByClusterKey));
+          createClusterLoadAssignment(
+              app.clusterName(), app.port(), endpointsByCluster.get(endpointsByClusterKey));
       clusterLoadAssignments.put(clusterLoadAssignment.getClusterName(), clusterLoadAssignment);
     }
     return this;

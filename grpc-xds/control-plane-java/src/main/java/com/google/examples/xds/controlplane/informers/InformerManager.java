@@ -118,19 +118,31 @@ public class InformerManager<T> {
         new ResourceEventHandler<>() {
           @Override
           public void onAdd(V1EndpointSlice endpointSlice) {
-            LOG.debug("informer kubecontext={} event={} endpointSlice={}", kubecontext, "add", endpointSlice);
+            LOG.debug(
+                "informer kubecontext={} event={} endpointSlice={}",
+                kubecontext,
+                "add",
+                endpointSlice);
             handleEndpointSliceEvent(informer, namespace);
           }
 
           @Override
           public void onUpdate(V1EndpointSlice previous, V1EndpointSlice endpointSlice) {
-            LOG.debug("informer kubecontext={} event={} endpointSlice={}", kubecontext, "update", endpointSlice);
+            LOG.debug(
+                "informer kubecontext={} event={} endpointSlice={}",
+                kubecontext,
+                "update",
+                endpointSlice);
             handleEndpointSliceEvent(informer, namespace);
           }
 
           @Override
           public void onDelete(V1EndpointSlice endpointSlice, boolean deletedFinalStateUnknown) {
-            LOG.debug("informer kubecontext={} event={} endpointSlice={}", kubecontext, "delete", endpointSlice);
+            LOG.debug(
+                "informer kubecontext={} event={} endpointSlice={}",
+                kubecontext,
+                "delete",
+                endpointSlice);
             handleEndpointSliceEvent(informer, namespace);
           }
         });
@@ -146,8 +158,13 @@ public class InformerManager<T> {
     informers.forEach(SharedInformer::stop);
   }
 
-  private void handleEndpointSliceEvent(@NotNull SharedIndexInformer<V1EndpointSlice> informer, @NotNull String namespace) {
-    var appsForInformer = informer.getIndexer().list().stream().filter(this::isValid).map(this::toGrpcApplication).collect(Collectors.toSet());
+  private void handleEndpointSliceEvent(
+      @NotNull SharedIndexInformer<V1EndpointSlice> informer, @NotNull String namespace) {
+    var appsForInformer =
+        informer.getIndexer().list().stream()
+            .filter(this::isValid)
+            .map(this::toGrpcApplication)
+            .collect(Collectors.toSet());
     cache.updateResources(kubecontext, namespace, appsForInformer);
   }
 

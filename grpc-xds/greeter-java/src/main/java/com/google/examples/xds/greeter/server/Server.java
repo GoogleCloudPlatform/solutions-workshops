@@ -24,14 +24,18 @@ import io.grpc.InsecureServerCredentials;
 import io.grpc.ServerBuilder;
 import io.grpc.ServerInterceptors;
 import io.grpc.ServerServiceDefinition;
+import io.grpc.examples.helloworld.GreeterGrpc;
 import io.grpc.health.v1.HealthCheckResponse.ServingStatus;
 import io.grpc.protobuf.services.ChannelzService;
 import io.grpc.protobuf.services.HealthStatusManager;
 import io.grpc.protobuf.services.ProtoReflectionService;
 import io.grpc.services.AdminInterface;
 import io.grpc.xds.XdsServerBuilder;
+import io.grpc.xds.XdsServerBuilder.XdsServingStatusListener;
 import io.grpc.xds.XdsServerCredentials;
 import java.util.concurrent.TimeUnit;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,16 +58,29 @@ public class Server {
   public void run(ServerConfig config) throws Exception {
     int servingPort = config.servingPort();
     boolean useXds = config.useXds();
-    var health = new HealthStatusManager();
-    var serverBuilder = createServerBuilder(servingPort, useXds);
+    var healthStatusManager = new HealthStatusManager();
+    // Set serving status for k8s startup and liveness probes:
+    healthStatusManager.setStatus("", ServingStatus.SERVING);
+    // Set serving status for k8s startup and liveness probes:
+    healthStatusManager.setStatus(GreeterGrpc.SERVICE_NAME, ServingStatus.NOT_SERVING);
+
+    ServerBuilder<?> serverBuilder;
+    if (useXds) {
+      var healthStatusListener =
+          new HealthStatusListener(GreeterGrpc.SERVICE_NAME, healthStatusManager);
+      serverBuilder = createXdsServerBuilder(servingPort, healthStatusListener);
+    } else {
+      serverBuilder = createServerBuilder(servingPort);
+    }
+
     // Start separate server on different port for health checks and admin services.
-    var healthServerBuilder = createServerBuilder(config.healthPort(), false);
+    var healthServerBuilder = createServerBuilder(config.healthPort());
     serverBuilder
         .addService(ProtoReflectionService.newInstance())
-        .addService(health.getHealthService());
+        .addService(healthStatusManager.getHealthService());
     healthServerBuilder
         .addService(ProtoReflectionService.newInstance())
-        .addService(health.getHealthService());
+        .addService(healthStatusManager.getHealthService());
     if (useXds) {
       // Channelz and CSDS for xDS server
       serverBuilder.addServices(AdminInterface.getStandardServices());
@@ -78,7 +95,7 @@ public class Server {
     }
 
     String greeterName = config.greeterName();
-    ServerServiceDefinition greeterServiceDefinition;
+    ServerServiceDefinition greeterServiceDefinition; // Naming is hard!
     String nextHop = config.nextHop();
     if (nextHop.isBlank()) {
       LOG.info("Adding leaf Greeter service, as NEXT_HOP is not provided.");
@@ -96,25 +113,29 @@ public class Server {
     LOG.info("Greeter service with nextHop={} listening on port {}.", nextHop, servingPort);
 
     var healthServer = healthServerBuilder.build().start();
-    addServerShutdownHook(server, healthServer, health);
-    health.setStatus("", ServingStatus.SERVING);
-    health.setStatus(
-        greeterServiceDefinition.getServiceDescriptor().getName(), ServingStatus.SERVING);
+    addServerShutdownHook(server, healthServer, healthStatusManager);
     server.awaitTermination();
   }
 
-  /** Creates a builder for either an xDS server or a plain old gRPC server. */
-  private ServerBuilder<?> createServerBuilder(int port, boolean useXds) {
-    if (!useXds) {
-      LOG.info("Creating a non-xDS managed server.");
-      return Grpc.newServerBuilderForPort(port, InsecureServerCredentials.create());
-    }
+  /** Creates a builder for an xDS managed gRPC server. */
+  private XdsServerBuilder createXdsServerBuilder(
+      int port, @Nullable XdsServingStatusListener xdsServingStatusListener) {
     LOG.info("Creating an xDS-managed server.");
     // The xDS credentials use the security configured by the xDS server when available. When xDS
     // is not used or when xDS does not provide security configuration, the xDS credentials fall
     // back to other credentials (in this case, InsecureServerCredentials).
     var serverCredentials = XdsServerCredentials.create(InsecureServerCredentials.create());
-    return XdsServerBuilder.forPort(port, serverCredentials);
+    var xdsServerBuilder = XdsServerBuilder.forPort(port, serverCredentials);
+    if (xdsServingStatusListener != null) {
+      xdsServerBuilder.xdsServingStatusListener(xdsServingStatusListener);
+    }
+    return xdsServerBuilder;
+  }
+
+  /** Creates a builder for a plain old non-xDS managed gRPC server. */
+  private ServerBuilder<?> createServerBuilder(int port) {
+    LOG.info("Creating a non-xDS managed server.");
+    return Grpc.newServerBuilderForPort(port, InsecureServerCredentials.create());
   }
 
   private void addServerShutdownHook(
@@ -143,5 +164,29 @@ public class Server {
                     server.shutdownNow();
                   }
                 }));
+  }
+
+  /**
+   * Update the service serving state, to pass or fail health checks such as Kubernetes probes.
+   *
+   * @param service the gRPC service name, including the package name, e.g., {@code
+   *     helloworld.Greeter}, or the empty string if you want to set the serving state for the whole
+   *     server rather than a single service.
+   * @param healthStatusManager manages the gRPC health check service.
+   */
+  private record HealthStatusListener(
+      @NotNull String service, @NotNull HealthStatusManager healthStatusManager)
+      implements XdsServingStatusListener {
+    @Override
+    public void onServing() {
+      LOG.info("[" + service + "] Entering SERVING state.");
+      healthStatusManager.setStatus(service, ServingStatus.SERVING);
+    }
+
+    @Override
+    public void onNotServing(Throwable throwable) {
+      LOG.error("[" + service + "] Entering NOT_SERVING state:", throwable);
+      healthStatusManager.setStatus(service, ServingStatus.NOT_SERVING);
+    }
   }
 }
