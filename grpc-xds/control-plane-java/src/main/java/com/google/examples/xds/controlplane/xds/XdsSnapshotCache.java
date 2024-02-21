@@ -189,15 +189,18 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
    * route configurations.
    *
    * @param kubecontext the kubeconfig context where the gRPC applications came from
-   * @param namespace
+   * @param namespace the Kubernetes namespace of the informer
    * @param appsForContextAndNamespace gRPC application configuration to add to the new snapshot
    */
   public void updateResources(
-      String kubecontext, @NotNull String namespace, @NotNull Set<GrpcApplication> appsForContextAndNamespace) {
+      String kubecontext,
+      @NotNull String namespace,
+      @NotNull Set<GrpcApplication> appsForContextAndNamespace) {
     boolean changesMade = appsCache.set(kubecontext, namespace, appsForContextAndNamespace);
     if (!changesMade) {
-      LOG.info("No changes to the application configuration, " +
-              "so not creating new xDS resource snapshots.");
+      LOG.info(
+          "No changes to the application configuration, "
+              + "so not creating new xDS resource snapshots.");
       return;
     }
     LOG.info("Creating new xDS resource snapshots");
