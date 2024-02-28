@@ -51,7 +51,7 @@ spec:
           readOnly: true
       initContainers:
       - name: grpc-xds-init
-        image: busybox
+        image: busybox:stable-glibc
         command:
         - /bin/sh
         - -c

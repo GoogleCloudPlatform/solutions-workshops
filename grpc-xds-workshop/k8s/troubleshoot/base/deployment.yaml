@@ -38,7 +38,7 @@ spec:
     spec:
       containers:
       - name: app
-        image: busybox # kpt-set: ${bastion-image}
+        image: busybox:stable-glibc # kpt-set: ${bastion-image}
         command: ["sleep"]
         args: ["31536000"]
         env: []

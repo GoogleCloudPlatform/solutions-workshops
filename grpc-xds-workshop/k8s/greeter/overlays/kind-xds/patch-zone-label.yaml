@@ -24,7 +24,7 @@ spec:
       automountServiceAccountToken: true # Need to communicate with the Kubernetes API server.
       initContainers:
       - name: zone-label-init
-        image: kubectl
+        image: bitnami/kubectl
         command:
         - /bin/sh
         - -c

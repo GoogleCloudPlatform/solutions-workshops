@@ -22,10 +22,6 @@ metadata:
   name: greeter-kind-xds
   annotations:
     config.kubernetes.io/local-config: "true"
-images:
-- name: kubectl
-  newName: bitnami/kubectl
-  digest: sha256:b062b7a76e0777551399157d59d3e8babac69c6c050d3b18c1199059fb3f0663
 patches:
 - path: patch-zone-label.yaml
   target:

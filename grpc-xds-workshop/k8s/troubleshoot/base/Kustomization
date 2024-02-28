@@ -22,10 +22,6 @@ metadata:
     config.kubernetes.io/local-config: "true"
 commonLabels:
   app.kubernetes.io/part-of: grpc-xds-workshop
-images:
-- name: busybox
-  newName: busybox:stable-glibc
-  digest: sha256:7338d0c72c655d6534670ed72590cdc99afc9c559958c47eb3a5a17a7520a75c
 namespace: xds # kpt-set: ${bastion-namespace}
 patches:
 - path: patch-resources.yaml
