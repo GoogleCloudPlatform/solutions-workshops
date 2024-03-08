@@ -25,6 +25,7 @@ import io.envoyproxy.controlplane.cache.Response;
 import io.envoyproxy.controlplane.cache.Watch;
 import io.envoyproxy.controlplane.cache.XdsRequest;
 import io.envoyproxy.controlplane.cache.v3.SimpleCache;
+import io.envoyproxy.controlplane.cache.v3.Snapshot;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
@@ -51,7 +52,6 @@ import org.slf4j.LoggerFactory;
  * @param <T> node hash type
  */
 public class XdsSnapshotCache<T> implements ConfigWatcher {
-
   private static final Logger LOG = LoggerFactory.getLogger(XdsSnapshotCache.class);
 
   /**
@@ -81,6 +81,11 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
   private final NodeGroup<T> nodeHashFn;
 
   /**
+   * Constructs a priority map for localities, to be used in EDS ClusterLoadAssignment resources.
+   */
+  private final LocalityPriorityMapper<T> localityPriorityMapper;
+
+  /**
    * appsCache stores the most recent gRPC application configuration information from k8s cluster
    * EndpointSlices. The appsCache is used to populate new entries (previously unseen `nodeHash`es)
    * in the xDS resource snapshot cache, so that the new subscribers don't have to wait for an
@@ -104,9 +109,13 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
    *
    * @param nodeHashFn function that returns a consistent identifier for a node.
    */
-  public XdsSnapshotCache(@NotNull NodeGroup<T> nodeHashFn, @NotNull XdsFeatures xdsFeatures) {
+  public XdsSnapshotCache(
+      @NotNull NodeGroup<T> nodeHashFn,
+      @NotNull LocalityPriorityMapper<T> localityPriorityMapper,
+      @NotNull XdsFeatures xdsFeatures) {
     this.delegate = new SimpleCache<>(nodeHashFn);
     this.nodeHashFn = nodeHashFn;
+    this.localityPriorityMapper = localityPriorityMapper;
     this.appsCache = new GrpcApplicationCache();
     this.serverListenerCache = new ServerListenerCache<>();
     this.xdsFeatures = xdsFeatures;
@@ -139,11 +148,7 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
           getServerListenerAddresses(request.getResourceNamesList());
       boolean isAdded = serverListenerCache.add(nodeHash, listenerAddressesFromRequest);
       if (isAdded) {
-        var snapshot =
-            new XdsSnapshotBuilder(xdsFeatures)
-                .addGrpcApplications(appsCache.getAll())
-                .addServerListenerAddresses(serverListenerCache.get(nodeHash))
-                .build();
+        var snapshot = createNewSnapshot(nodeHash, appsCache.getAll());
         LOG.info("Creating a new snapshot for nodeHash={}", nodeHash);
         delegate.setSnapshot(nodeHash, snapshot);
       }
@@ -209,13 +214,17 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
         .groups()
         .forEach(
             nodeHash -> {
-              var snapshot =
-                  new XdsSnapshotBuilder(xdsFeatures)
-                      .addGrpcApplications(apps)
-                      .addServerListenerAddresses(serverListenerCache.get(nodeHash))
-                      .build();
+              var snapshot = createNewSnapshot(nodeHash, apps);
               delegate.setSnapshot(nodeHash, snapshot);
             });
+  }
+
+  @NotNull
+  private Snapshot createNewSnapshot(T nodeHash, Set<GrpcApplication> apps) {
+    return new XdsSnapshotBuilder<>(nodeHash, localityPriorityMapper, xdsFeatures)
+        .addGrpcApplications(apps)
+        .addServerListenerAddresses(serverListenerCache.get(nodeHash))
+        .build();
   }
 
   /** Just delegating, since delta xDS is not supported by this control plane implementation. */

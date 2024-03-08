@@ -31,12 +31,7 @@ public record XdsFeatures(
   private static final Logger LOG = LoggerFactory.getLogger(XdsFeatures.class);
 
   /** Canonical constructor. */
-  public XdsFeatures(
-      boolean serverListenerUsesRds,
-      boolean enableControlPlaneTls,
-      boolean requireControlPlaneClientCerts,
-      boolean enableDataPlaneTls,
-      boolean requireDataPlaneClientCerts) {
+  public XdsFeatures {
     if (!enableControlPlaneTls && requireControlPlaneClientCerts) {
       throw new IllegalArgumentException(
           "xDS feature flags: enableControlPlaneTls=true is required when"
@@ -51,11 +46,6 @@ public record XdsFeatures(
       LOG.warn(
           "xDS clients implemented using Go must use gRPC-Go v1.61.0 or later for dynamic RouteConfiguration via RDS for server Listeners, see https://github.com/grpc/grpc-go/issues/6788");
     }
-    this.serverListenerUsesRds = serverListenerUsesRds;
-    this.enableControlPlaneTls = enableControlPlaneTls;
-    this.requireControlPlaneClientCerts = requireControlPlaneClientCerts;
-    this.enableDataPlaneTls = enableDataPlaneTls;
-    this.requireDataPlaneClientCerts = requireDataPlaneClientCerts;
   }
 
   /**
@@ -69,15 +59,10 @@ public record XdsFeatures(
    */
   public XdsFeatures(@NotNull Map<String, Boolean> features) {
     this(
-        Objects.requireNonNullElse(features.get("serverListenerUsesRds"), Boolean.FALSE)
-            .booleanValue(),
-        Objects.requireNonNullElse(features.get("enableControlPlaneTls"), Boolean.FALSE)
-            .booleanValue(),
-        Objects.requireNonNullElse(features.get("requireControlPlaneClientCerts"), Boolean.FALSE)
-            .booleanValue(),
-        Objects.requireNonNullElse(features.get("enableDataPlaneTls"), Boolean.FALSE)
-            .booleanValue(),
-        Objects.requireNonNullElse(features.get("requireDataPlaneClientCerts"), Boolean.FALSE)
-            .booleanValue());
+        Objects.requireNonNullElse(features.get("serverListenerUsesRds"), Boolean.FALSE),
+        Objects.requireNonNullElse(features.get("enableControlPlaneTls"), Boolean.FALSE),
+        Objects.requireNonNullElse(features.get("requireControlPlaneClientCerts"), Boolean.FALSE),
+        Objects.requireNonNullElse(features.get("enableDataPlaneTls"), Boolean.FALSE),
+        Objects.requireNonNullElse(features.get("requireDataPlaneClientCerts"), Boolean.FALSE));
   }
 }

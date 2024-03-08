@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Speed up Skaffold commands
+# Set global Skaffold options
 export SKAFFOLD_BUILD_CONCURRENCY:=0
+export SKAFFOLD_CACHE_ARTIFACTS:=false
 export SKAFFOLD_CLEANUP:=false
 export SKAFFOLD_DETECT_MINIKUBE:=false
 export SKAFFOLD_INTERACTIVE:=false

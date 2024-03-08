@@ -19,6 +19,7 @@ import java.util.logging.LogRecord;
 import java.util.regex.Pattern;
 
 /** Masks access tokens in log records. */
+@SuppressWarnings("unused")
 public class AccessTokenMaskingFilter implements Filter {
 
   private static final Pattern ACCESS_TOKEN_PATTERN =

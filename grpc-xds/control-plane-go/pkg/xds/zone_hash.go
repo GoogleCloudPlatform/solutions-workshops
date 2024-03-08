@@ -12,9 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package com.google.examples.xds.controlplane.informers;
+package xds
 
-import org.jetbrains.annotations.NotNull;
+import (
+	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	cachev3 "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
+)
 
-/** Identifies an EndpointSlice in a Namespace. */
-public record EndpointSlice(@NotNull String namespace, @NotNull String name) {}
+// ZoneHash uses `locality.zone` as the node hash,
+// so all xDS clients in the same zone access the same cache snapshot.
+type ZoneHash struct{}
+
+var _ cachev3.NodeHash = &ZoneHash{}
+
+func (ZoneHash) ID(node *corev3.Node) string {
+	if node == nil || node.Locality == nil {
+		return ""
+	}
+	return node.Locality.Zone
+}

@@ -76,10 +76,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** Builds xDS resource snapshots for the cache. */
-public class XdsSnapshotBuilder {
-
-  private static final Logger LOG = LoggerFactory.getLogger(XdsSnapshotBuilder.class);
-
+public class XdsSnapshotBuilder<T> {
   /**
    * Listener name template used xDS clients that are gRPC servers.
    *
@@ -97,8 +94,9 @@ public class XdsSnapshotBuilder {
   static final String SERVER_LISTENER_RESOURCE_NAME_TEMPLATE =
       "grpc/server?xds.resource.listening_address=%s";
 
+  private static final Logger LOG = LoggerFactory.getLogger(XdsSnapshotBuilder.class);
+
   /** Copied from {@link io.grpc.xds.XdsListenerResource}. */
-  @SuppressWarnings("JavadocReference")
   private static final String TRANSPORT_SOCKET_NAME_TLS = "envoy.transport_sockets.tls";
 
   /** Copied from {@link io.envoyproxy.controlplane.cache.Resources}. */
@@ -138,10 +136,17 @@ public class XdsSnapshotBuilder {
   /** Addresses for server listeners to be added to the snapshot. */
   private final Set<EndpointAddress> serverListenerAddresses = new HashSet<>();
 
+  private final T nodeHash;
+  private final LocalityPriorityMapper<T> localityPriorityMapper;
   private final XdsFeatures xdsFeatures;
 
   /** Creates a builder for an xDS resource cache snapshot. */
-  public XdsSnapshotBuilder(@NotNull XdsFeatures xdsFeatures) {
+  public XdsSnapshotBuilder(
+      @NotNull T nodeHash,
+      @NotNull LocalityPriorityMapper<T> localityPriorityMapper,
+      @NotNull XdsFeatures xdsFeatures) {
+    this.nodeHash = nodeHash;
+    this.localityPriorityMapper = localityPriorityMapper;
     this.xdsFeatures = xdsFeatures;
   }
 
@@ -152,7 +157,7 @@ public class XdsSnapshotBuilder {
    */
   @SuppressWarnings("UnusedReturnValue")
   @NotNull
-  public XdsSnapshotBuilder addGrpcApplications(@NotNull Set<GrpcApplication> apps) {
+  public XdsSnapshotBuilder<T> addGrpcApplications(@NotNull Set<GrpcApplication> apps) {
     for (GrpcApplication app : apps) {
       if (!listeners.containsKey(app.listenerName())) {
         var listener = createApiListener(app.listenerName(), app.routeName());
@@ -190,7 +195,7 @@ public class XdsSnapshotBuilder {
 
   @NotNull
   @SuppressWarnings("UnusedReturnValue")
-  public XdsSnapshotBuilder addServerListenerAddresses(
+  public XdsSnapshotBuilder<T> addServerListenerAddresses(
       @NotNull Collection<EndpointAddress> addresses) {
     serverListenerAddresses.addAll(addresses);
     return this;
@@ -554,7 +559,17 @@ public class XdsSnapshotBuilder {
             .collect(
                 Collectors.groupingBy(
                     endpoint -> Locality.newBuilder().setZone(endpoint.zone()).build()));
+    Map<Locality, Integer> localitiesByPriority =
+        localityPriorityMapper.buildPriorityMap(nodeHash, endpointsByLocality.keySet());
     for (var locality : endpointsByLocality.keySet()) {
+      int priority = localitiesByPriority.getOrDefault(locality, 0);
+      LOG.debug(
+          "Using priority="
+              + priority
+              + " for endpointZone="
+              + locality.getZone()
+              + " and nodeHash="
+              + nodeHash);
       var localityLbEndpointsBuilder =
           LocalityLbEndpoints.newBuilder()
               // Locality must be unique for a given priority.
@@ -562,7 +577,7 @@ public class XdsSnapshotBuilder {
               // Weight is effectively mandatory, read the javadoc carefully :-)
               .setLoadBalancingWeight(UInt32Value.of(100000))
               // Priority is optional. If provided, must start from 0 and have no gaps.
-              .setPriority(0);
+              .setPriority(priority);
       List<String> addressesForLocality =
           endpointsByLocality.get(locality).stream()
               .flatMap(endpoint -> endpoint.addresses().stream())

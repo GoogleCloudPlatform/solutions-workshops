@@ -47,6 +47,8 @@ type SnapshotCache struct {
 	delegate cachev3.SnapshotCache
 	// hash is the function to determine the cache key (`nodeHash`) for nodes.
 	hash cachev3.NodeHash
+	// localityPriorityMapper constructs a priority map for localities, to be used in EDS ClusterLoadAssignment resources.
+	localityPriorityMapper LocalityPriorityMapper
 	// appsCache stores the most recent gRPC application configuration information from k8s cluster EndpointSlices.
 	// The appsCache is used to populate new entries (previously unseen `nodeHash`es in the xDS resource snapshot cache,
 	// so that the new subscribers don't have to wait for an EndpointSlice update before they can receive xDS resource.
@@ -65,15 +67,16 @@ var _ cachev3.Cache = &SnapshotCache{}
 //
 // If `allowPartialRequests` is true, the DiscoveryServer will respond to requests for a resource
 // type even if some resources in the snapshot are not named in the request.
-func NewSnapshotCache(ctx context.Context, allowPartialRequests bool, hash cachev3.NodeHash, features *Features) *SnapshotCache {
+func NewSnapshotCache(ctx context.Context, allowPartialRequests bool, hash cachev3.NodeHash, localityPriorityMapper LocalityPriorityMapper, features *Features) *SnapshotCache {
 	return &SnapshotCache{
-		ctx:                 ctx,
-		logger:              logging.FromContext(ctx),
-		delegate:            cachev3.NewSnapshotCache(!allowPartialRequests, hash, logging.SnapshotCacheLogger(ctx)),
-		hash:                hash,
-		appsCache:           NewGRPCApplicationCache(),
-		serverListenerCache: NewServerListenerCache(),
-		features:            features,
+		ctx:                    ctx,
+		logger:                 logging.FromContext(ctx),
+		delegate:               cachev3.NewSnapshotCache(!allowPartialRequests, hash, logging.SnapshotCacheLogger(ctx)),
+		hash:                   hash,
+		localityPriorityMapper: localityPriorityMapper,
+		appsCache:              NewGRPCApplicationCache(),
+		serverListenerCache:    NewServerListenerCache(),
+		features:               features,
 	}
 }
 
@@ -133,7 +136,7 @@ func (c *SnapshotCache) UpdateResources(_ context.Context, logger logr.Logger, k
 // createNewSnapshot sets a new snapshot for the provided `nodeHash` and gRPC application configuration.
 func (c *SnapshotCache) createNewSnapshot(nodeHash string, apps []GRPCApplication) error {
 	c.logger.Info("Creating a new snapshot", "nodeHash", nodeHash, "apps", apps)
-	snapshotBuilder, err := NewSnapshotBuilder(c.features).AddGRPCApplications(apps)
+	snapshotBuilder, err := NewSnapshotBuilder(nodeHash, c.localityPriorityMapper, c.features).AddGRPCApplications(apps)
 	if err != nil {
 		return fmt.Errorf("could not create xDS resource snapshot builder for nodeHash=%s: %w", nodeHash, err)
 	}
