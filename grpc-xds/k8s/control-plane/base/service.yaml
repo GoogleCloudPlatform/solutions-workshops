@@ -20,6 +20,7 @@ metadata:
   labels:
     app.kubernetes.io/component: control-plane
 spec:
+  clusterIP: None
   ports:
   - appProtocol: gRPC
     name: app
