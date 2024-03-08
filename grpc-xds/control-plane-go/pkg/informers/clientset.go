@@ -39,14 +39,15 @@ func NewClientSet(ctx context.Context, kubecontextName string) (*kubernetes.Clie
 	return clientset, nil
 }
 
-// clientConfig uses in-cluster config if the value of the kubeconfig flag is empty.
-// Otherwise, the specified kubeconfig files are parsed,
-// and the provided kubecontextName is selected as the current context.
+// clientConfig uses in-cluster config if the values of the kubeconfig flag
+// and KUBECONFIG environment variable are empty. Otherwise, the specified
+// kubeconfig files are parsed, and the provided kubecontextName is selected
+// as the current context.
 func clientConfig(logger logr.Logger, kubecontextName string) (*rest.Config, error) {
 	if kubeconfig == "" {
 		logger.V(2).Info("using in-cluster config")
 		if kubecontextName != "" {
-			logger.Info("ignoring provided kubeconfig context, as we are using in-cluster config", "context", kubecontextName)
+			logger.Info("ignoring provided kubeconfig context name, as we are using in-cluster config", "context", kubecontextName)
 		}
 		return rest.InClusterConfig()
 	}

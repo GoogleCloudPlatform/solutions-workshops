@@ -26,7 +26,6 @@ metadata:
 images:
 - name: td-grpc-bootstrap
   newName: gcr.io/trafficdirector-prod/td-grpc-bootstrap:0.16.0
-  digest: sha256:a1ac1aa71924c88743c614372e7bbeacf90d697aaed280a18948ad8dc8c6c90f
 patches:
 - path: patch-xds-init-td.yaml
   target:

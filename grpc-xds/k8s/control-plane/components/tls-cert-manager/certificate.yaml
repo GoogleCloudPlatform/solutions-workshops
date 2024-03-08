@@ -28,7 +28,7 @@ spec:
   dnsNames:
   - control-plane
   - control-plane.xds # kpt-set: control-plane.${control-plane-namespace}
-  - control-plane.xds.svc.cluster.local # kpt-set: control-plane.${control-plane-namespace}.svc.cluster.local
+  - control-plane.xds.svc.cluster.example.com # kpt-set: control-plane.${control-plane-namespace}.svc.cluster.example.com
   uris:
   - spiffe://grpc-xds.example.com/ns/xds/sa/control-plane # kpt-set: spiffe://${project-id}.svc.id.goog/ns/${control-plane-namespace}/sa/control-plane
   secretName: control-plane-certificate
@@ -46,7 +46,7 @@ spec:
   - server auth
   - client auth
   privateKey:
-    algorithm: RSA # gRPC-Java as of v1.60.1 only supports RSA for xDS, use the same algorithm for root CA certificate.
-    encoding: PKCS8 # Default is `PKCS1`. gRPC-Java requires PKCS #8
+    algorithm: ECDSA
+    encoding: PKCS8
     rotationPolicy: Always
-    size: 4096
+    size: 256

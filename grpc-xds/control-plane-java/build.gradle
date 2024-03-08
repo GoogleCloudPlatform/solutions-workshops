@@ -31,7 +31,7 @@ plugins {
     id 'java'
 
     id 'com.github.sherter.google-java-format' version '0.9'
-    id 'com.google.cloud.tools.jib' version '3.4.0'
+    id 'com.google.cloud.tools.jib' version '3.4.1'
     id 'com.google.protobuf' version '0.9.4'
 }
 
@@ -71,19 +71,21 @@ tasks.withType(Checkstyle) {
     }
 }
 
-def grpcVersion = '1.61.1'
+def googleOAuthClientVersion = '1.35.0'
+def grpcVersion = '1.62.2'
 def javaControlPlaneVersion = '1.0.42'
 def jetbrainsAnnotationsVersion = '24.1.0'
 def junitJupiterVersion = '5.10.2'
 def junitVersion = '4.13.2'
 def kubernetesClientJavaVersion = '20.0.0'
-def log4jVersion = '2.22.1'
+def log4jVersion = '2.23.0'
 def protobufVersion = '3.25.3'
 def slf4jVersion = '2.0.12'
 def snakeyamlEngineVersion = '2.7'
 def tomcatAnnotationsApiVersion = '6.0.53'
 
 dependencies {
+    implementation("com.google.oauth-client:google-oauth-client:${googleOAuthClientVersion}")
     implementation("com.google.protobuf:protobuf-java-util:${protobufVersion}")
     implementation("io.envoyproxy.controlplane:api:${javaControlPlaneVersion}")
     implementation("io.envoyproxy.controlplane:cache:${javaControlPlaneVersion}")

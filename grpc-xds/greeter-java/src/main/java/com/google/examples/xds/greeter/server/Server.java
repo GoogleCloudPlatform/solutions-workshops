@@ -61,7 +61,7 @@ public class Server {
     var healthStatusManager = new HealthStatusManager();
     // Set serving status for k8s startup and liveness probes:
     healthStatusManager.setStatus("", ServingStatus.SERVING);
-    // Set serving status for k8s startup and liveness probes:
+    // Set serving status for k8s readiness probes:
     healthStatusManager.setStatus(GreeterGrpc.SERVICE_NAME, ServingStatus.NOT_SERVING);
 
     ServerBuilder<?> serverBuilder;
@@ -167,7 +167,15 @@ public class Server {
   }
 
   /**
-   * Update the service serving state, to pass or fail health checks such as Kubernetes probes.
+   * Listen for status changes to the xDS control plane management server connection, and make
+   * Kubernetes readiness probes pass on first connection.
+   *
+   * <p>Subsequent loss of connection to the xDS control plane management server will
+   * <strong>not</strong> cause k8s readiness probes to fail, because the greeter server can
+   * continue using the last ACKed configuration.
+   *
+   * <p>TODO: Enhance this Listener so readiness probes only pass after the server Listener and
+   * RouteConfiguration resources have been ACKed.
    *
    * @param service the gRPC service name, including the package name, e.g., {@code
    *     helloworld.Greeter}, or the empty string if you want to set the serving state for the whole
@@ -179,14 +187,19 @@ public class Server {
       implements XdsServingStatusListener {
     @Override
     public void onServing() {
-      LOG.info("[" + service + "] Entering SERVING state.");
+      // Make k8s readiness probes pass.
+      LOG.info("[" + service + "] Connected to the xDS control plane management server.");
       healthStatusManager.setStatus(service, ServingStatus.SERVING);
     }
 
     @Override
     public void onNotServing(Throwable throwable) {
-      LOG.error("[" + service + "] Entering NOT_SERVING state:", throwable);
-      healthStatusManager.setStatus(service, ServingStatus.NOT_SERVING);
+      LOG.error(
+          "["
+              + service
+              + "] Lost connection to the xDS control plane management server,"
+              + " using cached configuration. Cause:",
+          throwable);
     }
   }
 }

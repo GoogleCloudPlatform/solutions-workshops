@@ -26,8 +26,7 @@ metadata:
     config.kubernetes.io/local-config: "true"
 images:
 - name: kubectl
-  newName: bitnami/kubectl
-  digest: sha256:0fdc1ab053addba12b63c232f7085ea1b3103d3bfea06c6210069e22b10d9555
+  newName: docker.io/bitnami/kubectl
 patches:
 - path: patch-node-labels-init.yaml
   target:
