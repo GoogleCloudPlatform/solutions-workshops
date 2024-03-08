@@ -100,6 +100,10 @@ dev-java: check-skaffold check-javac
 host-certs: check-skaffold
 	skaffold run --filename=k8s/host-certs/skaffold.yaml
 	skaffold delete --filename=k8s/host-certs/skaffold.yaml
+	@echo "*************************************************"
+	@echo " Certificate Validity :"
+	@openssl x509 -text -noout -in certs/certificates.pem | grep After
+	@echo "*************************************************"
 
 # copy-bastion-certs copies the workload TLS certificates from the bastion pod to the local developer workstation.
 .PHONY: copy-bastion-certs

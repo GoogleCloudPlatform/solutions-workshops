@@ -19,6 +19,7 @@ import (
 	"flag"
 	"fmt"
 
+	"github.com/googlecloudplatform/solutions-workshops/grpc-xds/control-plane-go/pkg/auth"
 	"github.com/googlecloudplatform/solutions-workshops/grpc-xds/control-plane-go/pkg/config"
 	"github.com/googlecloudplatform/solutions-workshops/grpc-xds/control-plane-go/pkg/informers"
 	"github.com/googlecloudplatform/solutions-workshops/grpc-xds/control-plane-go/pkg/logging"
@@ -36,6 +37,7 @@ func Run(ctx context.Context, flagset *flag.FlagSet, args []string) error {
 	logger := logging.NewLogger()
 	logging.SetGRPCLogger(logger)
 	ctx = logging.NewContext(ctx, logger)
+	auth.RegisterAll(ctx, logger)
 	servingPort, err := config.ServingPort()
 	if err != nil {
 		return fmt.Errorf("could not configure management server listening port: %w", err)

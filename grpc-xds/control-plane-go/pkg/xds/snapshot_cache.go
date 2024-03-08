@@ -110,7 +110,7 @@ func (c *SnapshotCache) CreateWatch(request *cachev3.Request, state stream.Strea
 // UpdateResources creates a new snapshot for each node hash in the cache,
 // based on the provided gRPC application configuration,
 // with the addition of server listeners and their associated route configurations.
-func (c *SnapshotCache) UpdateResources(ctx context.Context, logger logr.Logger, kubecontextName string, namespace string, updatedApps []GRPCApplication) error {
+func (c *SnapshotCache) UpdateResources(_ context.Context, logger logr.Logger, kubecontextName string, namespace string, updatedApps []GRPCApplication) error {
 	var errs []error
 	changed := c.appsCache.Put(kubecontextName, namespace, updatedApps)
 	if !changed {

@@ -14,6 +14,7 @@
 
 package com.google.examples.xds.controlplane.server;
 
+import com.google.examples.xds.controlplane.auth.Authenticators;
 import com.google.examples.xds.controlplane.config.ServerConfig;
 import com.google.examples.xds.controlplane.informers.InformerManager;
 import com.google.examples.xds.controlplane.informers.Kubecontext;
@@ -68,6 +69,8 @@ public class Server {
   /** Runs the server. */
   public void run(@NotNull ServerConfig config) throws Exception {
     XdsFeatures xdsFeatures = config.xdsFeatures();
+    Authenticators.registerAll();
+
     var xdsCache = new XdsSnapshotCache<>(FIXED_HASH, xdsFeatures);
     setupInformers(xdsCache, config.kubecontexts());
 

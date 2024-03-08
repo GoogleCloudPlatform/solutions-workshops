@@ -14,10 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Deploy to a GKE or kind Kubernetes cluster with an in-cluster xDS control plane,
-# and use workload TLS certificates from cert-manager.
-# cert-manager and the `root-ca` ClusterIssuer must already be set up in the cluster,
-# the `make kind-create` target sets this up.
+# Deploy to a GKE or kind Kubernetes cluster with a self-managed
+# xDS control plane, and use workload TLS certificates from cert-manager.
+# cert-manager and the root CA ClusterIssuer must already be set up
+# in the cluster.
 
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization

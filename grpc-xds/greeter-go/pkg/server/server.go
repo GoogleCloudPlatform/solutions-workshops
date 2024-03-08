@@ -135,12 +135,16 @@ func configureServerOptions(logger logr.Logger, useXDSCredentials bool, healthSe
 		grpc.MaxConcurrentStreams(grpcMaxConcurrentStreams),
 		xds.ServingModeCallback(func(addr net.Addr, args xds.ServingModeChangeArgs) {
 			switch args.Mode {
+			case connectivity.ServingModeStarting:
+				logger.Info("Attempting to connect to the xDS control plane management server")
 			case connectivity.ServingModeServing:
-				logger.Info("Greeter service", "servingMode", args.Mode.String())
+				// Make k8s readiness probes pass.
+				// TODO: Enhance this Listener so readiness probes only pass after the server Listener and RouteConfiguration resources have been ACKed.
+				logger.Info("Connected to the xDS control plane management server")
 				healthServer.SetServingStatus(helloworldpb.Greeter_ServiceDesc.ServiceName, healthpb.HealthCheckResponse_SERVING)
 			case connectivity.ServingModeNotServing:
-				// Make k8s readiness probes fail:
-				logger.Error(args.Err, "Greeter service", "servingMode", args.Mode.String())
+				// Do _not_ make k8s readiness probes fail, because the greeter server can continue using the last ACKed configuration.
+				logger.Error(args.Err, "Lost connection to the xDS control plane management server, using cached configuration", "xdsControlPlaneServingMode", args.Mode.String())
 				healthServer.SetServingStatus(helloworldpb.Greeter_ServiceDesc.ServiceName, healthpb.HealthCheckResponse_NOT_SERVING)
 			}
 		}),

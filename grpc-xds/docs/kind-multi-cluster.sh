@@ -91,7 +91,7 @@ for node in $(kind get nodes --name=grpc-xds-2) ; do
   docker exec "$node" ip route replace "$cluster1_service_cidr" via "$cluster1_control_plane_node_ip"
 done
 
-# Patch CoreDNS to forward DNS requests between the two clusters (cluster.local and cluster2.local)
+# Patch CoreDNS to forward DNS requests between the two clusters
 # See https://coredns.io/plugins/forward/ and 
 # https://kubernetes.io/docs/tasks/administer-cluster/dns-custom-nameservers/#configuration-of-stub-domain-and-upstream-nameserver-using-coredns
 #
@@ -100,7 +100,7 @@ cluster2_kube_dns_ip=$(kubectl --context=kind-grpc-xds-2 --namespace=kube-system
 corefile_cluster1=$(mktemp)
 kubectl --context=kind-grpc-xds --namespace=kube-system get configmap coredns --output=go-template='{{index .data "Corefile"}}' > "$corefile_cluster1"
 cat << EOF >> "$corefile_cluster1"
-cluster2.local:53 {
+cluster2.example.com:53 {
     errors
     cache 30
     forward . $cluster2_kube_dns_ip
@@ -114,7 +114,7 @@ cluster1_kube_dns_ip=$(kubectl --context=kind-grpc-xds --namespace=kube-system g
 corefile_cluster2=$(mktemp)
 kubectl --context=kind-grpc-xds-2 --namespace=kube-system get configmap coredns --output=go-template='{{index .data "Corefile"}}' > "$corefile_cluster2"
 cat << EOF >> "$corefile_cluster2"
-cluster.local:53 {
+cluster.example.com:53 {
     errors
     cache 30
     forward . $cluster1_kube_dns_ip
@@ -126,7 +126,7 @@ kubectl --context=kind-grpc-xds-2 --namespace=kube-system patch configmap coredn
 # Generate kubeconfig files for accessing the two Kubernetes clusters.
 kubeconfig_dir=k8s/control-plane/components/kubeconfig
 kind get kubeconfig --internal --name=grpc-xds \
-  | yq eval '(.current-context = "grpc-xds") | (.contexts[0].name = "grpc-xds")' \
+  | yq eval '(.current-context = "grpc-xds-1") | (.contexts[0].name = "grpc-xds-1")' \
   > "$kubeconfig_dir/kubeconfig-1.yaml"
 # When merging kubeconfigs, the first `current-context` will take precedence.
 # So changing `current-context` for the second cluster kubeconfig file is actually redundant.

@@ -43,3 +43,9 @@ out/
 # Certificates and keys
 *.pem
 /certs/
+
+# GKE workload certificate configuration
+TrustConfig*.yaml
+trust-config*.yaml
+WorkloadCertificateConfig*.yaml
+workload-certificate-config*.yaml

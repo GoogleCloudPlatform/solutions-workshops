@@ -31,7 +31,7 @@ nodes:
   - |
     kind: ClusterConfiguration
     networking:
-      dnsDomain: cluster2.local
+      dnsDomain: cluster2.example.com
 - role: worker
   labels:
     topology.kubernetes.io/zone: us-east-1a

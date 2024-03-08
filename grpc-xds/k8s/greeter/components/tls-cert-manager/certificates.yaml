@@ -45,10 +45,10 @@ spec:
   - server auth
   - client auth
   privateKey:
-    algorithm: RSA # gRPC-Java as of v1.60.1 only supports RSA for xDS, use the same algorithm for root CA certificate.
-    encoding: PKCS8 # Default is `PKCS1`. gRPC-Java requires PKCS #8
+    algorithm: ECDSA
+    encoding: PKCS8
     rotationPolicy: Always
-    size: 4096
+    size: 256
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate
@@ -81,7 +81,7 @@ spec:
   - server auth
   - client auth
   privateKey:
-    algorithm: RSA # gRPC-Java as of v1.60.1 only supports RSA for xDS, use the same algorithm for root CA certificate.
-    encoding: PKCS8 # Default is `PKCS1`. gRPC-Java requires PKCS #8
+    algorithm: ECDSA
+    encoding: PKCS8
     rotationPolicy: Always
-    size: 4096
+    size: 256

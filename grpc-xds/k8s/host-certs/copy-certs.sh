@@ -26,4 +26,4 @@ kubectl exec --context "$SKAFFOLD_KUBE_CONTEXT" --namespace host-certs --contain
   -- \
   tar -C /var/run/secrets/workload-spiffe-credentials -cf - . \
   | \
-  tar -C "$output_dir" -xf - 
+  tar -C "$output_dir" -xf -

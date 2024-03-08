@@ -28,7 +28,7 @@ plugins {
     id 'java'
 
     id 'com.github.sherter.google-java-format' version '0.9'
-    id 'com.google.cloud.tools.jib' version '3.4.0'
+    id 'com.google.cloud.tools.jib' version '3.4.1'
     id 'com.google.protobuf' version '0.9.4'
 }
 
@@ -93,12 +93,12 @@ tasks.withType(Checkstyle) {
     }
 }
 
-def grpcVersion = '1.61.1'
+def grpcVersion = '1.62.2'
 def gsonVersion = '2.10.1'
 def jetbrainsAnnotationsVersion = '24.1.0'
 def junitJupiterVersion = '5.10.2'
 def junitVersion = '4.13.2'
-def log4jVersion = '2.22.1'
+def log4jVersion = '2.23.0'
 def protobufVersion = '3.25.3'
 def slf4jVersion = '2.0.12'
 def tomcatAnnotationsApiVersion = '6.0.53'
