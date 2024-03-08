@@ -193,6 +193,7 @@ GKE cluster nodes and pods, even if the nodes do not have public IP addresses.
         --cluster-dns-scope vpc \
         --enable-dataplane-v2 \
         --enable-ip-alias \
+        --enable-l4-ilb-subsetting \
         --enable-master-global-access \
         --enable-mesh-certificates \
         --enable-private-nodes \
@@ -318,11 +319,13 @@ for each cluster:
 ```shell
 kubeconfig_dir=k8s/control-plane/components/kubeconfig
 kubeconfig_file="${kubeconfig_dir}/kubeconfig.yaml"
+rm -f "$kubeconfig_file"
 
 iter=1
 for zone in $ZONES; do
   cluster="grpc-xds-${zone}"
   context="grpc-xds-${iter}"
+  context="${context%-1}"
 
   kubectl config set-context "$context" \
     --cluster "$cluster" \
@@ -342,7 +345,7 @@ kubectl config set-credentials user \
   --auth-provider google \
   --kubeconfig "$kubeconfig_file"
 
-kubectl config use-context grpc-xds-1 --kubeconfig "$kubeconfig_file"
+kubectl config use-context grpc-xds --kubeconfig "$kubeconfig_file"
 ```
 
 You must recreate the kubeconfig file, by running the snippet above again,

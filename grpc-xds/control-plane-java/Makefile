@@ -26,7 +26,7 @@ debug:
 	skaffold debug --cleanup=false --detect-minikube=false --port-forward=user --skip-tests
 
 # dev builds and deploys the xDS control plane, and sets up file watching for automatic image
-# rebuilds and redeployments on source code changes.
+# rebuilds and redeploys on source code changes.
 .PHONY: dev
 dev:
 	skaffold dev --cleanup=false --detect-minikube=false --skip-tests
