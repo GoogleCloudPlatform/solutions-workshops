@@ -12,18 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package com.google.examples.xds.controlplane.informers;
+package com.google.examples.xds.controlplane.xds;
 
+import io.envoyproxy.envoy.config.core.v3.Locality;
 import java.util.Collection;
-import java.util.List;
-import org.jetbrains.annotations.Nullable;
+import java.util.Map;
+import org.jetbrains.annotations.NotNull;
 
-/** Kubecontext represents a kubeconfig context, containing a list of {@link InformerConfig}s. */
-public record Kubecontext(String context, Collection<InformerConfig> informers) {
+/** Determines EDS ClusterLoadAssignment locality priorites. */
+public interface LocalityPriorityMapper<T> {
 
-  /** Canonical constructor. */
-  public Kubecontext(@Nullable String context, @Nullable Collection<InformerConfig> informers) {
-    this.context = context == null ? "" : context;
-    this.informers = informers == null ? List.of() : List.copyOf(informers);
-  }
+  /**
+   * Constructs the priority map for the provided localities, based on information in the node hash.
+   *
+   * @param nodeHash hash of the node information.
+   * @param localities localities to prioritize.
+   */
+  @NotNull
+  Map<Locality, Integer> buildPriorityMap(
+      @NotNull T nodeHash, @NotNull Collection<Locality> localities);
 }

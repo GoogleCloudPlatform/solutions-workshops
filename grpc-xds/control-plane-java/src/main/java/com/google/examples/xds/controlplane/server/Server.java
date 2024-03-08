@@ -19,6 +19,7 @@ import com.google.examples.xds.controlplane.config.ServerConfig;
 import com.google.examples.xds.controlplane.informers.InformerManager;
 import com.google.examples.xds.controlplane.informers.Kubecontext;
 import com.google.examples.xds.controlplane.interceptors.LoggingServerInterceptor;
+import com.google.examples.xds.controlplane.xds.LocalityPriorityByZone;
 import com.google.examples.xds.controlplane.xds.XdsFeatures;
 import com.google.examples.xds.controlplane.xds.XdsSnapshotCache;
 import io.envoyproxy.controlplane.cache.NodeGroup;
@@ -53,8 +54,18 @@ public class Server {
 
   private static final Logger LOG = LoggerFactory.getLogger(Server.class);
 
-  /** Fixed node hash, so all xDS clients access the same cache snapshot. */
-  private static final NodeGroup<String> FIXED_HASH = node -> "default";
+  /**
+   * Use <code>locality.zone</code> as the node hash value, so all xDS clients in the same zone get
+   * the same xDS resource cache snapshot.
+   */
+  private static final NodeGroup<String> ZONE_HASH = new ZoneHash();
+
+  /**
+   * Use <code>locality.zone</code> from the requesting node to determine the priority of endpoint
+   * localities for EDS ClusterLoadAssignment resorces.
+   */
+  private static final LocalityPriorityByZone LOCALITY_PRIORITIES_BY_ZONE =
+      new LocalityPriorityByZone();
 
   /** Using the GKE workload certificate file paths for the server TLS certificate. */
   private static final String CA_CERTIFICATES_FILE =
@@ -71,7 +82,7 @@ public class Server {
     XdsFeatures xdsFeatures = config.xdsFeatures();
     Authenticators.registerAll();
 
-    var xdsCache = new XdsSnapshotCache<>(FIXED_HASH, xdsFeatures);
+    var xdsCache = new XdsSnapshotCache<>(ZONE_HASH, LOCALITY_PRIORITIES_BY_ZONE, xdsFeatures);
     setupInformers(xdsCache, config.kubecontexts());
 
     int controlPlanePort = config.servingPort();
@@ -100,10 +111,8 @@ public class Server {
     server.awaitTermination();
   }
 
-  @NotNull
   private void setupInformers(
-      @NotNull XdsSnapshotCache<String> cache, @NotNull Collection<Kubecontext> kubecontexts)
-      throws IOException {
+      @NotNull XdsSnapshotCache<String> cache, @NotNull Collection<Kubecontext> kubecontexts) {
     kubecontexts.forEach(
         kubecontext -> {
           var informerManager = new InformerManager<>(kubecontext.context(), cache);

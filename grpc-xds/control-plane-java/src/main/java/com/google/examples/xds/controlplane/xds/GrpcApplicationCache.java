@@ -16,7 +16,6 @@ package com.google.examples.xds.controlplane.xds;
 
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -54,6 +53,7 @@ class GrpcApplicationCache {
     return !apps.equals(oldApps);
   }
 
+  @SuppressWarnings("unused")
   @NotNull
   Set<GrpcApplication> get(@NotNull String kubecontext, @NotNull String namespace) {
     try {
@@ -71,28 +71,6 @@ class GrpcApplicationCache {
       mux.readLock().lock();
       for (Set<GrpcApplication> apps : cache.values()) {
         result.addAll(apps);
-      }
-    } finally {
-      mux.readLock().unlock();
-    }
-    return result;
-  }
-
-  /**
-   * GetOthers returns all cached gRPC applications _except_ the ones for the provided kubecontext
-   * and namespace. Use this method when building a new xDS resource snapshot with existing apps and
-   * updates from the Kubernetes informer for the provided kubecontext and namespace.
-   */
-  @NotNull
-  Set<GrpcApplication> getOthers(@NotNull String kubecontext, @NotNull String namespace) {
-    var keyToSkip = key(kubecontext, namespace);
-    var result = new HashSet<GrpcApplication>();
-    try {
-      mux.readLock().lock();
-      for (Map.Entry<ContextNamespace, Set<GrpcApplication>> entry : cache.entrySet()) {
-        if (!keyToSkip.equals(entry.getKey())) {
-          result.addAll(entry.getValue());
-        }
       }
     } finally {
       mux.readLock().unlock();

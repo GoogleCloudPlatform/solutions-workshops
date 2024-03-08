@@ -12,24 +12,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Set global Skaffold options
+export SKAFFOLD_BUILD_CONCURRENCY:=0
+export SKAFFOLD_CACHE_ARTIFACTS:=false
+export SKAFFOLD_CLEANUP:=false
+export SKAFFOLD_DETECT_MINIKUBE:=false
+export SKAFFOLD_INTERACTIVE:=false
+export SKAFFOLD_SKIP_TESTS:=true
+export SKAFFOLD_UPDATE_CHECK:=false
+
 .PHONY: all
 all: clean proto format lint test
 
 # run builds and deploys the xDS control plane, sets up port forwarding, and tails the logs.
 .PHONY: run
 run:
-	skaffold run --detect-minikube=false --port-forward=user --skip-tests --tail
+	skaffold run --port-forward=user --tail
 
 # debug builds and deploys the xDS control plane, and sets up remote debugging.
 .PHONY: debug
 debug:
-	skaffold debug --cleanup=false --detect-minikube=false --port-forward=user --skip-tests
+	skaffold debug --port-forward=user
 
 # dev builds and deploys the xDS control plane, and sets up file watching for automatic image
 # rebuilds and redeploys on source code changes.
 .PHONY: dev
 dev:
-	skaffold dev --cleanup=false --detect-minikube=false --skip-tests
+	skaffold dev
 
 # tail the logs of the xDS control plane.
 .PHONY: tail
@@ -61,7 +70,7 @@ format:
 
 .PHONY: image
 image:
-	skaffold build --detect-minikube=false --skip-tests
+	skaffold build
 
 .PHONY: imagejib
 imageko:

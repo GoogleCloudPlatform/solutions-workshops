@@ -77,6 +77,7 @@ public class LoggingServerInterceptor implements ServerInterceptor {
   @Override
   public <ReqT, RespT> Listener<ReqT> interceptCall(
       ServerCall<ReqT, RespT> call, Metadata requestHeaders, ServerCallHandler<ReqT, RespT> next) {
+    //noinspection Convert2Diamond
     return new SimpleForwardingServerCallListener<>(
         next.startCall(
             new SimpleForwardingServerCall<ReqT, RespT>(call) {

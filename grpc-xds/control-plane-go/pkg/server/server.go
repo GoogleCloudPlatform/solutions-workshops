@@ -96,7 +96,7 @@ func Run(ctx context.Context, servingPort int, healthPort int, kubecontexts []in
 	reflection.Register(server)
 	reflection.Register(healthGRPCServer)
 
-	xdsCache := xds.NewSnapshotCache(ctx, true, xds.FixedHash{}, xdsFeatures)
+	xdsCache := xds.NewSnapshotCache(ctx, true, xds.ZoneHash{}, xds.LocalityPriorityByZone{}, xdsFeatures)
 	xdsServer := serverv3.NewServer(ctx, xdsCache, xdsServerCallbackFuncs(logger))
 
 	registerXDSServices(server, xdsServer)

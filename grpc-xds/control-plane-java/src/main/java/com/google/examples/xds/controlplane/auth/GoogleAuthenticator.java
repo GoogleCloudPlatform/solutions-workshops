@@ -117,7 +117,9 @@ public class GoogleAuthenticator implements Authenticator {
       return true;
     }
     if (!(expiryObj instanceof Date)) {
-      LOG.warn("Assuming access token is expired, as expiry is unexpected object type: " + expiryObj.getClass().getCanonicalName());
+      LOG.warn(
+          "Assuming access token is expired, as expiry is unexpected object type: "
+              + expiryObj.getClass().getCanonicalName());
       return true;
     }
     var expiry = ((Date) expiryObj).toInstant();

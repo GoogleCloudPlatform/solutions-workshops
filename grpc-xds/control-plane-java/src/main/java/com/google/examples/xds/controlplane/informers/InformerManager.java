@@ -168,7 +168,7 @@ public class InformerManager<T> {
     cache.updateResources(kubecontext, namespace, appsForInformer);
   }
 
-  @SuppressWarnings({"null"})
+  @SuppressWarnings({"null", "DataFlowIssue"})
   // https://github.com/redhat-developer/vscode-java/issues/3124
   @NotNull
   private GrpcApplication toGrpcApplication(@NotNull V1EndpointSlice endpointSlice) {
@@ -276,8 +276,10 @@ public class InformerManager<T> {
       KubeConfig config = KubeConfig.loadKubeConfig(bufferedReader);
       config.setFile(new File(kubeConfigPath));
       if (kubecontext != null && !kubecontext.isBlank()) {
-        LOG.info("Using kubeconfig context {}", kubecontext);
+        LOG.info("Using kubeconfig context={}", kubecontext);
         config.setContext(kubecontext);
+      } else {
+        LOG.info("Using current kubeconfig context=" + config.getCurrentContext());
       }
       return Config.fromConfig(config);
     } catch (IOException e) {
