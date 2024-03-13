@@ -6,10 +6,10 @@ Kubernetes clusters using [podman](https://podman.io/) or
 kind is handy for development purposes if you don't have access to a hosted
 Kubernetes cluster and container image registry.
 
-Follow the instructions below to create a multi-node Kubernetes cluster using
+Follow the instructions below to create multi-node Kubernetes clusters using
 [kind](docs/kind.md), with fake
 [zone labels (`topology.kubernetes.io/zone`)](https://kubernetes.io/docs/reference/labels-annotations-taints/#topologykubernetesiozone)
-for simulating a cluster with nodes across multiple cloud provider zones, and
+for simulating clusters with nodes across multiple cloud provider zones, and
 with [cert-manager](https://cert-manager.io/docs/) and a root certificate
 authority (CA) to issue workload certificates for TLS and mTLS.
 
@@ -17,7 +17,11 @@ authority (CA) to issue workload certificates for TLS and mTLS.
 
 1.  If you want to use kind with Docker Desktop, increase the virtual machine
     CPU and memory allocation, so that the Kubernetes cluster will have
-    sufficient capacity. Set CPUs to 2 (or more), and memory to 4 GB (or more).
+    sufficient capacity.
+
+    For one kind cluster, set CPUs to 2 (or more), and memory to 4 GB (or more).
+
+    For two kind clusters, set CPUs to 2 (or more), and memory to 8 GB (or more).
 
     Refer to the
     [official documentation](https://docs.docker.com/desktop/settings/mac/#resources)
@@ -43,7 +47,7 @@ If you want to use kind with podman, follow the steps in this section.
     2.  For running two kind Kubernetes clusters:
 
         ```shell
-        podman machine set --cpus 4 --memory 8096
+        podman machine set --cpus 2 --memory 8096
         ```
 
     Verify the settings by inspecting the machine:
@@ -86,30 +90,52 @@ If you want to use kind with podman, follow the steps in this section.
 
     Remember to run this command again if you open a new terminal.
 
-## Creating the kind cluster
+## Creating the kind cluster(s)
 
-1.  Create the kind Kubernetes cluster with fake
-    [zone labels](https://kubernetes.io/docs/reference/labels-annotations-taints/#topologykubernetesiozone),
-    install cert-manager, and create a root CA issuer for workload TLS
-    certificates:
+The [`Makefile`](../Makefile) contains two targets to create kind clusters.
+Use one of the targets only.
 
-    ```shell
-    make kind-create
-    ```
+- Create two kind clusters, install cert-manager in both clusters with a
+  shared root CA, configure DNS forwarding between the clusters, and set up
+  static routes between the pod subnets of each cluster to enable direct
+  pod-to-pod communication across the clusters:
 
-    This command creates a
-    [kubeconfig context](https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/#context)
-    called `kind-grpc-xds`.
+  ```shell
+  make kind-create-multi-cluster
+  ```
 
-    The manifest rendering process assumes that the kubeconfig context name
-    matches the regular expression `kind.*`, if you use a kind cluster.
+  The
+  [kubeconfig contexts](https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/#context)
+  will be called `kind-grpc-xds` and `kind-grpc-xds-2`.
 
-    The command also sets the `xds` namespace as the default namespace
-    for the kubeconfig context.
+- Create one kind cluster, and install cert-manager:
+
+  ```shell
+  make kind-create
+  ```
+
+  The
+  [kubeconfig context](https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/#context)
+  will be called `kind-grpc-xds`.
+
+Both targets set the `xds` namespace as the default namespace for the
+kubeconfig contexts.
+
+You can view the kind cluster configuration files:
+[`kind-cluster-config.yaml`](kind-cluster-config.yaml) and
+[`kind-cluster-config-2.yaml`](kind-cluster-config-2.yaml).
 
 ## Cleaning up
 
-1.  When you are done, delete the kind Kubernetes cluster:
+1.  When you are done, delete the kind Kubernetes cluster
+
+    If you created two kind clusters, delete both:
+
+    ```shell
+    make kind-delete-multi-cluster
+    ```
+
+    Or, if you created only one kind cluster, delete it:
 
     ```shell
     make kind-delete

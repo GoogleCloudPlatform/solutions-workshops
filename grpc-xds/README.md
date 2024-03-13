@@ -15,9 +15,9 @@ Go and Java. The sample applications implement the
 gRPC service.
 
 The scripts and manifests in this directory enable running the xDS control
-plane and the sample gRPC application on either a
+plane and the sample gRPC application on either
 [Google Kubernetes Engine (GKE)](https://cloud.google.com/kubernetes-engine/docs)
-cluster, or on a local [kind](https://kind.sigs.k8s.io/) Kubernetes cluster.
+clusters, or on local [kind](https://kind.sigs.k8s.io/) Kubernetes clusters.
 
 The code in this repository in not recommended for production environments.
 If you want a production-ready xDS control plane, we recommend
@@ -44,35 +44,39 @@ receiving a response from the next hop (defined by the `NEXT_HOP` environment
 variable), the intermediary service appends its own host name and zone, before
 returning the response to the client.
 
+The [`hack`](hack) directory contains shell scripts for deploying to multiple
+Kubernetes clusters.
+
 The [`k8s`](k8s) directory contains Kubernetes manifests and patches that are
-used by both the Go and Java implementations of the control plane and the
-sample application. Patches that are specific to the Go and Java
+used by both the Go and Java implementations of the xDS control plane and the
+sample gRPC applications. Patches that are specific to the Go and Java
 implementations can be found in `k8s` subdirectories of
 `control-plane-(go|java)` and `greeter-(go|java)`. Skaffold renders the
 complete manifests using Kustomize.
 
 The [`k8s/troubleshoot`](k8s/troubleshoot) directory contains Kubernetes
-manifests that you can use to deploy a pod with networking and gRPC
+manifests that you can use to deploy a Pod with networking and gRPC
 troubleshooting tools to your cluster.
 
 ## Prerequisites
 
-To run the samples, you need a Kubernetes cluster. The sample works best with
+To run the samples, you need one or more Kubernetes clusters. The sample works
+great with
 [Google Kubernetes Engine (GKE)](https://cloud.google.com/kubernetes-engine/docs)
 and [Artifact Registry](https://cloud.google.com/artifact-registry/docs),
-but you can also use other clusters and container image registries, including
-local clusters using [kind](https://kind.sigs.k8s.io/).
+but you can also use local clusters using [kind](https://kind.sigs.k8s.io/).
 
 The [`docs`](docs) directory contains instructions on both
-[creating a GKE cluster and Artifact Registry repository](docs/gke.md), or
-creating a multi-node Kubernetes cluster using [kind](docs/kind.md), and on
+[creating GKE clusters and an Artifact Registry container image repository](docs/gke.md),
+or creating multi-node Kubernetes clusters using [kind](docs/kind.md), and on
 creating certificate authorities (CAs) for issuing workload TLS certificates.
 
-If you want to build and deploy the Java control plane and sample application,
-you need [Java 17](https://adoptium.net/).
+If you want to build and deploy the Java implementation of the xDS control
+plane and sample gRPC application, you need [Java 17](https://adoptium.net/).
 
-If you want to build and deploy the Go control plane and sample application,
-you need [Go 1.21](https://go.dev/doc/install) or later.
+If you want to build and deploy the Go implementation of the xDS control plane
+and sample gRPC applications, you need [Go 1.21](https://go.dev/doc/install)
+or later.
 
 You also need the following tools:
 
@@ -105,16 +109,16 @@ to ensure that your cluster and the prerequisite tools are set up correctly.
 ## Local Kubernetes cluster setup using kind
 
 Follow the the documentation on
-[create a multi-node kind Kubernetes cluster](docs/kind.md) with fake
+[create multi-node kind Kubernetes clusters](docs/kind.md) with fake
 [zone labels (`topology.kubernetes.io/zone`)](https://kubernetes.io/docs/reference/labels-annotations-taints/#topologykubernetesiozone),
 and set up a root certificate authority using
 [cert-manager](https://cert-manager.io/docs/)
 to issue workload TLS certificates.
 
-## GKE cluster and Artifact Registry setup
+## GKE and Artifact Registry setup
 
 1.  Follow the documentation on
-    [creating a GKE cluster, an Artifact Registry container image repository, and certificate authorities for issuing workload TLS certificates](docs/gke.md).
+    [creating GKE clusters, an Artifact Registry container image repository, and certificate authorities for issuing workload TLS certificates](docs/gke.md).
 
 2.  Create and export an environment variable called `SKAFFOLD_DEFAULT_REPO`
     to point to your container image registry:
@@ -133,23 +137,35 @@ to issue workload TLS certificates.
     - `REPOSITORY`: the name of your Artifact Registry
       [container image repository](https://cloud.google.com/artifact-registry/docs/docker).
 
-## Running the xDS control plane and sample gRPC application
+## Running the xDS control plane and sample gRPC applications
 
-1.  Build the container images for the control plane and the sample gRPC
-    application, render the Kubernetes resource manifests, apply them to the
+1.  Build the container images for the xDS control plane and the sample gRPC
+    applications, render the Kubernetes resource manifests, apply them to the
     Kubernetes cluster, and set up port forwarding.
 
-    Using the Go implementations:
+    - Using the Go implementations, deploying across two clusters:
 
-    ```shell
-    make run-go
-    ```
+      ```shell
+      make run-go-multi-cluster
+      ```
 
-    Using the Java implementations:
+    - Using the Go implementations, deploying to one cluster only:
 
-    ```shell
-    make run-java
-    ```
+      ```shell
+      make run-go
+      ```
+
+    - Using the Java implementations, deploying across two clusters:
+
+      ```shell
+      make run-java-multi-cluster
+      ```
+
+    - Using the Java implementations, deploying to one cluster only:
+
+      ```shell
+      make run-java
+      ```
 
     Leave Skaffold running so that port forwarding keeps working.
 
@@ -160,19 +176,21 @@ to issue workload TLS certificates.
     You can safely ignore these messages as long as the deployment proceeds,
     and you eventually see the message `Deployments stabilized in __ seconds`.
 
-2.  In a new terminal, tail the control plane logs:
+2.  In a new terminal, tail the xDS control plane logs:
 
     ```shell
     make tail-control-plane
     ```
 
-3.  In another new terminal, tail the greeter-intermediary logs:
+3.  In another new terminal, tail the greeter-intermediary logs from one
+    of the clusters:
 
     ```shell
     make tail-greeter-intermediary
     ```
 
-4.  In yet another new terminal, tail the greeter-leaf logs:
+4.  In yet another new terminal, tail the greeter-leaf logs from one of the
+    clusters:
 
     ```shell
     make tail-greeter-leaf
@@ -191,7 +209,8 @@ to issue workload TLS certificates.
     The workload certificate, CA certificate, and private key will be copied
     to the `certs` directory.
 
-6.  Send a request to the `greeter-leaf` server, using mTLS and the
+6.  Send a request to the `greeter-leaf` server in one of the clusters, using
+    mTLS and the
     [DNS resolver](https://grpc.io/docs/guides/custom-name-resolution/):
 
     ```shell
@@ -218,7 +237,8 @@ to issue workload TLS certificates.
     make request-leaf-mtls-insecure
     ```
 
-7.  Send a request to the `greeter-intermediary` server, using mTLS and the
+7.  Send a request to the `greeter-intermediary` server in one of the
+    clusters, using mTLS and the
     [DNS resolver](https://grpc.io/docs/guides/custom-name-resolution/):
 
     ```shell
@@ -245,34 +265,33 @@ to issue workload TLS certificates.
     make request-mtls-insecure
     ```
 
-8.  Observe the control plane logs as you scale the greeter service
-    deployments. For instance, you can scale the `greeter-leaf` deployment:
+8.  Observe the xDS control plane logs as you scale the greeter Deployments.
+    For instance, you can scale the `greeter-leaf` Deployment in one of the
+    clusters:
 
     ```shell
     kubectl scale deployment/greeter-leaf --namespace=xds --replicas=2
     ```
 
-9.  To explore the cluster resources, you may find it convenient to set the
-    namespace for your current kubeconfig context entry:
+9.  To explore resources across both clusters, use the
+    `kubectl config current-context`, `kubectl config get-contexts`, and
+    `kubectl config use-context` commands.
+
+10. To delete the xDS control plane and greeter Deployment and Service objects,
+    without deleting the `xds` namespace or other resources, such as the GKE
+    workload certificate configuration resources, or `cert-manager`:
 
     ```shell
-    kubectl config set-context --current --namespace=xds
-    ```
-
-10. To delete the control plane and greeter pods, without deleting the `xds`
-    namespace or other resources, such as the GKE workload certificate
-    configuration resources, or `cert-manager`:
-
-    ```shell
-    make delete
+    make delete-multi-cluster
     ```
 
 See the [`Makefile`](Makefile) for examples of other commands you can run.
 
 ## Development
 
-Set up a local file watch that automatically rebuilds and redeploys the
-applications on code changes:
+Deploy to one cluster only, and set up a local file watch that automatically
+rebuilds and redeploys the xDS control plane and gRPC applications on code
+changes:
 
 Using Go:
 
@@ -288,8 +307,8 @@ make dev-java
 
 ## Remote debugging
 
-Set up remote debugging by exposing and port-forwarding to delve (for Go) or
-the JDWP agent (for Java):
+Deploy to one cluster only, and set up remote debugging by exposing and
+port-forwarding to `delve` (for Go) or the JDWP agent (for Java):
 
 Using Go:
 
@@ -305,8 +324,8 @@ make debug-java
 
 ## Troubleshooting
 
-1.  Create a pod in the Kubernetes cluster with various tools available to
-    troubleshoot issues.
+1.  Create a bastion Pod in one of the Kubernetes clusters with various tools
+    available to troubleshoot issues.
 
     ```shell
     make run-bastion
@@ -314,7 +333,11 @@ make debug-java
 
     This takes a few minutes, as an init container installs a number of tools.
 
-2.  Open an interactive shell in the pod's container:
+    The bastion Pod is configured to only have access to the API server of the
+    cluster where the Pod is deployed. To troubleshoot two clusters, create
+    a bastion Pod in each cluster.
+
+2.  Open an interactive shell in the Pod's container:
 
     ```shell
     make troubleshoot
@@ -322,7 +345,7 @@ make debug-java
 
 Some troubleshooting commands:
 
-- View the Kubernetes pod IP addresses:
+- View the Kubernetes Pod IP addresses:
 
   ```shell
   kubectl get pods --namespace=xds --output=wide
@@ -335,7 +358,7 @@ Some troubleshooting commands:
   grpcurl -plaintext POD_IP:50052 envoy.service.status.v3.ClientStatusDiscoveryService/FetchClientStatus | yq --prettyPrint
   ```
 
-  Replace `POD_IP` with the IP address of the Kubernetes pod.
+  Replace `POD_IP` with the IP address of the Kubernetes Pod.
 
 - List the ACK'ed xDS resources of a gRPC server using `grpcdebug`:
 
@@ -396,7 +419,7 @@ Some troubleshooting commands:
     helloworld.Greeter/SayHello
   ```
 
-- View the xDS bootstrap configuration file of the troubleshooting pod:
+- View the xDS bootstrap configuration file of the bastion Pod:
 
   ```shell
   cat $GRPC_XDS_BOOTSTRAP

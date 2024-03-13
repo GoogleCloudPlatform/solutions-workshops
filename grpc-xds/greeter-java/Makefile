@@ -24,15 +24,20 @@ export SKAFFOLD_UPDATE_CHECK:=false
 .PHONY: all
 all: clean proto format lint test
 
-# run builds and deploys both greeter-intermediary and greeter-leaf, sets up port forwarding, and tails the logs.
+# run builds and deploys both greeter-intermediary and greeter-leaf and sets up port forwarding.
 .PHONY: run
 run:
-	skaffold run --port-forward=user --tail
+	skaffold run --port-forward=user
+
+# run-no-port-forward builds and deploys both greeter-intermediary and greeter-leaf.
+.PHONY: run-no-port-forward
+run-no-port-forward:
+	skaffold run --port-forward=off
 
 # run-no-xds builds and deploys both greeter-intermediary and greeter-leaf with no xDS configuration.
 .PHONY: run-no-xds
 run-no-xds:
-	skaffold run --port-forward=user --profile=no-xds --tail
+	skaffold run --port-forward=user --profile=no-xds
 
 # debug builds and deploys both greeter-intermediary and greeter-leaf, and sets up remote debugging.
 .PHONY: debug

@@ -96,7 +96,7 @@ spec:
           #           }
           #         }
           #
-          # Set `locality.zone` from a file if the GKE metadata server is not available,
+          # Set `locality.zone` from a file if the GKE metadata server is unavailable,
           # e.g., when running on a local kind cluster. Also handle the special cases of
           # Cloud Workstations (https://cloud.google.com/workstations/docs) and
           # gLinux Rodete (https://cloud.google.com/blog/topics/developers-practitioners/how-google-got-to-rolling-linux-releases-for-desktops).

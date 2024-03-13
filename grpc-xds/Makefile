@@ -21,17 +21,11 @@ export SKAFFOLD_INTERACTIVE:=false
 export SKAFFOLD_SKIP_TESTS:=true
 export SKAFFOLD_UPDATE_CHECK:=false
 
-# kind-create-multiple creates two kind Kubernetes cluster, each with multiple nodes.
+# kind-create-multi-cluster creates two kind Kubernetes cluster, each with multiple nodes.
 # It also installs prerequisites such as cert-manager in both clusters.
-.PHONY: kind-create-multiple
-kind-create-multiple: check-kind check-skaffold check-yq
-	./docs/kind-multi-cluster.sh
-
-# kind-delete-multiple deletes the two kind Kubernetes clusters.
-.PHONY: kind-delete-multiple
-kind-delete-multiple: check-kind
-	kind delete cluster --name=grpc-xds
-	kind delete cluster --name=grpc-xds-2
+.PHONY: kind-create-multi-cluster
+kind-create-multi-cluster: check-kind check-skaffold check-yq
+	./hack/kind-multi-cluster.sh
 
 # kind-create creates a kind Kubernetes cluster with multiple nodes.
 # It also installs prerequisites such as cert-manager.
@@ -41,18 +35,36 @@ kind-create: kind-create-cluster-only cert-manager
 # kind-create-cluster-only creates a kind Kubernetes cluster with multiple nodes.
 .PHONY: kind-create-cluster-only
 kind-create-cluster-only: check-kind check-kubectl
-	kind create cluster --config=docs/kind-cluster-config.yaml
+	kind create cluster --config=hack/kind-cluster-config.yaml
 	kubectl config set-context --current --namespace=xds
+
+# kind-delete-multi-cluster deletes the two kind Kubernetes clusters.
+.PHONY: kind-delete-multi-cluster
+kind-delete-multi-cluster: check-kind
+	kind delete cluster --name=grpc-xds
+	kind delete cluster --name=grpc-xds-2
 
 # kind-delete deletes the kind Kubernetes cluster.
 .PHONY: kind-delete
 kind-delete: check-kind
 	kind delete cluster --name=grpc-xds
 
+# run-go-multi-cluster builds and deploys control-plane-go and greeter-go to one cluster,
+# and greeter-go to the other cluster.
+.PHONY: run-go-multi-cluster
+run-go-multi-cluster: check-skaffold check-go
+	./hack/deploy-multi-cluster.sh go
+
 # run-go builds and deploys control-plane-go and greeter-go.
 .PHONY: run-go
 run-go: check-skaffold check-go
 	skaffold run --module=go --port-forward=user
+
+# run-java-multi-cluster builds and deploys control-plane-java and greeter-java to one cluster,
+# and greeter-java to the other cluster.
+.PHONY: run-java-multi-cluster
+run-java-multi-cluster: check-skaffold check-javac
+	./hack/deploy-multi-cluster.sh java
 
 # run-java builds and deploys control-plane-java and greeter-java.
 .PHONY: run-java
@@ -203,14 +215,14 @@ run-bastion: check-skaffold
 troubleshoot: check-kubectl
 	kubectl exec --container=app --namespace=xds --stdin --tty deployment/bastion -- /bin/sh
 
-# delete-control-plane deletes the Services and Deployments for control-plane-[go|java].
+# delete-control-plane deletes the Deployments, Services, and ConfigMaps for control-plane-[go|java].
 .PHONY: delete-control-plane
 delete-control-plane: check-kubectl
 	kubectl delete --ignore-not-found --namespace=xds deployment control-plane
 	kubectl delete --ignore-not-found --namespace=xds service control-plane
 	kubectl delete --ignore-not-found --namespace=xds configmaps --selector='app.kubernetes.io/part-of=grpc-xds'
 
-# delete-greeter deletes the Services and Deployments for greeter-[intermediary|leaf].
+# delete-greeter deletes the Deployments and Services for greeter-[intermediary|leaf].
 .PHONY: delete-greeter
 delete-greeter: check-kubectl
 	kubectl delete --ignore-not-found --namespace=xds deployment greeter-intermediary greeter-leaf
@@ -220,6 +232,12 @@ delete-greeter: check-kubectl
 # but leaves the bastion Pod running.
 .PHONY: delete
 delete: delete-control-plane delete-greeter
+
+# delete-multi-cluster deletes the Deployments, Service, and ConfigMaps for control-plane and
+# greeter-[intermediary|leaf] in both clusters, but leaves any bastion Pods running.
+.PHONY: delete-multi-cluster
+delete-multi-cluster: check-kubectl
+	./hack/delete-multi-cluster.sh
 
 # clean removes running instances of control-plane-[go|java], greeter-[go|java], and bastion.
 .PHONY: clean
