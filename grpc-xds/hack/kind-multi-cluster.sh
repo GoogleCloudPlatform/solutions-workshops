@@ -21,6 +21,10 @@ if ! command -v docker &> /dev/null ; then
   exit 1
 fi
 
+repo_dir=$(git rev-parse --show-toplevel)
+base_dir="${repo_dir}/grpc-xds"
+pushd "$base_dir"
+
 # Workaround for
 # https://kind.sigs.k8s.io/docs/user/known-issues/#pod-errors-due-to-too-many-open-files
 KIND_EXPERIMENTAL_PROVIDER=${KIND_EXPERIMENTAL_PROVIDER:-}
@@ -54,13 +58,13 @@ export SKAFFOLD_SKIP_TESTS=true
 export SKAFFOLD_UPDATE_CHECK=false
 
 # Create the first cluster.
-kind create cluster --config=docs/kind-cluster-config.yaml
+kind create cluster --config=hack/kind-cluster-config.yaml
 kubectl config set-context --current --namespace=xds
 skaffold run --filename=k8s/cert-manager/skaffold.yaml --module=cert-manager
 skaffold run --filename=k8s/cert-manager/skaffold.yaml --module=root-ca
 
 # Create the second cluster.
-kind create cluster --config=docs/kind-cluster-config-2.yaml
+kind create cluster --config=hack/kind-cluster-config-2.yaml
 kubectl config set-context --current --namespace=xds
 skaffold run --filename=k8s/cert-manager/skaffold.yaml --module=cert-manager
 skaffold run --filename=k8s/cert-manager/skaffold.yaml --module=root-ca-external
@@ -142,3 +146,5 @@ KUBECONFIG="$kubeconfig_dir/kubeconfig-1.yaml:$kubeconfig_dir/kubeconfig-2.yaml"
 
 # Set the current kubectl context to the first cluster.
 kubectl config use-context kind-grpc-xds
+
+popd

@@ -72,7 +72,7 @@ func zoneFromGRPCXDSBootstrapFile() (string, error) {
 	return bootstrapConfig.NodeProto.Locality.Zone, nil
 }
 
-// zoneFromGRPCXDSBootstrapFile returns the zone name of the Kubernetes cluster
+// zoneFromGCPMetadataServer returns the zone name of the Kubernetes cluster
 // node where this Pod is scheduled, by querying the Google Kubernetes Engine
 // or Compute Engine
 // [metadata server]: https://cloud.google.com/compute/docs/metadata/overview

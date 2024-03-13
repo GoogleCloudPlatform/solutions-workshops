@@ -26,10 +26,15 @@ export SKAFFOLD_UPDATE_CHECK:=false
 .PHONY: all
 all: clean proto format lint test
 
-# run builds and deploys the xDS control plane, sets up port forwarding, and tails the logs.
+# run builds and deploys the xDS control plane and sets up port forwarding.
 .PHONY: run
 run:
-	skaffold run --port-forward=user --tail
+	skaffold run --port-forward=user
+
+# run-no-port-forward builds and deploys the xDS control plane.
+.PHONY: run-no-port-forward
+run-no-port-forward:
+	skaffold run --port-forward=off
 
 # debug builds and deploys the xDS control plane, and sets up remote debugging.
 .PHONY: debug
