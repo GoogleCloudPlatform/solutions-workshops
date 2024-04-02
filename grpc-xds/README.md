@@ -438,6 +438,7 @@ make clean
 - [API Concepts](https://kubernetes.io/docs/reference/using-api/api-concepts/)
 - [Headless Services](https://kubernetes.io/docs/concepts/services-networking/service/#headless-services)
 - [EndpointSlices](https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/)
+- [Namespace Sameness](https://github.com/kubernetes/community/blob/dd4c8b704ef1c9c3bfd928c6fa9234276d61ad18/sig-multicluster/namespace-sameness-position-statement.md)
 
 ## xDS references
 
@@ -445,8 +446,20 @@ make clean
 - [xDS REST and gRPC protocol](https://www.envoyproxy.io/docs/envoy/latest/api-docs/xds_protocol)
 - [Aggregated Discovery Service (ADS)](https://www.envoyproxy.io/docs/envoy/latest/configuration/overview/xds_api#aggregated-discovery-service)
 - [gRFC A27: xDS-Based Global Load Balancing](https://github.com/grpc/proposal/blob/972b69ab1f0f7f6079af81a8c2b8a01a15ce3bec/A27-xds-global-load-balancing.md)
+- [gRFC A28: gRPC xDS traffic splitting and routing](https://github.com/grpc/proposal/blob/f6d38361da31ffad3158dbef84f8af3cdd89d8c1/A28-xds-traffic-splitting-and-routing.md)
 - [gRFC A29: xDS-Based Security for gRPC Clients and Servers](https://github.com/grpc/proposal/blob/deaf1bcf248d1e48e83c470b00930cbd363fab6d/A29-xds-tls-security.md)
 - [gRFC A36: xDS-Enabled Servers](https://github.com/grpc/proposal/blob/fd10c1a86562b712c2c5fa23178992654c47a072/A36-xds-for-servers.md)
+- [gRFC A37: xDS Aggregate and Logical DNS Clusters](https://github.com/grpc/proposal/blob/7c05212d14f4abef5f74f71695f95ba8dd3f7dd3/A37-xds-aggregate-and-logical-dns-clusters.md)
+- [gRFC A41: xDS RBAC Support](https://github.com/grpc/proposal/blob/c83f0cb8ed534c4192e0e5d7a4550a1f5a76ef65/A41-xds-rbac.md)
+- [gRFC A42: xDS Ring Hash LB Policy](https://github.com/grpc/proposal/blob/1d50990f5e95d5d15233e35e56ac1dc33fcd56b3/A42-xds-ring-hash-lb-policy.md)
+- [gRFC A47: xDS Federation](https://github.com/grpc/proposal/blob/e85c66e48348867937688d89117bad3dcaa6f4f5/A47-xds-federation.md)
+- [gRFC A48: xDS Least Request LB Policy](https://github.com/grpc/proposal/blob/fc4ade7b042a614aba5df8b6b82f4ca55f59a37e/A48-xds-least-request-lb-policy.md)
+- [gRFC A52: gRPC xDS Custom Load Balancer Configuration](https://github.com/grpc/proposal/blob/7c05212d14f4abef5f74f71695f95ba8dd3f7dd3/A52-xds-custom-lb-policies.md)
+- [gRFC A53: Option for Ignoring xDS Resource Deletion](https://github.com/grpc/proposal/blob/1f9b52226bf45d9f54d0eda34446b4cffabfcec6/A53-xds-ignore-resource-deletion.md)
+- [gRFC A57: XdsClient Failure Mode Behavior](https://github.com/grpc/proposal/blob/f1ef153e9955d3507e8322727e96e56e04933605/A57-xds-client-failure-mode-behavior.md)
+- [gRFC A65: mTLS Credentials in xDS Bootstrap File](https://github.com/grpc/proposal/blob/e027a56d7d900b47948602e6d72413b5cba80d54/A65-xds-mtls-creds-in-bootstrap.md)
+- [xRFC TP1: `xdstp://` structured resource naming, caching and federation support](https://github.com/cncf/xds/blob/70da609f752ed4544772f144411161d41798f07e/proposals/TP1-xds-transport-next.md)
+- [xRFC TP2: Dynamically Generated Cacheable xDS Resources](https://github.com/cncf/xds/blob/70da609f752ed4544772f144411161d41798f07e/proposals/TP2-dynamically-generated-cacheable-xds-resources.md)
 - [xDS Features in gRPC](https://github.com/grpc/grpc/blob/1b31c6e0ba711787c05e8e78719896a682fca102/doc/grpc_xds_features.md)
 
 ## Disclaimer

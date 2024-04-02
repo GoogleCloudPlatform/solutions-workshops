@@ -16,7 +16,6 @@ PKG := github.com/googlecloudplatform/solutions-workshops/grpc-xds/greeter-go
 
 # Set global Skaffold options
 export SKAFFOLD_BUILD_CONCURRENCY:=0
-export SKAFFOLD_CACHE_ARTIFACTS:=false
 export SKAFFOLD_CLEANUP:=false
 export SKAFFOLD_DETECT_MINIKUBE:=false
 export SKAFFOLD_INTERACTIVE:=false
