@@ -29,8 +29,9 @@ build:
       dependencies:
         paths: ["cmd", "config", "pkg", "third_party", "go.mod", "main.go"]
         ignore: [".gitignore", ".golangci.yaml", "control-plane-go", "go.sum", "Makefile", "NOTICE", "README.md"]
+      flags: ["-buildvcs=false"]
   tagPolicy:
-    gitCommit: {}
+    inputDigest: {}
 deploy:
   kubectl: {}
 manifests:

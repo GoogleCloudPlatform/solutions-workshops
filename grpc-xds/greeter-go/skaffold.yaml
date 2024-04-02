@@ -29,8 +29,9 @@ build:
       dependencies:
         paths: ["cmd", "pkg", "third_party", "go.mod", "main.go"]
         ignore: [".gitignore", ".golangci.yaml", ".run", "docs", "go.sum", "greeter-go", "k8s", "Makefile", "NOTICE", "README.md"]
+      flags: ["-buildvcs=false"]
   tagPolicy:
-    gitCommit: {}
+    inputDigest: {}
 deploy:
   kubectl: {}
 manifests:

@@ -186,7 +186,7 @@ GKE cluster nodes and pods, even if the nodes do not have public IP addresses.
 
     ```shell
     iter=1
-    for zone in $ZONES; do
+    for zone in "${ZONES[@]}"; do
       gcloud container clusters create grpc-xds \
         --cluster-dns clouddns \
         --cluster-dns-domain "cluster${iter%1}.example.com" \
@@ -220,7 +220,7 @@ GKE cluster nodes and pods, even if the nodes do not have public IP addresses.
 
     ```shell
     public_ip="$(dig TXT +short o-o.myaddr.l.google.com @ns1.google.com | sed 's/"//g')"
-    for zone in $ZONES; do
+    for zone in "${ZONES[@]}"; do
       gcloud container clusters update grpc-xds \
         --enable-master-authorized-networks \
         --location "$zone" \
@@ -322,7 +322,7 @@ kubeconfig_file="${kubeconfig_dir}/kubeconfig.yaml"
 rm -f "$kubeconfig_file"
 
 iter=1
-for zone in $ZONES; do
+for zone in "${ZONES[@]}"; do
   cluster="grpc-xds-${zone}"
   context="grpc-xds-${iter}"
   context="${context%-1}"
@@ -332,11 +332,14 @@ for zone in $ZONES; do
     --user user \
     --kubeconfig "$kubeconfig_file"
 
+  cluster_ca_file="$(mktemp)"
+  gcloud container clusters describe grpc-xds --format='value(masterAuth.clusterCaCertificate)' --location=$zone | base64 --decode > "$cluster_ca_file"
   kubectl config set-cluster "$cluster" \
-    --certificate-authority <(gcloud container clusters describe grpc-xds --format='value(masterAuth.clusterCaCertificate)' --location=$zone | base64 --decode) \
+    --certificate-authority "$cluster_ca_file" \
     --embed-certs \
     --server "https://$(gcloud container clusters describe grpc-xds --format='value(privateClusterConfig.privateEndpoint)' --location=$zone)" \
     --kubeconfig "$kubeconfig_file"
+  rm -f "$cluster_ca_file"
 
   iter=$(expr $iter + 1)
 done
@@ -444,7 +447,7 @@ spec:
     - certificateAuthorityServiceURI: //privateca.googleapis.com/projects/${PROJECT_ID}/locations/${LOCATION}/caPools/grpc-xds-root-ca-pool
 EOF
 
-for zone in $ZONES; do
+for zone in "${ZONES[@]}"; do
   context="gke_${PROJECT_ID}_${zone}_grpc-xds"
   kubectl apply --filename WorkloadCertificateConfig.yaml --context "$context"
   kubectl apply --filename TrustConfig.yaml --context "$context"
@@ -478,7 +481,7 @@ cert-manager.
 1.  Delete the GKE clusters:
 
     ```shell
-    for zone in $ZONES; do
+    for zone in "${ZONES[@]}"; do
       gcloud container clusters delete grpc-xds \
         --location "$zone" --quiet --async
     done

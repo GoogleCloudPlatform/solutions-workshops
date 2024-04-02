@@ -29,7 +29,7 @@ build:
       # since this is a sample implementation created for learning purposes.
       fromImage: gcr.io/distroless/java17-debian12:debug-nonroot
   tagPolicy:
-    gitCommit: {}
+    inputDigest: {}
 deploy:
   kubectl: {}
 manifests:
