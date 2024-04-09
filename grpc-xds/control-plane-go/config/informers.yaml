@@ -19,14 +19,7 @@
 # If the kubeconfig `context` name is blank or omitted,
 # the `current-context` value is used.
 
-- context: ""
-  informers:
-  - namespace: xds
-    services:
-    - greeter-intermediary
-    - greeter-leaf
-- context: grpc-xds-2
-  informers:
+- informers:
   - namespace: xds
     services:
     - greeter-intermediary

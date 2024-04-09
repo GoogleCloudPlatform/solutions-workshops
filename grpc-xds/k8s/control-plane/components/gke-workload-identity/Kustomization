@@ -1,6 +1,6 @@
 # vi: set ft=yaml :
 #
-# Copyright 2023 Google LLC
+# Copyright 2024 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,10 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
 metadata:
-  name: control-plane
+  name: control-plane-gke-workload-identity
   annotations:
     config.kubernetes.io/local-config: "true"
 labels:
@@ -26,22 +26,14 @@ labels:
   includeSelectors: false
   includeTemplates: true
 patches:
-- path: patch-config.yaml
+# patch-gke-workload-identity.yaml is populated by the GKE setup steps.
+# It will remain an empty file if not using GKE.
+- path: patch-gke-workload-identity.yaml
   target:
-    group: apps
     version: v1
-    kind: Deployment
-    name: control-plane
-- path: patch-resources.yaml
-  target:
-    group: apps
-    version: v1
-    kind: Deployment
+    kind: ServiceAccount
     name: control-plane
 resources:
-- namespace.yaml
-- service-account.yaml
-- cluster-role.yaml
-- cluster-role-binding.yaml
-- deployment.yaml
-- service.yaml
+# cluster-role-binding-gcp.yaml is populated by the GKE setup steps.
+# It will remain an empty file if not using GKE.
+- cluster-role-binding-gcp.yaml

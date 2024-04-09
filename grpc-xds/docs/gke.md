@@ -269,7 +269,7 @@ an IAM service account without storing long-lived credentials.
     echo "$(kubectl annotate --dry-run=client --local --output=yaml \
       --filename=k8s/control-plane/base/service-account.yaml \
       iam.gke.io/gcp-service-account=${GSA}@${PROJECT_ID}.iam.gserviceaccount.com)" \
-      > k8s/control-plane/base/patch-gke-workload-identity.yaml
+      > k8s/control-plane/components/gke-workload-identity/patch-gke-workload-identity.yaml
     ```
 
 4.  Create a Kubernetes ClusterRoleBinding manifest that grants a Kubernetes
@@ -277,7 +277,7 @@ an IAM service account without storing long-lived credentials.
     ClusterRole provides permissions to list and get EndpointSlices:
 
     ```shell
-    cat << EOF > k8s/control-plane/base/cluster-role-binding-gcp.yaml
+    cat << EOF > k8s/control-plane/components/gke-workload-identity/cluster-role-binding-gcp.yaml
     apiVersion: rbac.authorization.k8s.io/v1
     kind: ClusterRoleBinding
     metadata:
@@ -303,7 +303,7 @@ an IAM service account without storing long-lived credentials.
     kubectl apply --context "gke_${PROJECT_ID}_${ZONES[2]}_grpc-xds" \
       --filename k8s/control-plane/base/cluster-role.yaml
     kubectl apply --context "gke_${PROJECT_ID}_${ZONES[2]}_grpc-xds" \
-      --filename k8s/control-plane/base/cluster-role-binding-gcp.yaml
+      --filename k8s/control-plane/components/gke-workload-identity/cluster-role-binding-gcp.yaml
     ```
 
 ## kubeconfig file

@@ -76,13 +76,25 @@ profiles:
       namespace: xds # kpt-set: ${control-plane-namespace}
       localPort: 56272
       port: 56268 # delve debug port
+# xDS federation, and data plane mTLS using GKE workload TLS certificates ("mesh certificates").
+- name: federation-gke
+  manifests:
+    kustomize:
+      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+      paths: ["k8s/overlays/federation-gke"]
+# xDS federation, and data plane mTLS using workload certificates from cert-manager.
+- name: federation-kind
+  manifests:
+    kustomize:
+      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+      paths: ["k8s/overlays/federation-kind"]
 # No xDS, use gRPC DNS resolver, kube-proxy, and headful services.
 - name: no-xds
   manifests:
     kustomize:
       buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
       paths: ["k8s/overlays/no-xds"]
-# Deploy to a GKE or kind Kubernetes cluster, with workload TLS certificates from cert-manager.
+# Deploy to a GKE or kind Kubernetes cluster, and data plane mTLS using workload certificates from cert-manager.
 - name: kind
   activation:
   - kubeContext: kind.*

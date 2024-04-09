@@ -1,5 +1,3 @@
-# vi: set ft=yaml :
-#
 # Copyright 2023 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,15 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Use the `no-tls` overlay for a no-TLS/mTLS deployment.
+# List of kubeconfig contexts,
+# each with a list of EndpointSlices to watch,
+# specified by Namespace and owning Service name.
+#
+# If the kubeconfig `context` name is blank or omitted,
+# the `current-context` value is used.
 
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-metadata:
-  name: control-plane-go
-  annotations:
-    config.kubernetes.io/local-config: "true"
-components:
-- ../components/go-flags
-resources:
-- ../../../k8s/control-plane/base
+- context: ""
+  informers:
+  - namespace: xds
+    services:
+    - greeter-intermediary
+    - greeter-leaf
+- context: grpc-xds-2
+  informers:
+  - namespace: xds
+    services:
+    - greeter-intermediary
+    - greeter-leaf

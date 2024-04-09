@@ -1,6 +1,4 @@
-# vi: set ft=yaml :
-#
-# Copyright 2023 Google LLC
+# Copyright 2024 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,15 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Use the `no-tls` overlay for a no-TLS/mTLS deployment.
+# Patch to set the NEXT_HOP environment variable for greeter-intermediary
+# to use another xDS control plane management server via xDS federation.
 
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: control-plane-go
-  annotations:
-    config.kubernetes.io/local-config: "true"
-components:
-- ../components/go-flags
-resources:
-- ../../../k8s/control-plane/base
+  name: greeter-intermediary
+spec:
+  template:
+    spec:
+      containers:
+      - name: app
+        env:
+        - name: NEXT_HOP
+          value: xds://control-plane.xds.svc.cluster2.example.com/greeter-leaf

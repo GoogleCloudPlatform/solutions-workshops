@@ -59,6 +59,8 @@ type SnapshotCache struct {
 	serverListenerCache *ServerListenerCache
 	// features contains flags to enable and disable xDS features, e.g., mTLS.
 	features *Features
+	// authority is the authority name of this control plane for xDS federation.
+	authority string
 }
 
 var _ cachev3.Cache = &SnapshotCache{}
@@ -67,7 +69,7 @@ var _ cachev3.Cache = &SnapshotCache{}
 //
 // If `allowPartialRequests` is true, the DiscoveryServer will respond to requests for a resource
 // type even if some resources in the snapshot are not named in the request.
-func NewSnapshotCache(ctx context.Context, allowPartialRequests bool, hash cachev3.NodeHash, localityPriorityMapper LocalityPriorityMapper, features *Features) *SnapshotCache {
+func NewSnapshotCache(ctx context.Context, allowPartialRequests bool, hash cachev3.NodeHash, localityPriorityMapper LocalityPriorityMapper, features *Features, authority string) *SnapshotCache {
 	return &SnapshotCache{
 		ctx:                    ctx,
 		logger:                 logging.FromContext(ctx),
@@ -77,6 +79,7 @@ func NewSnapshotCache(ctx context.Context, allowPartialRequests bool, hash cache
 		appsCache:              NewGRPCApplicationCache(),
 		serverListenerCache:    NewServerListenerCache(),
 		features:               features,
+		authority:              authority,
 	}
 }
 
@@ -91,6 +94,8 @@ func NewSnapshotCache(ctx context.Context, allowPartialRequests bool, hash cache
 // This solves (in a slightly hacky way) bootstrapping of xDS-enabled gRPC servers.
 func (c *SnapshotCache) CreateWatch(request *cachev3.Request, state stream.StreamState, responses chan cachev3.Response) (cancel func()) {
 	if request != nil && len(request.ResourceNames) > 0 && request.GetTypeUrl() == "type.googleapis.com/envoy.config.listener.v3.Listener" {
+		// removeXdstpPrefixes(request)
+		c.logger.Info("CreateWatch", "request.ResourceNames", request.ResourceNames)
 		nodeHash := c.hash.ID(request.GetNode())
 		addressesFromRequest, err := findServerListenerAddresses(request.ResourceNames)
 		if err != nil {
@@ -109,6 +114,16 @@ func (c *SnapshotCache) CreateWatch(request *cachev3.Request, state stream.Strea
 	}
 	return c.delegate.CreateWatch(request, state, responses)
 }
+
+// func removeXdstpPrefixes(request *cachev3.Request) {
+// 	for i, resourceName := range request.ResourceNames {
+// 		if strings.HasPrefix(resourceName, "xdstp://") {
+// 			reg := regexp.MustCompile(`xdstp://.*/envoy.config.listener.v3.Listener/envoy.config.listener.v3.Listener/`)
+// 			newResourceName := reg.ReplaceAllString(resourceName, "")
+// 			request.ResourceNames[i] = newResourceName
+// 		}
+// 	}
+// }
 
 // UpdateResources creates a new snapshot for each node hash in the cache,
 // based on the provided gRPC application configuration,
@@ -136,7 +151,7 @@ func (c *SnapshotCache) UpdateResources(_ context.Context, logger logr.Logger, k
 // createNewSnapshot sets a new snapshot for the provided `nodeHash` and gRPC application configuration.
 func (c *SnapshotCache) createNewSnapshot(nodeHash string, apps []GRPCApplication) error {
 	c.logger.Info("Creating a new snapshot", "nodeHash", nodeHash, "apps", apps)
-	snapshotBuilder, err := NewSnapshotBuilder(nodeHash, c.localityPriorityMapper, c.features).AddGRPCApplications(apps)
+	snapshotBuilder, err := NewSnapshotBuilder(nodeHash, c.localityPriorityMapper, c.features, c.authority).AddGRPCApplications(apps)
 	if err != nil {
 		return fmt.Errorf("could not create xDS resource snapshot builder for nodeHash=%s: %w", nodeHash, err)
 	}
@@ -154,6 +169,8 @@ func (c *SnapshotCache) createNewSnapshot(nodeHash string, apps []GRPCApplicatio
 
 // findServerListenerAddresses looks for server Listener names in the provided
 // slice and extracts the address and port for each server Listener found.
+// TODO: Handle xDS federation server Listener names using `xdstp://` names,
+// e.g., "xdstp://xds.authority.com/envoy.config.listener.v3.Listener/grpc/server/%s"
 func findServerListenerAddresses(names []string) ([]EndpointAddress, error) {
 	var addresses []EndpointAddress
 	for _, name := range names {

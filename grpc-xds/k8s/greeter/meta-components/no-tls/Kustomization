@@ -1,6 +1,6 @@
 # vi: set ft=yaml :
 #
-# Copyright 2023 Google LLC
+# Copyright 2024 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,34 +14,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
+# Deploy to a GKE or kind Kubernetes cluster, and use cert-manager for TLS certificates.
+# cert-manager and the `root-ca` ClusterIssuer must already be set up in the cluster,
+# the `make kind-create` target sets this up.
+
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
 metadata:
-  name: control-plane
+  name: greeter-no-tls
   annotations:
     config.kubernetes.io/local-config: "true"
-labels:
-- pairs:
-    app.kubernetes.io/part-of: grpc-xds
-  includeSelectors: false
-  includeTemplates: true
-patches:
-- path: patch-config.yaml
-  target:
-    group: apps
-    version: v1
-    kind: Deployment
-    name: control-plane
-- path: patch-resources.yaml
-  target:
-    group: apps
-    version: v1
-    kind: Deployment
-    name: control-plane
-resources:
-- namespace.yaml
-- service-account.yaml
-- cluster-role.yaml
-- cluster-role-binding.yaml
-- deployment.yaml
-- service.yaml
+components:
+- ../../components/bootstrap-diy
+- ../../components/node-labels # not actually required for GKE

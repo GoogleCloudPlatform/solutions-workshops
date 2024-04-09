@@ -22,3 +22,4 @@ enableControlPlaneTls: false
 requireControlPlaneClientCerts: false # `true` value requires enableControlPlaneTls=true
 enableDataPlaneTls: true
 requireDataPlaneClientCerts: true # `true` value requires enableDataPlaneTls=true
+enableFederation: true

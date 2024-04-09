@@ -1,6 +1,6 @@
 # vi: set ft=yaml :
 #
-# Copyright 2023 Google LLC
+# Copyright 2024 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,34 +14,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
 metadata:
-  name: control-plane
+  name: control-plane-go-app-config-multi-cluster
   annotations:
     config.kubernetes.io/local-config: "true"
+configMapGenerator:
+- name: app-config
+  namespace: xds # kpt-set: ${control-plane-namespace}
+  files:
+  - ../../../config/informers_multi-cluster.yaml
+  - ../../../config/xds_features.yaml
 labels:
 - pairs:
     app.kubernetes.io/part-of: grpc-xds
   includeSelectors: false
   includeTemplates: true
 patches:
-- path: patch-config.yaml
+- path: patch-config-dir-env.yaml
   target:
     group: apps
     version: v1
     kind: Deployment
     name: control-plane
-- path: patch-resources.yaml
-  target:
-    group: apps
-    version: v1
-    kind: Deployment
-    name: control-plane
-resources:
-- namespace.yaml
-- service-account.yaml
-- cluster-role.yaml
-- cluster-role-binding.yaml
-- deployment.yaml
-- service.yaml

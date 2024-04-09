@@ -38,7 +38,7 @@ const (
 
 func registerGCP(ctx context.Context, logger logr.Logger) {
 	logger.Info("Registering Kubernetes client auth provider", "authProvider", googleAuthPluginName)
-	if err := rest.RegisterAuthProviderPlugin(googleAuthPluginName, func(_ string, config map[string]string, persister rest.AuthProviderConfigPersister) (rest.AuthProvider, error) {
+	if err := rest.RegisterAuthProviderPlugin(googleAuthPluginName, func(_ string, config map[string]string, _ rest.AuthProviderConfigPersister) (rest.AuthProvider, error) {
 		scopes := parseScopes(config)
 		ts, err := google.DefaultTokenSource(ctx, scopes...)
 		if err != nil {

@@ -31,4 +31,4 @@ current_context=$(kubectl config current-context)
 # cluster_type will be either "gke_" or "kind"
 cluster_type=${current_context:0:4}
 
-kubectl config get-contexts --output=name | grep "${cluster_type}.*grpc-xds" | xargs -I{} -L1 bash -c "delete_resources {}"
+kubectl config get-contexts --output=name | grep "${cluster_type}.*grpc-xds" | xargs -I{} bash -c "delete_resources {}"

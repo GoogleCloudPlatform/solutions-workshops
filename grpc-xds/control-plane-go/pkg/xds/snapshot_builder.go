@@ -66,10 +66,11 @@ type SnapshotBuilder struct {
 	nodeHash                string
 	localityPriorityMapper  LocalityPriorityMapper
 	features                *Features
+	authority               string
 }
 
 // NewSnapshotBuilder initializes the builder.
-func NewSnapshotBuilder(nodeHash string, localityPriorityMapper LocalityPriorityMapper, features *Features) *SnapshotBuilder {
+func NewSnapshotBuilder(nodeHash string, localityPriorityMapper LocalityPriorityMapper, features *Features, authority string) *SnapshotBuilder {
 	return &SnapshotBuilder{
 		listeners:               make(map[string]types.Resource),
 		routeConfigurations:     make(map[string]types.Resource),
@@ -80,6 +81,7 @@ func NewSnapshotBuilder(nodeHash string, localityPriorityMapper LocalityPriority
 		nodeHash:                nodeHash,
 		localityPriorityMapper:  localityPriorityMapper,
 		features:                features,
+		authority:               authority,
 	}
 }
 
@@ -87,15 +89,30 @@ func NewSnapshotBuilder(nodeHash string, localityPriorityMapper LocalityPriority
 func (b *SnapshotBuilder) AddGRPCApplications(apps []GRPCApplication) (*SnapshotBuilder, error) {
 	for _, app := range apps {
 		if b.listeners[app.ListenerName] == nil {
-			apiListener, err := createAPIListener(app.ListenerName, app.RouteConfigurationName)
+			apiListener, err := createAPIListener(app.ListenerName, app.ListenerName, app.RouteConfigurationName)
 			if err != nil {
 				return nil, fmt.Errorf("could not create LDS API listener for gRPC application %+v: %w", app, err)
 			}
 			b.listeners[apiListener.Name] = apiListener
+			if b.features.EnableFederation {
+				xdstpListenerName := xdstpListener(b.authority, app.ListenerName)
+				xdstpRouteConfigurationName := xdstpRouteConfiguration(b.authority, app.RouteConfigurationName)
+				xdstpListener, err := createAPIListener(xdstpListenerName, app.ListenerName, xdstpRouteConfigurationName)
+				if err != nil {
+					return nil, fmt.Errorf("could not create federation LDS API listener for authority=%s and gRPC application %+v: %w", b.authority, app, err)
+				}
+				b.listeners[xdstpListener.Name] = xdstpListener
+			}
 		}
 		if b.routeConfigurations[app.RouteConfigurationName] == nil {
 			routeConfiguration := createRouteConfiguration(app.RouteConfigurationName, app.ListenerName, app.PathPrefix, app.ClusterName)
 			b.routeConfigurations[routeConfiguration.Name] = routeConfiguration
+			if b.features.EnableFederation {
+				xdstpRouteConfigurationName := xdstpRouteConfiguration(b.authority, app.RouteConfigurationName)
+				xdstpClusterName := xdstpCluster(b.authority, app.ClusterName)
+				xdstpRouteConfiguration := createRouteConfiguration(xdstpRouteConfigurationName, app.ListenerName, app.PathPrefix, xdstpClusterName)
+				b.routeConfigurations[xdstpRouteConfiguration.Name] = xdstpRouteConfiguration
+			}
 		}
 		if b.clusters[app.ClusterName] == nil {
 			cluster, err := createCluster(
@@ -108,14 +125,48 @@ func (b *SnapshotBuilder) AddGRPCApplications(apps []GRPCApplication) (*Snapshot
 				return nil, fmt.Errorf("could not create CDS Cluster for gRPC application %+v: %w", app, err)
 			}
 			b.clusters[cluster.Name] = cluster
+			if b.features.EnableFederation {
+				xdstpClusterName := xdstpCluster(b.authority, app.ClusterName)
+				xdstpCluster, err := createCluster(
+					xdstpClusterName,
+					app.Namespace,
+					app.ServiceAccountName,
+					b.features.EnableDataPlaneTLS,
+					b.features.RequireDataPlaneClientCerts)
+				if err != nil {
+					return nil, fmt.Errorf("could not create federation CDS Cluster for authority=%s and gRPC application %+v: %w", b.authority, app, err)
+				}
+				b.clusters[xdstpCluster.Name] = xdstpCluster
+			}
 		}
 		// Merge endpoints from multiple informers for the same app:
 		endpointsByClusterKey := fmt.Sprintf("%s-%d", app.ClusterName, app.Port)
 		b.endpointsByCluster[endpointsByClusterKey] = append(b.endpointsByCluster[endpointsByClusterKey], app.Endpoints...)
 		clusterLoadAssignment := createClusterLoadAssignment(app.ClusterName, app.Port, b.nodeHash, b.localityPriorityMapper, b.endpointsByCluster[endpointsByClusterKey])
 		b.clusterLoadAssignments[clusterLoadAssignment.ClusterName] = clusterLoadAssignment
+		if b.features.EnableFederation {
+			xdstpClusterName := xdstpCluster(b.authority, app.ClusterName)
+			xdstpClusterLoadAssignment := createClusterLoadAssignment(xdstpClusterName, app.Port, b.nodeHash, b.localityPriorityMapper, b.endpointsByCluster[endpointsByClusterKey])
+			b.clusterLoadAssignments[xdstpClusterLoadAssignment.ClusterName] = xdstpClusterLoadAssignment
+		}
 	}
 	return b, nil
+}
+
+func xdstpListener(authority string, listenerName string) string {
+	return fmt.Sprintf("xdstp://%s/envoy.config.listener.v3.Listener/%s", authority, listenerName)
+}
+
+func xdstpRouteConfiguration(authority string, routeConfigurationName string) string {
+	return fmt.Sprintf("xdstp://%s/envoy.config.route.v3.RouteConfiguration/%s", authority, routeConfigurationName)
+}
+
+func xdstpCluster(authority string, clusterName string) string {
+	return fmt.Sprintf("xdstp://%s/envoy.config.cluster.v3.Cluster/%s", authority, clusterName)
+}
+
+func xdstpClusterLoadAssignment(authority string, clusterName string) string {
+	return fmt.Sprintf("xdstp://%s/envoy.config.endpoint.v3.ClusterLoadAssignment/%s", authority, clusterName)
 }
 
 // AddServerListenerAddresses adds server listeners and associated route
@@ -154,22 +205,22 @@ func (b *SnapshotBuilder) Build() (cachev3.ResourceSnapshot, error) {
 		i++
 	}
 	routeConfigurations := make([]types.Resource, len(b.routeConfigurations))
-	i = 0
+	j := 0
 	for _, routeConfiguration := range b.routeConfigurations {
-		routeConfigurations[i] = routeConfiguration
-		i++
+		routeConfigurations[j] = routeConfiguration
+		j++
 	}
 	clusters := make([]types.Resource, len(b.clusters))
-	i = 0
+	k := 0
 	for _, cluster := range b.clusters {
-		clusters[i] = cluster
-		i++
+		clusters[k] = cluster
+		k++
 	}
 	clusterLoadAssignments := make([]types.Resource, len(b.clusterLoadAssignments))
-	i = 0
+	l := 0
 	for _, clusterLoadAssignment := range b.clusterLoadAssignments {
-		clusterLoadAssignments[i] = clusterLoadAssignment
-		i++
+		clusterLoadAssignments[l] = clusterLoadAssignment
+		l++
 	}
 
 	version := strconv.FormatInt(time.Now().UnixNano(), 10)
@@ -185,7 +236,7 @@ func (b *SnapshotBuilder) Build() (cachev3.ResourceSnapshot, error) {
 //
 // [gRFC A27]: https://github.com/grpc/proposal/blob/master/A27-xds-global-load-balancing.md#listener-proto
 // [Reference]: https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/listener/v3/api_listener.proto
-func createAPIListener(name string, routeConfigurationName string) (*listenerv3.Listener, error) {
+func createAPIListener(name string, statPrefix string, routeConfigurationName string) (*listenerv3.Listener, error) {
 	httpFaultFilterTypedConfig, err := anypb.New(&faultv3.HTTPFault{})
 	if err != nil {
 		return nil, fmt.Errorf("could not marshall HTTPFault typedConfig into Any instance: %w", err)
@@ -199,7 +250,7 @@ func createAPIListener(name string, routeConfigurationName string) (*listenerv3.
 	httpConnectionManager := &hcmv3.HttpConnectionManager{
 		CodecType: hcmv3.HttpConnectionManager_AUTO,
 		// https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_conn_man/stats#config-http-conn-man-stats
-		StatPrefix: name,
+		StatPrefix: statPrefix,
 		RouteSpecifier: &hcmv3.HttpConnectionManager_Rds{
 			Rds: &hcmv3.Rds{
 				ConfigSource: &corev3.ConfigSource{
@@ -470,6 +521,7 @@ func createCluster(name string, namespace string, serviceAccountName string, ena
 					Ads: &corev3.AggregatedConfigSource{},
 				},
 			},
+			ServiceName: name,
 		},
 		ConnectTimeout: &durationpb.Duration{
 			Seconds: 3, // default is 5s
@@ -497,6 +549,7 @@ func createCluster(name string, namespace string, serviceAccountName string, ena
 // createUpstreamTLSContext configures:
 // 1. gRPC client TLS certificate provider
 // 2. certificate authorities (CAs) to validate gRPC server certificates, including server authorization.
+// Important: Assumes that the client application k8s Service account name matches the application name!
 func createUpstreamTLSContext(namespace string, serviceAccountName string, requireClientCerts bool) *tlsv3.UpstreamTlsContext {
 	upstreamTLSContext := tlsv3.UpstreamTlsContext{
 		CommonTlsContext: &tlsv3.CommonTlsContext{

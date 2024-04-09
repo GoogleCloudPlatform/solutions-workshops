@@ -54,6 +54,12 @@ kind-delete: check-kind
 run-go-multi-cluster: check-skaffold check-go
 	./hack/deploy-multi-cluster.sh go
 
+# run-go-federation builds and deploys the xDS control plane and greeter-intermediary to one cluster,
+# and the xDS control plane and greeter-leaf to the other cluster.
+.PHONY: run-go-federation
+run-go-federation: check-skaffold check-go
+	./hack/deploy-federation.sh go
+
 # run-go builds and deploys control-plane-go and greeter-go.
 .PHONY: run-go
 run-go: check-skaffold check-go
@@ -64,6 +70,12 @@ run-go: check-skaffold check-go
 .PHONY: run-java-multi-cluster
 run-java-multi-cluster: check-skaffold check-javac
 	./hack/deploy-multi-cluster.sh java
+
+# run-java-federation builds and deploys the xDS control plane and greeter-intermediary to one cluster,
+# and the xDS control plane and greeter-leaf to the other cluster.
+.PHONY: run-java-federation
+run-java-federation: check-skaffold check-javac
+	./hack/deploy-federation.sh java
 
 # run-java builds and deploys control-plane-java and greeter-java.
 .PHONY: run-java
@@ -237,6 +249,11 @@ delete: delete-control-plane delete-greeter
 .PHONY: delete-multi-cluster
 delete-multi-cluster: check-kubectl
 	./hack/delete-multi-cluster.sh
+
+# delete-federation deletes the Deployments, Service, and ConfigMaps for control-plane and
+# greeter-[intermediary|leaf] in both clusters, but leaves any bastion Pods running.
+.PHONY: delete-federation
+delete-federation: delete-multi-cluster
 
 # clean removes running instances of control-plane-[go|java], greeter-[go|java], and bastion.
 .PHONY: clean

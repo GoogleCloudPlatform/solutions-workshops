@@ -54,5 +54,12 @@ func Run(ctx context.Context, flagset *flag.FlagSet, args []string) error {
 	if err != nil {
 		return fmt.Errorf("could not initialize xDS feature flags: %w", err)
 	}
-	return server.Run(ctx, servingPort, healthPort, kubecontexts, xdsFeatures)
+	authority, err := config.AuthorityName(logger)
+	if err != nil {
+		return fmt.Errorf("could not determine control plane authority name: %w", err)
+	}
+	if xdsFeatures.EnableFederation {
+		logger.V(2).Info("Enabling xDS federation", "authority", authority)
+	}
+	return server.Run(ctx, servingPort, healthPort, kubecontexts, xdsFeatures, authority)
 }

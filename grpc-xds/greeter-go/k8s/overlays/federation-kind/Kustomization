@@ -1,6 +1,6 @@
 # vi: set ft=yaml :
 #
-# Copyright 2023 Google LLC
+# Copyright 2024 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,34 +14,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Deploy to a GKE or kind Kubernetes cluster with a self-managed
+# xDS control plane, and use workload TLS certificates from cert-manager.
+# cert-manager and the root CA ClusterIssuer must already be set up
+# in the cluster.
+
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 metadata:
-  name: control-plane
+  name: greeter-go-federation-kind
   annotations:
     config.kubernetes.io/local-config: "true"
-labels:
-- pairs:
-    app.kubernetes.io/part-of: grpc-xds
-  includeSelectors: false
-  includeTemplates: true
-patches:
-- path: patch-config.yaml
-  target:
-    group: apps
-    version: v1
-    kind: Deployment
-    name: control-plane
-- path: patch-resources.yaml
-  target:
-    group: apps
-    version: v1
-    kind: Deployment
-    name: control-plane
+components:
+- ../../../../k8s/greeter/meta-components/tls-cert-manager-federation
 resources:
-- namespace.yaml
-- service-account.yaml
-- cluster-role.yaml
-- cluster-role-binding.yaml
-- deployment.yaml
-- service.yaml
+- ../../base
