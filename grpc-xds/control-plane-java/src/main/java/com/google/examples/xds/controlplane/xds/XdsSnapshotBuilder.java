@@ -139,15 +139,18 @@ public class XdsSnapshotBuilder<T> {
   private final T nodeHash;
   private final LocalityPriorityMapper<T> localityPriorityMapper;
   private final XdsFeatures xdsFeatures;
+  private final String authority;
 
   /** Creates a builder for an xDS resource cache snapshot. */
   public XdsSnapshotBuilder(
       @NotNull T nodeHash,
       @NotNull LocalityPriorityMapper<T> localityPriorityMapper,
-      @NotNull XdsFeatures xdsFeatures) {
+      @NotNull XdsFeatures xdsFeatures,
+      @NotNull String authority) {
     this.nodeHash = nodeHash;
     this.localityPriorityMapper = localityPriorityMapper;
     this.xdsFeatures = xdsFeatures;
+    this.authority = authority;
   }
 
   /**
@@ -160,18 +163,48 @@ public class XdsSnapshotBuilder<T> {
   public XdsSnapshotBuilder<T> addGrpcApplications(@NotNull Set<GrpcApplication> apps) {
     for (GrpcApplication app : apps) {
       if (!listeners.containsKey(app.listenerName())) {
-        var listener = createApiListener(app.listenerName(), app.routeName());
+        var listener =
+            createApiListener(app.listenerName(), app.listenerName(), app.routeConfigurationName());
         listeners.put(listener.getName(), listener);
+        if (xdsFeatures.enableFederation()) {
+          var xdstpListenerName = xdstpListener(authority, app.listenerName());
+          var xdstpRouteConfigurationName =
+              xdstpRouteConfiguration(authority, app.routeConfigurationName());
+          var xdstpListener =
+              createApiListener(xdstpListenerName, app.listenerName(), xdstpRouteConfigurationName);
+          listeners.put(xdstpListener.getName(), xdstpListener);
+        }
       }
-      if (!routeConfigurations.containsKey(app.routeName())) {
+      if (!routeConfigurations.containsKey(app.routeConfigurationName())) {
         var routeConfiguration =
             createRouteConfiguration(
-                app.routeName(), app.listenerName(), app.pathPrefix(), app.clusterName());
+                app.routeConfigurationName(),
+                app.listenerName(),
+                app.pathPrefix(),
+                app.clusterName());
         routeConfigurations.put(routeConfiguration.getName(), routeConfiguration);
+        if (xdsFeatures.enableFederation()) {
+          var xdstpRouteConfigurationName =
+              xdstpRouteConfiguration(authority, app.routeConfigurationName());
+          var xdstpClusterName = xdstpCluster(authority, app.clusterName());
+          var xdstpRouteConfiguration =
+              createRouteConfiguration(
+                  xdstpRouteConfigurationName,
+                  app.listenerName(),
+                  app.pathPrefix(),
+                  xdstpClusterName);
+          routeConfigurations.put(xdstpRouteConfiguration.getName(), xdstpRouteConfiguration);
+        }
       }
       if (!clusters.containsKey(app.clusterName())) {
         var cluster = createCluster(app.clusterName(), app.namespace(), app.serviceAccountName());
         clusters.put(cluster.getName(), cluster);
+        if (xdsFeatures.enableFederation()) {
+          var xdstpClusterName = xdstpCluster(authority, app.clusterName());
+          var xdstpCluster =
+              createCluster(xdstpClusterName, app.namespace(), app.serviceAccountName());
+          clusters.put(xdstpCluster.getName(), xdstpCluster);
+        }
       }
       var endpointsByClusterKey = app.clusterName() + "-" + app.port();
       if (endpointsByCluster.containsKey(endpointsByClusterKey)
@@ -189,8 +222,33 @@ public class XdsSnapshotBuilder<T> {
           createClusterLoadAssignment(
               app.clusterName(), app.port(), endpointsByCluster.get(endpointsByClusterKey));
       clusterLoadAssignments.put(clusterLoadAssignment.getClusterName(), clusterLoadAssignment);
+      if (xdsFeatures.enableFederation()) {
+        var xdstpClusterName = xdstpCluster(authority, app.clusterName());
+        var xdstpClusterLoadAssignment =
+            createClusterLoadAssignment(
+                xdstpClusterName, app.port(), endpointsByCluster.get(endpointsByClusterKey));
+        clusterLoadAssignments.put(
+            xdstpClusterLoadAssignment.getClusterName(), xdstpClusterLoadAssignment);
+      }
     }
     return this;
+  }
+
+  @NotNull
+  static String xdstpListener(@NotNull String authority, @NotNull String listenerName) {
+    return "xdstp://%s/envoy.config.listener.v3.Listener/%s".formatted(authority, listenerName);
+  }
+
+  @NotNull
+  static String xdstpRouteConfiguration(
+      @NotNull String authority, @NotNull String routeConfigurationName) {
+    return "xdstp://%s/envoy.config.route.v3.RouteConfiguration/%s"
+        .formatted(authority, routeConfigurationName);
+  }
+
+  @NotNull
+  static String xdstpCluster(@NotNull String authority, @NotNull String clusterName) {
+    return "xdstp://%s/envoy.config.cluster.v3.Cluster/%s".formatted(authority, clusterName);
   }
 
   @NotNull
@@ -237,12 +295,13 @@ public class XdsSnapshotBuilder<T> {
    * @param routeName the name of the RDS route configuration for this API listener.
    * @return an LDS API listener for a gRPC application.
    */
-  private Listener createApiListener(@NotNull String listenerName, @NotNull String routeName) {
+  private Listener createApiListener(
+      @NotNull String listenerName, @NotNull String statPrefix, @NotNull String routeName) {
     var httpConnectionManager =
         HttpConnectionManager.newBuilder()
             .setCodecType(CodecType.AUTO)
             // https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_conn_man/stats#config-http-conn-man-stats
-            .setStatPrefix(listenerName)
+            .setStatPrefix(statPrefix)
             .setRds(
                 Rds.newBuilder()
                     .setConfigSource(
@@ -473,70 +532,83 @@ public class XdsSnapshotBuilder<T> {
    */
   private Cluster createCluster(
       @NotNull String clusterName, @NotNull String namespace, @NotNull String serviceAccountName) {
+    var clusterBuilder =
+        Cluster.newBuilder()
+            .setName(clusterName)
+            .setType(DiscoveryType.EDS)
+            .setEdsClusterConfig(
+                EdsClusterConfig.newBuilder()
+                    .setEdsConfig(
+                        ConfigSource.newBuilder()
+                            .setResourceApiVersion(ApiVersion.V3)
+                            .setAds(AggregatedConfigSource.getDefaultInstance())
+                            .build())
+                    .build())
+            .setConnectTimeout(Durations.fromSeconds(3)); // default is 5s
+
+    if (xdsFeatures.enableDataPlaneTls()) {
+      var upstreamTlsContext = createUpstreamTlsContext(namespace, serviceAccountName);
+      clusterBuilder.setTransportSocket(
+          TransportSocket.newBuilder()
+              .setName(TRANSPORT_SOCKET_NAME_TLS)
+              .setTypedConfig(Any.pack(upstreamTlsContext))
+              .build());
+    }
+
+    return clusterBuilder.build();
+  }
+
+  @NotNull
+  private UpstreamTlsContext createUpstreamTlsContext(
+      @NotNull String namespace, @NotNull String serviceAccountName) {
     //noinspection deprecation
-    var upstreamTlsContext =
-        UpstreamTlsContext.newBuilder()
-            .setCommonTlsContext(
-                CommonTlsContext.newBuilder()
-                    // Send client certificate in TLS handshake:
-                    .setTlsCertificateProviderInstance(
+    var commonTlsContextBuilder =
+        CommonTlsContext.newBuilder()
+            // Validate gRPC server certificate:
+            // gRFC A29 specifies to use either `validation_context` or
+            // `combined_validation_context.default_validation_context`, but
+            // gRPC-Java as of v1.60.0 doesn't handle `combined_validation_context`
+            // correctly.
+            .setValidationContext(
+                CertificateValidationContext.newBuilder()
+                    .setCaCertificateProviderInstance(
                         CertificateProviderPluginInstance.newBuilder()
                             .setInstanceName(TLS_CERTIFICATE_PROVIDER_INSTANCE_NAME)
                             // Using the same certificate name value as Traffic Director,
                             // but the certificate name is ignored by gRPC says gRFC A29.
-                            .setCertificateName("DEFAULT")
+                            .setCertificateName("ROOTCA")
                             .build())
-                    // Validate gRPC server certificate:
-                    // gRFC A29 specifies to use either `validation_context` or
-                    // `combined_validation_context.default_validation_context`, but
-                    // gRPC-Java as of v1.60.0 doesn't handle `combined_validation_context`
-                    // correctly.
-                    .setValidationContext(
-                        CertificateValidationContext.newBuilder()
-                            .setCaCertificateProviderInstance(
-                                CertificateProviderPluginInstance.newBuilder()
-                                    .setInstanceName(TLS_CERTIFICATE_PROVIDER_INSTANCE_NAME)
-                                    // Using the same certificate name value as Traffic Director,
-                                    // but the certificate name is ignored by gRPC says gRFC A29.
-                                    .setCertificateName("ROOTCA")
-                                    .build())
-                            // Server authorization (SAN checks):
-                            // gRPC-Java as of v1.60.0 does not work correctly with
-                            // `match_typed_subject_alt_names`, using `match_subject_alt_names`
-                            // instead, for now.
-                            .addMatchSubjectAltNames(
-                                StringMatcher.newBuilder()
-                                    .setSafeRegex(
-                                        RegexMatcher.newBuilder()
-                                            .setRegex(
-                                                "spiffe://[^/]+/ns/%s/sa/%s"
-                                                    .formatted(namespace, serviceAccountName))
-                                            .build())
+                    // Server authorization (SAN checks):
+                    // gRPC-Java as of v1.60.0 does not work correctly with
+                    // `match_typed_subject_alt_names`, using `match_subject_alt_names`
+                    // instead, for now.
+                    .addMatchSubjectAltNames(
+                        StringMatcher.newBuilder()
+                            .setSafeRegex(
+                                RegexMatcher.newBuilder()
+                                    .setRegex(
+                                        "spiffe://[^/]+/ns/%s/sa/%s"
+                                            .formatted(namespace, serviceAccountName))
                                     .build())
                             .build())
-                    // Traffic Director sets `alpn_protocols`, but it is ignored by gRPC according
-                    // to gRFC A29.
-                    .addAlpnProtocols("h2")
                     .build())
-            .build();
+            // Traffic Director sets `alpn_protocols`, but it is ignored by gRPC according to gRFC
+            // A29.
+            .addAlpnProtocols("h2");
 
-    return Cluster.newBuilder()
-        .setName(clusterName)
-        .setType(DiscoveryType.EDS)
-        .setEdsClusterConfig(
-            EdsClusterConfig.newBuilder()
-                .setEdsConfig(
-                    ConfigSource.newBuilder()
-                        .setResourceApiVersion(ApiVersion.V3)
-                        .setAds(AggregatedConfigSource.getDefaultInstance())
-                        .build())
-                .build())
-        .setConnectTimeout(Durations.fromSeconds(3)) // default is 5s
-        .setTransportSocket(
-            TransportSocket.newBuilder()
-                .setName(TRANSPORT_SOCKET_NAME_TLS)
-                .setTypedConfig(Any.pack(upstreamTlsContext))
-                .build())
+    if (xdsFeatures.requireDataPlaneClientCerts()) {
+      // Send client certificate in TLS handshake:
+      commonTlsContextBuilder.setTlsCertificateProviderInstance(
+          CertificateProviderPluginInstance.newBuilder()
+              .setInstanceName(TLS_CERTIFICATE_PROVIDER_INSTANCE_NAME)
+              // Using the same certificate name value as Traffic Director,
+              // but the certificate name is ignored by gRPC says gRFC A29.
+              .setCertificateName("DEFAULT")
+              .build());
+    }
+
+    return UpstreamTlsContext.newBuilder()
+        .setCommonTlsContext(commonTlsContextBuilder.build())
         .build();
   }
 
@@ -564,12 +636,10 @@ public class XdsSnapshotBuilder<T> {
     for (var locality : endpointsByLocality.keySet()) {
       int priority = localitiesByPriority.getOrDefault(locality, 0);
       LOG.debug(
-          "Using priority="
-              + priority
-              + " for endpointZone="
-              + locality.getZone()
-              + " and nodeHash="
-              + nodeHash);
+          "Using priority={} for endpointZone={} and nodeHash={}",
+          priority,
+          locality.getZone(),
+          nodeHash);
       var localityLbEndpointsBuilder =
           LocalityLbEndpoints.newBuilder()
               // Locality must be unique for a given priority.

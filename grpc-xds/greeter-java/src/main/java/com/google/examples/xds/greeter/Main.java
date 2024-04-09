@@ -19,6 +19,7 @@ import com.google.examples.xds.greeter.server.Server;
 import java.net.URL;
 
 /** Contains the entry point for the gRPC greeter server. */
+@SuppressWarnings("CatchAndPrintStackTrace")
 public class Main {
 
   // Set up logging if not already configured.

@@ -94,7 +94,6 @@ func NewSnapshotCache(ctx context.Context, allowPartialRequests bool, hash cache
 // This solves (in a slightly hacky way) bootstrapping of xDS-enabled gRPC servers.
 func (c *SnapshotCache) CreateWatch(request *cachev3.Request, state stream.StreamState, responses chan cachev3.Response) (cancel func()) {
 	if request != nil && len(request.ResourceNames) > 0 && request.GetTypeUrl() == "type.googleapis.com/envoy.config.listener.v3.Listener" {
-		// removeXdstpPrefixes(request)
 		c.logger.Info("CreateWatch", "request.ResourceNames", request.ResourceNames)
 		nodeHash := c.hash.ID(request.GetNode())
 		addressesFromRequest, err := findServerListenerAddresses(request.ResourceNames)
@@ -114,16 +113,6 @@ func (c *SnapshotCache) CreateWatch(request *cachev3.Request, state stream.Strea
 	}
 	return c.delegate.CreateWatch(request, state, responses)
 }
-
-// func removeXdstpPrefixes(request *cachev3.Request) {
-// 	for i, resourceName := range request.ResourceNames {
-// 		if strings.HasPrefix(resourceName, "xdstp://") {
-// 			reg := regexp.MustCompile(`xdstp://.*/envoy.config.listener.v3.Listener/envoy.config.listener.v3.Listener/`)
-// 			newResourceName := reg.ReplaceAllString(resourceName, "")
-// 			request.ResourceNames[i] = newResourceName
-// 		}
-// 	}
-// }
 
 // UpdateResources creates a new snapshot for each node hash in the cache,
 // based on the provided gRPC application configuration,
@@ -170,7 +159,7 @@ func (c *SnapshotCache) createNewSnapshot(nodeHash string, apps []GRPCApplicatio
 // findServerListenerAddresses looks for server Listener names in the provided
 // slice and extracts the address and port for each server Listener found.
 // TODO: Handle xDS federation server Listener names using `xdstp://` names,
-// e.g., "xdstp://xds.authority.com/envoy.config.listener.v3.Listener/grpc/server/%s"
+// e.g., "xdstp://xds-authority.example.com/envoy.config.listener.v3.Listener/grpc/server/%s"
 func findServerListenerAddresses(names []string) ([]EndpointAddress, error) {
 	var addresses []EndpointAddress
 	for _, name := range names {

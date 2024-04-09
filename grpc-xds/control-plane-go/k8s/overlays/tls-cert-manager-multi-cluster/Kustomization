@@ -21,8 +21,8 @@ metadata:
   annotations:
     config.kubernetes.io/local-config: "true"
 components:
-- ../../../../k8s/control-plane/components/tls-cert-manager
 - ../../../../k8s/control-plane/components/kubeconfig
+- ../../../../k8s/control-plane/components/tls-cert-manager
 - ../../components/app-config-multi-cluster
 resources:
 - ../../base

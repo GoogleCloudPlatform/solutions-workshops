@@ -1,3 +1,5 @@
+# vi: set ft=yaml :
+#
 # Copyright 2024 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,22 +14,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# List of kubeconfig contexts,
-# each with a list of EndpointSlices to watch,
-# specified by Namespace and owning Service name.
-#
-# If the kubeconfig `context` name is blank or omitted,
-# the `current-context` value is used.
+# Deploy to a GKE or kind Kubernetes cluster with a self-managed
+# xDS control plane, and use workload TLS certificates from cert-manager.
+# cert-manager and the root CA ClusterIssuer must already be set up
+# in the cluster.
 
-- context: ""
-  informers:
-  - namespace: xds
-    services:
-    - greeter-intermediary
-    - greeter-leaf
-- context: grpc-xds-2
-  informers:
-  - namespace: xds
-    services:
-    - greeter-intermediary
-    - greeter-leaf
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+metadata:
+  name: greeter-java-federation-kind
+  annotations:
+    config.kubernetes.io/local-config: "true"
+components:
+- ../../../../k8s/greeter/meta-components/tls-cert-manager-federation
+resources:
+- ../../base

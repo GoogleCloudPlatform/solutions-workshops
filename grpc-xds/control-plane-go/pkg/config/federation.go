@@ -20,7 +20,7 @@ import (
 	"github.com/go-logr/logr"
 )
 
-// AuthorityName returns the expected authority name of this control plane.
+// AuthorityName returns the expected authority name of this control plane management server.
 // The authority name is used in xDS federation, where xDS clients can specify
 // the authority of an xDS resource.
 //
