@@ -92,7 +92,7 @@ func (m *Manager) AddEndpointSliceInformer(ctx context.Context, logger logr.Logg
 			apps := getAppsForInformer(logger, informer)
 			m.handleEndpointSliceEvent(ctx, logger, config.Namespace, apps)
 		},
-		UpdateFunc: func(oldObj, obj interface{}) {
+		UpdateFunc: func(_, obj interface{}) {
 			logger := logger.WithValues("event", "update")
 			logEndpointSlice(logger, obj)
 			apps := getAppsForInformer(logger, informer)

@@ -40,5 +40,23 @@ spec:
           containerPort: 50051
         - name: health-port
           containerPort: 50052
+        volumeMounts:
+        - name: podinfo
+          mountPath: /etc/podinfo
+          readOnly: true
       serviceAccountName: control-plane
       terminationGracePeriodSeconds: 10
+      volumes:
+      - name: grpc-xds-conf
+        emptyDir: {}
+      - name: nodeinfo
+        emptyDir: {}
+      - name: podinfo
+        downwardAPI:
+          items:
+          - path: label-app-name
+            fieldRef:
+              fieldPath: metadata.labels['app.kubernetes.io/name']
+          - path: namespace
+            fieldRef:
+              fieldPath: metadata.namespace

@@ -445,6 +445,7 @@ make clean
 - [xDS API Overview](https://www.envoyproxy.io/docs/envoy/latest/configuration/overview/overview)
 - [xDS REST and gRPC protocol](https://www.envoyproxy.io/docs/envoy/latest/api-docs/xds_protocol)
 - [Aggregated Discovery Service (ADS)](https://www.envoyproxy.io/docs/envoy/latest/configuration/overview/xds_api#aggregated-discovery-service)
+- [On the state of Envoy Proxy control planes](https://mattklein123.dev/2020/03/15/2020-03-14-on-the-state-of-envoy-proxy-control-planes/)
 - [gRFC A27: xDS-Based Global Load Balancing](https://github.com/grpc/proposal/blob/972b69ab1f0f7f6079af81a8c2b8a01a15ce3bec/A27-xds-global-load-balancing.md)
 - [gRFC A28: gRPC xDS traffic splitting and routing](https://github.com/grpc/proposal/blob/f6d38361da31ffad3158dbef84f8af3cdd89d8c1/A28-xds-traffic-splitting-and-routing.md)
 - [gRFC A29: xDS-Based Security for gRPC Clients and Servers](https://github.com/grpc/proposal/blob/deaf1bcf248d1e48e83c470b00930cbd363fab6d/A29-xds-tls-security.md)

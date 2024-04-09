@@ -19,6 +19,7 @@ metadata:
   annotations:
     config.kubernetes.io/local-config: "true"
 profiles:
+- name: federation
 - name: tls-cert-manager
   activation:
   - kubeContext: kind.* # use cert-manager by default for kind Kubernetes clusters
@@ -36,6 +37,7 @@ metadata:
   annotations:
     config.kubernetes.io/local-config: "true"
 profiles:
+- name: federation
 - name: tls-cert-manager
   activation:
   - kubeContext: kind.* # use cert-manager by default for kind Kubernetes clusters

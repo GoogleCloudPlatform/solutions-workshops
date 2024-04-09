@@ -39,14 +39,20 @@ while IFS='' read -r line; do contexts+=("$line"); done < <(kubectl config get-c
 repo_dir=$(git rev-parse --show-toplevel)
 base_dir="${repo_dir}/grpc-xds"
 
+pushd "${base_dir}/control-plane-${language}"
 context="${contexts[1]}"
-echo "Deploying greeter-$language to $context, without port forwarding"
-pushd "${base_dir}/greeter-${language}"
-skaffold run --kube-context="$context" --port-forward=off --status-check=false
+echo "Deploying control-plane-$language to $context, without port forwarding"
+skaffold run --kube-context="$context" --port-forward=off
+context="${contexts[0]}"
+echo "Deploying control-plane-$language to $context, without port forwarding"
+skaffold run --kube-context="$context" --port-forward=off
 popd
 
+pushd "${base_dir}/greeter-${language}"
+context="${contexts[1]}"
+echo "Deploying greeter-$language to $context, without port forwarding"
+skaffold run --kube-context="$context" --port-forward=off
 context="${contexts[0]}"
-echo "Deploying control-plane-$language and greeter-$language to $context, with port forwarding"
-pushd "$base_dir"
-skaffold run --kube-context="$context" --module="$language" --port-forward=user --profile="multi-cluster-${cluster_type%_}"
+echo "Deploying greeter-$language to $context, with port forwarding"
+skaffold run --kube-context="$context" --port-forward=user --profile="federation-${cluster_type%_}"
 popd

@@ -70,7 +70,7 @@ func (c *transportCredentials) Close() {
 	}
 }
 
-func Run(ctx context.Context, servingPort int, healthPort int, kubecontexts []informers.Kubecontext, xdsFeatures *xds.Features) error {
+func Run(ctx context.Context, servingPort int, healthPort int, kubecontexts []informers.Kubecontext, xdsFeatures *xds.Features, authority string) error {
 	logger := logging.FromContext(ctx)
 	serverCredentials, err := createServerCredentials(logger, xdsFeatures)
 	if err != nil {
@@ -96,7 +96,7 @@ func Run(ctx context.Context, servingPort int, healthPort int, kubecontexts []in
 	reflection.Register(server)
 	reflection.Register(healthGRPCServer)
 
-	xdsCache := xds.NewSnapshotCache(ctx, true, xds.ZoneHash{}, xds.LocalityPriorityByZone{}, xdsFeatures)
+	xdsCache := xds.NewSnapshotCache(ctx, true, xds.ZoneHash{}, xds.LocalityPriorityByZone{}, xdsFeatures, authority)
 	xdsServer := serverv3.NewServer(ctx, xdsCache, xdsServerCallbackFuncs(logger))
 
 	registerXDSServices(server, xdsServer)

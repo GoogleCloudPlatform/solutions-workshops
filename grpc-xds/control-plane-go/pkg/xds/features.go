@@ -21,4 +21,5 @@ type Features struct {
 	RequireControlPlaneClientCerts bool `yaml:"requireControlPlaneClientCerts"`
 	EnableDataPlaneTLS             bool `yaml:"enableDataPlaneTls"`
 	RequireDataPlaneClientCerts    bool `yaml:"requireDataPlaneClientCerts"`
+	EnableFederation               bool `yaml:"enableFederation"`
 }

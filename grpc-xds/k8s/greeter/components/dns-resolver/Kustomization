@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Use the gRPC DNS resolver instead of xDS to discover greeter-leaf from greeter-intermediary.
+# greeter-intermediary to use the gRPC DNS resolver instead of xDS to discover greeter-leaf.
 
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component

@@ -12,8 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Patch to set the NEXT_HOP environment variable for greeter-intermediary to use the DNS resolver.
-# Overwrites any `env` already set on the `app` container.
+# Patch to set the NEXT_HOP environment variable for greeter-intermediary to use the gRPC DNS resolver.
 
 apiVersion: apps/v1
 kind: Deployment
