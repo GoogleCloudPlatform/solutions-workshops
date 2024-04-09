@@ -32,6 +32,9 @@ import org.slf4j.LoggerFactory;
  * Implements a "google" <code>auth_provider</code> for Kubernetes.
  *
  * <p>Relies on Application Default Credentials, and does not support command-based authentication.
+ *
+ * <p>Also avoids the possible race condition in {@link
+ * io.kubernetes.client.util.authenticators.GCPAuthenticator}.
  */
 public class GoogleAuthenticator implements Authenticator {
   private static final Logger LOG = LoggerFactory.getLogger(GoogleAuthenticator.class);

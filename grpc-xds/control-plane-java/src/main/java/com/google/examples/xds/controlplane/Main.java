@@ -19,6 +19,7 @@ import com.google.examples.xds.controlplane.server.Server;
 import java.net.URL;
 
 /** Contains the entry point for the xDS control plane management server. */
+@SuppressWarnings("CatchAndPrintStackTrace")
 public class Main {
 
   // Set up logging if not already configured.

@@ -12,13 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# See the `XdsFeatures` class in the file
-# `src/main/java/com/google/examples/xds/controlplane/xds/XdsFeatures.java`
+# See the `Features` struct in the file
+# `pkg/xds/features.go`
 # for the flags that can be used.
 # Unspecified flags default to `false`.
 
-serverListenerUsesRds: true # `false` value means that RouteConfiguration is inline in the server Listener instead of relying on RDS
-enableControlPlaneTls: false # gRPC-Java as of v1.61.0 does _not_ fully support control plane mTLS for xDS clients
+serverListenerUsesRds: true # `false` value means that RouteConfiguration is inline in the server Listener instead of dynamic via RDS
+enableControlPlaneTls: false
 requireControlPlaneClientCerts: false # `true` value requires enableControlPlaneTls=true
 enableDataPlaneTls: true
 requireDataPlaneClientCerts: true # `true` value requires enableDataPlaneTls=true
+enableFederation: true

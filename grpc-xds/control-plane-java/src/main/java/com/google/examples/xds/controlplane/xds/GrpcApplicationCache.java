@@ -44,8 +44,8 @@ class GrpcApplicationCache {
     }
     var key = key(kubecontext, namespace);
     Set<GrpcApplication> oldApps;
+    mux.writeLock().lock();
     try {
-      mux.writeLock().lock();
       oldApps = cache.put(key, apps);
     } finally {
       mux.writeLock().unlock();
@@ -56,8 +56,8 @@ class GrpcApplicationCache {
   @SuppressWarnings("unused")
   @NotNull
   Set<GrpcApplication> get(@NotNull String kubecontext, @NotNull String namespace) {
+    mux.readLock().lock();
     try {
-      mux.readLock().lock();
       return cache.get(key(kubecontext, namespace));
     } finally {
       mux.readLock().unlock();
@@ -67,8 +67,8 @@ class GrpcApplicationCache {
   @NotNull
   Set<GrpcApplication> getAll() {
     var result = new HashSet<GrpcApplication>();
+    mux.readLock().lock();
     try {
-      mux.readLock().lock();
       for (Set<GrpcApplication> apps : cache.values()) {
         result.addAll(apps);
       }

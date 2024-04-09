@@ -23,7 +23,7 @@ public record GrpcApplication(
     @NotNull String namespace,
     @NotNull String serviceAccountName,
     @NotNull String listenerName,
-    @NotNull String routeName,
+    @NotNull String routeConfigurationName,
     @NotNull String clusterName,
     @NotNull String pathPrefix,
     int port,
@@ -56,7 +56,8 @@ public record GrpcApplication(
    *     the <code>xds:///</code> scheme prefix. For instance, if <code>listenerName</code> is
    *     <code>greeter-leaf</code>, clients connect using the {@link io.grpc.NameResolver}-compliant
    *     URI <code>xds:///greeter-leaf</code>
-   * @param routeName can be any value, but it is typically the same as <code>listenerName</code>
+   * @param routeConfigurationName can be any value, but it is typically the same as <code>
+   *     listenerName</code>
    * @param clusterName can be any value, but it is typically the same as <code>listenerName</code>
    * @param pathPrefix URL path prefix for the service exposed by the application. For a single
    *     route, the path prefix can be an empty string. In general, for a gRPC service, the path
@@ -69,7 +70,7 @@ public record GrpcApplication(
       @NotNull String namespace,
       @NotNull String serviceAccountName,
       @NotNull String listenerName,
-      @NotNull String routeName,
+      @NotNull String routeConfigurationName,
       @NotNull String clusterName,
       @NotNull String pathPrefix,
       int port,
@@ -77,7 +78,7 @@ public record GrpcApplication(
     this.namespace = namespace;
     this.serviceAccountName = serviceAccountName;
     this.listenerName = listenerName;
-    this.routeName = routeName;
+    this.routeConfigurationName = routeConfigurationName;
     this.clusterName = clusterName;
     this.pathPrefix = pathPrefix;
     this.port = port;

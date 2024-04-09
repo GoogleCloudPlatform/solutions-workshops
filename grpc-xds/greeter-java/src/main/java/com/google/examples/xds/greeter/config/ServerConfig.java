@@ -14,6 +14,7 @@
 
 package com.google.examples.xds.greeter.config;
 
+import com.google.common.base.Splitter;
 import com.google.gson.JsonParser;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -24,6 +25,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
@@ -173,14 +175,14 @@ public class ServerConfig {
           return "";
         }
         // Response is <code>projects/[PROJECT_NUMBER]/zones/[ZONE]</code>.
-        String[] split = firstLineOfResponse.split("/");
-        if (split.length < 4) {
+        List<String> split = Splitter.on('/').splitToList(firstLineOfResponse);
+        if (split.size() < 4) {
           LOG.warn(
               "Unexpected zone format from the GCP metadata server: {}, using it verbatim.",
               firstLineOfResponse);
           return firstLineOfResponse;
         }
-        return split[3];
+        return split.get(3);
       }
     } catch (IOException e) {
       LOG.warn("Could not look up the zone from the GCP metadata server: {}", e.getMessage());

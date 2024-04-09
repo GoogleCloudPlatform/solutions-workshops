@@ -26,7 +26,8 @@ public record XdsFeatures(
     boolean enableControlPlaneTls,
     boolean requireControlPlaneClientCerts,
     boolean enableDataPlaneTls,
-    boolean requireDataPlaneClientCerts) {
+    boolean requireDataPlaneClientCerts,
+    boolean enableFederation) {
 
   private static final Logger LOG = LoggerFactory.getLogger(XdsFeatures.class);
 
@@ -63,6 +64,7 @@ public record XdsFeatures(
         Objects.requireNonNullElse(features.get("enableControlPlaneTls"), Boolean.FALSE),
         Objects.requireNonNullElse(features.get("requireControlPlaneClientCerts"), Boolean.FALSE),
         Objects.requireNonNullElse(features.get("enableDataPlaneTls"), Boolean.FALSE),
-        Objects.requireNonNullElse(features.get("requireDataPlaneClientCerts"), Boolean.FALSE));
+        Objects.requireNonNullElse(features.get("requireDataPlaneClientCerts"), Boolean.FALSE),
+        Objects.requireNonNullElse(features.get("enableFederation"), Boolean.FALSE));
   }
 }

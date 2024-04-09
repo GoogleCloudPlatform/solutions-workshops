@@ -85,6 +85,9 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
    */
   private final LocalityPriorityMapper<T> localityPriorityMapper;
 
+  /** The authority name of this control plane for xDS federation. */
+  private final String authority;
+
   /**
    * appsCache stores the most recent gRPC application configuration information from k8s cluster
    * EndpointSlices. The appsCache is used to populate new entries (previously unseen `nodeHash`es)
@@ -108,17 +111,21 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
    * Create an xDS resource cache for the provided node hash function (<code>NodeGroup</code>).
    *
    * @param nodeHashFn function that returns a consistent identifier for a node.
+   * @param authority the authority name of this control plane management server, must match the key
+   *     in the gRPC xDS bootstrap config authorities section.
    */
   public XdsSnapshotCache(
       @NotNull NodeGroup<T> nodeHashFn,
       @NotNull LocalityPriorityMapper<T> localityPriorityMapper,
-      @NotNull XdsFeatures xdsFeatures) {
+      @NotNull XdsFeatures xdsFeatures,
+      @NotNull String authority) {
     this.delegate = new SimpleCache<>(nodeHashFn);
     this.nodeHashFn = nodeHashFn;
     this.localityPriorityMapper = localityPriorityMapper;
+    this.xdsFeatures = xdsFeatures;
+    this.authority = authority;
     this.appsCache = new GrpcApplicationCache();
     this.serverListenerCache = new ServerListenerCache<>();
-    this.xdsFeatures = xdsFeatures;
   }
 
   /**
@@ -168,6 +175,12 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
         && request.getResourceType() == ResourceType.LISTENER;
   }
 
+  /**
+   * Looks for server Listener names in the provided resource names, and extracts the address and
+   * port for each server Listener found. TODO: Handle xDS federation server Listener names using
+   * `xdstp://` names, e.g., {@code
+   * xdstp://xds-authority.example.com/envoy.config.listener.v3.Listener/grpc/server/%s}.
+   */
   @NotNull
   private Set<EndpointAddress> getServerListenerAddresses(
       @Nullable ProtocolStringList resourceNames) {
@@ -221,7 +234,7 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
 
   @NotNull
   private Snapshot createNewSnapshot(T nodeHash, Set<GrpcApplication> apps) {
-    return new XdsSnapshotBuilder<>(nodeHash, localityPriorityMapper, xdsFeatures)
+    return new XdsSnapshotBuilder<>(nodeHash, localityPriorityMapper, xdsFeatures, authority)
         .addGrpcApplications(apps)
         .addServerListenerAddresses(serverListenerCache.get(nodeHash))
         .build();

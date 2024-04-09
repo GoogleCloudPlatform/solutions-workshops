@@ -17,9 +17,19 @@ package com.google.examples.xds.controlplane.config;
 import com.google.examples.xds.controlplane.informers.InformerConfig;
 import com.google.examples.xds.controlplane.informers.Kubecontext;
 import com.google.examples.xds.controlplane.xds.XdsFeatures;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Properties;
+import java.util.regex.Pattern;
+import javax.naming.Context;
+import javax.naming.NamingException;
+import javax.naming.directory.InitialDirContext;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,6 +59,24 @@ public class ServerConfig {
   /** The file that contains xDS feature toggles. */
   private static final String XDS_FEATURES_CONFIG_FILE = "config/xds_features.yaml";
 
+  /**
+   * The file that contains the {@code app.kubernetes.io/name} pod label, mounted using the k8s
+   * downward API.
+   */
+  private static final String APP_NAME_LABEL_FILEPATH_DOWNWARD_API = "/etc/podinfo/label-app-name";
+
+  /** The file that contains the pod namespace, mounted using the k8s downward API. */
+  private static final String NAMESPACE_FILEPATH_DOWNWARD_API = "/etc/podinfo/namespace";
+
+  /**
+   * The file that contains the pod namespace if the Kubernetes service account token is mounted.
+   */
+  private static final String NAMESPACE_FILEPATH_SERVICE_ACCOUNT =
+      "/var/run/secrets/kubernetes.io/serviceaccount/namespace";
+
+  /** Reference to the Kubernetes API server. */
+  private static final String KUBERNETES_SERVICE = "kubernetes.default.svc";
+
   /** Returns the port number that the management server should listen on for xDS requests. */
   public int servingPort() {
     String portEnv = System.getenv("PORT");
@@ -74,6 +102,96 @@ public class ServerConfig {
       }
     }
     return DEFAULT_HEALTH_PORT;
+  }
+
+  /**
+   * Returns the expected authority name of this control plane management server. The authority name
+   * is used in xDS federation, where xDS clients can specify the authority of an xDS resource.
+   *
+   * <p>The authority name format assumed in this control plane implementation is of the format
+   * {@code [app-name].[namespace].svc.[k8s-dns-cluster-domain]}, e.g., {@code
+   * control-plane.xds.svc.cluster.local}. xDS clients must use this format in the {@code
+   * authorities} section of their gRPC xDS bootstrap configuration.
+   *
+   * @see <a
+   *     href="https://github.com/cncf/xds/blob/70da609f752ed4544772f144411161d41798f07e/proposals/TP1-xds-transport-next.md#federation">xRFC
+   *     TP1: <code>xdstp://</code> structured resource naming, caching and federation support</a>
+   * @see <a
+   *     href="https://github.com/grpc/proposal/blob/e85c66e48348867937688d89117bad3dcaa6f4f5/A47-xds-federation.md">gRFC
+   *     A47: xDS Federation</a>
+   */
+  public String authorityName() {
+    return "%s.%s.svc.%s".formatted(appName(), namespace(), clusterDnsDomain());
+  }
+
+  /**
+   * Returns the value of the {@code app.kubernetes.io/name} label on this pod. This method reads
+   * the value from a file in a volume that was mounted using the Kubernetes downward API.
+   */
+  String appName() {
+    try {
+      return Files.readString(
+          Path.of(APP_NAME_LABEL_FILEPATH_DOWNWARD_API), StandardCharsets.UTF_8);
+    } catch (IOException e) {
+      throw new ConfigException(
+          "Could not read app name label from file " + APP_NAME_LABEL_FILEPATH_DOWNWARD_API, e);
+    }
+  }
+
+  /**
+   * Returns the Kubernetes namespace of this pod. This method first looks for a file in a volume
+   * that was mounted using the Kubernetes downward API. If that doesn't exist, it looks for the
+   * {@code namespace} file in the {@code serviceaccount} directory. If neither of those files
+   * exist, this method throws a runtime exception.
+   */
+  String namespace() {
+    Path namespacePathDownwardApi = Path.of(NAMESPACE_FILEPATH_DOWNWARD_API);
+    if (Files.isReadable(namespacePathDownwardApi)) {
+      try {
+        return Files.readString(namespacePathDownwardApi, StandardCharsets.UTF_8);
+      } catch (IOException e) {
+        LOG.warn(
+            "Could not read pod namespace from file "
+                + NAMESPACE_FILEPATH_DOWNWARD_API
+                + " even though the file is readable, trying "
+                + NAMESPACE_FILEPATH_SERVICE_ACCOUNT
+                + " next",
+            e);
+      }
+    }
+    try {
+      return Files.readString(Path.of(NAMESPACE_FILEPATH_SERVICE_ACCOUNT), StandardCharsets.UTF_8);
+    } catch (IOException e) {
+      throw new ConfigException(
+          "Could not read pod namespace from file " + NAMESPACE_FILEPATH_SERVICE_ACCOUNT, e);
+    }
+  }
+
+  /**
+   * Returns the Kubernetes cluster's DNS domain, e.g., {@code cluster.local}.
+   *
+   * @see <a
+   *     href="https://github.com/openjdk/jdk/blob/6765f902505fbdd02f25b599f942437cd805cad1/src/jdk.naming.dns/share/classes/com/sun/jndi/dns/DnsContextFactory.java#L41">
+   *     <code>com.sun.jndi.dns.DnsContextFactory</code></a>
+   */
+  @SuppressWarnings("BanJNDI")
+  String clusterDnsDomain() {
+    var env = new Properties();
+    env.put(Context.INITIAL_CONTEXT_FACTORY, "com.sun.jndi.dns.DnsContextFactory");
+    try {
+      var initialDirContext = new InitialDirContext(env);
+      var cnameAttributes =
+          initialDirContext.getAttributes(KUBERNETES_SERVICE, new String[] {"CNAME"});
+      var k8sSvcFqdn = cnameAttributes.get("CNAME").get().toString();
+      var domain = k8sSvcFqdn.replaceFirst("^" + Pattern.quote(KUBERNETES_SERVICE), "");
+      return domain.endsWith(".") ? domain.substring(0, domain.lastIndexOf(".")) : domain;
+    } catch (NamingException | NoSuchElementException e) {
+      throw new ConfigException(
+          "Could not determine the Kubernetes cluster DNS domain "
+              + "by looking up the DNS CNAME record for "
+              + KUBERNETES_SERVICE,
+          e);
+    }
   }
 
   /**

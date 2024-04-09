@@ -82,7 +82,9 @@ public class Server {
     XdsFeatures xdsFeatures = config.xdsFeatures();
     Authenticators.registerAll();
 
-    var xdsCache = new XdsSnapshotCache<>(ZONE_HASH, LOCALITY_PRIORITIES_BY_ZONE, xdsFeatures);
+    var xdsCache =
+        new XdsSnapshotCache<>(
+            ZONE_HASH, LOCALITY_PRIORITIES_BY_ZONE, xdsFeatures, config.authorityName());
     setupInformers(xdsCache, config.kubecontexts());
 
     int controlPlanePort = config.servingPort();
