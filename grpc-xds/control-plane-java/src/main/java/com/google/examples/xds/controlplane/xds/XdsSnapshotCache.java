@@ -153,10 +153,10 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
       T nodeHash = nodeHashFn.hash(request.v3Request().getNode());
       Set<EndpointAddress> listenerAddressesFromRequest =
           getServerListenerAddresses(request.getResourceNamesList());
+      LOG.info("serverListenerAddressesFromRequest={}", listenerAddressesFromRequest);
       boolean isAdded = serverListenerCache.add(nodeHash, listenerAddressesFromRequest);
-      if (isAdded) {
+      if (isAdded || delegate.getSnapshot(nodeHash) == null) {
         var snapshot = createNewSnapshot(nodeHash, appsCache.getAll());
-        LOG.info("Creating a new snapshot for nodeHash={}", nodeHash);
         delegate.setSnapshot(nodeHash, snapshot);
       }
     }
@@ -177,8 +177,9 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
 
   /**
    * Looks for server Listener names in the provided resource names, and extracts the address and
-   * port for each server Listener found. TODO: Handle xDS federation server Listener names using
-   * `xdstp://` names, e.g., {@code
+   * port for each server Listener found.
+   *
+   * <p>TODO: Handle xDS federation server Listener names using `xdstp://` names, e.g., {@code
    * xdstp://xds-authority.example.com/envoy.config.listener.v3.Listener/grpc/server/%s}.
    */
   @NotNull
@@ -221,12 +222,13 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
               + "so not creating new xDS resource snapshots.");
       return;
     }
-    LOG.info("Creating new xDS resource snapshots");
+    LOG.info("Creating new xDS resource snapshots for nodeHashes={}", delegate.groups());
     var apps = appsCache.getAll();
     delegate
         .groups()
         .forEach(
             nodeHash -> {
+              LOG.info("Creating new xDS resource snapshot for nodeHash={}", nodeHash);
               var snapshot = createNewSnapshot(nodeHash, apps);
               delegate.setSnapshot(nodeHash, snapshot);
             });

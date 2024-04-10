@@ -12,8 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# See the `Features` struct in the file
-# `pkg/xds/features.go`
+# See the `com.google.examples.xds.controlplane.xds.XdsFeatures` class
 # for the flags that can be used.
 # Unspecified flags default to `false`.
 

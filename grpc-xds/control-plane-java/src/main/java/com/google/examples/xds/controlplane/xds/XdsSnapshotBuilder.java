@@ -197,12 +197,16 @@ public class XdsSnapshotBuilder<T> {
         }
       }
       if (!clusters.containsKey(app.clusterName())) {
-        var cluster = createCluster(app.clusterName(), app.namespace(), app.serviceAccountName());
+        var cluster =
+            createCluster(
+                app.clusterName(), app.edsServiceName(), app.namespace(), app.serviceAccountName());
         clusters.put(cluster.getName(), cluster);
         if (xdsFeatures.enableFederation()) {
           var xdstpClusterName = xdstpCluster(authority, app.clusterName());
+          var xdstpEdsServiceName = xdstpEdsService(authority, app.edsServiceName());
           var xdstpCluster =
-              createCluster(xdstpClusterName, app.namespace(), app.serviceAccountName());
+              createCluster(
+                  xdstpClusterName, xdstpEdsServiceName, app.namespace(), app.serviceAccountName());
           clusters.put(xdstpCluster.getName(), xdstpCluster);
         }
       }
@@ -220,13 +224,13 @@ public class XdsSnapshotBuilder<T> {
           .addAll(app.endpoints());
       var clusterLoadAssignment =
           createClusterLoadAssignment(
-              app.clusterName(), app.port(), endpointsByCluster.get(endpointsByClusterKey));
+              app.edsServiceName(), app.port(), endpointsByCluster.get(endpointsByClusterKey));
       clusterLoadAssignments.put(clusterLoadAssignment.getClusterName(), clusterLoadAssignment);
       if (xdsFeatures.enableFederation()) {
-        var xdstpClusterName = xdstpCluster(authority, app.clusterName());
+        var xdstpEdsServiceName = xdstpEdsService(authority, app.clusterName());
         var xdstpClusterLoadAssignment =
             createClusterLoadAssignment(
-                xdstpClusterName, app.port(), endpointsByCluster.get(endpointsByClusterKey));
+                xdstpEdsServiceName, app.port(), endpointsByCluster.get(endpointsByClusterKey));
         clusterLoadAssignments.put(
             xdstpClusterLoadAssignment.getClusterName(), xdstpClusterLoadAssignment);
       }
@@ -249,6 +253,12 @@ public class XdsSnapshotBuilder<T> {
   @NotNull
   static String xdstpCluster(@NotNull String authority, @NotNull String clusterName) {
     return "xdstp://%s/envoy.config.cluster.v3.Cluster/%s".formatted(authority, clusterName);
+  }
+
+  @NotNull
+  static String xdstpEdsService(@NotNull String authority, @NotNull String serviceName) {
+    return "xdstp://%s/envoy.config.endpoint.v3.ClusterLoadAssignment/%s"
+        .formatted(authority, serviceName);
   }
 
   @NotNull
@@ -277,6 +287,9 @@ public class XdsSnapshotBuilder<T> {
       routeConfigurations.put(routeConfigForServerListener.getName(), routeConfigForServerListener);
     }
     ImmutableList<Secret> secrets = ImmutableList.of();
+    LOG.info(
+        "Creating xDS resource snapshot with listeners={}",
+        listeners.values().stream().map(listener -> listener.getName()).toList());
     String version = String.valueOf(System.nanoTime());
     return Snapshot.create(
         clusters.values(),
@@ -531,7 +544,10 @@ public class XdsSnapshotBuilder<T> {
    *     A27: xDS-Based Global Load Balancing</a>
    */
   private Cluster createCluster(
-      @NotNull String clusterName, @NotNull String namespace, @NotNull String serviceAccountName) {
+      @NotNull String clusterName,
+      @NotNull String edsServiceName,
+      @NotNull String namespace,
+      @NotNull String serviceAccountName) {
     var clusterBuilder =
         Cluster.newBuilder()
             .setName(clusterName)
@@ -543,6 +559,8 @@ public class XdsSnapshotBuilder<T> {
                             .setResourceApiVersion(ApiVersion.V3)
                             .setAds(AggregatedConfigSource.getDefaultInstance())
                             .build())
+                    .setServiceName(
+                        edsServiceName) // required when using xDS federation, otherwise optional
                     .build())
             .setConnectTimeout(Durations.fromSeconds(3)); // default is 5s
 
@@ -615,16 +633,17 @@ public class XdsSnapshotBuilder<T> {
   /**
    * ClusterLoadAssignment definition for EDS.
    *
+   * @param edsServiceName must match {@code serviceName} from EDSClusterConfig in CDS.
    * @see <a
    *     href="https://github.com/grpc/proposal/blob/972b69ab1f0f7f6079af81a8c2b8a01a15ce3bec/A27-xds-global-load-balancing.md#clusterloadassignment-proto">gRFC
    *     A27: xDS-Based Global Load Balancing</a>
    */
   private ClusterLoadAssignment createClusterLoadAssignment(
-      @NotNull String clusterName,
+      @NotNull String edsServiceName,
       int port,
       @NotNull Collection<GrpcApplicationEndpoint> endpoints) {
     var clusterLoadAssignmentBuilder =
-        ClusterLoadAssignment.newBuilder().setClusterName(clusterName);
+        ClusterLoadAssignment.newBuilder().setClusterName(edsServiceName);
 
     Map<Locality, List<GrpcApplicationEndpoint>> endpointsByLocality =
         endpoints.stream()
