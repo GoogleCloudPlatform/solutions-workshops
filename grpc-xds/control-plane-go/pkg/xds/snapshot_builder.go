@@ -117,6 +117,7 @@ func (b *SnapshotBuilder) AddGRPCApplications(apps []GRPCApplication) (*Snapshot
 		if b.clusters[app.ClusterName] == nil {
 			cluster, err := createCluster(
 				app.ClusterName,
+				app.EDSServiceName,
 				app.Namespace,
 				app.ServiceAccountName,
 				b.features.EnableDataPlaneTLS,
@@ -127,8 +128,10 @@ func (b *SnapshotBuilder) AddGRPCApplications(apps []GRPCApplication) (*Snapshot
 			b.clusters[cluster.Name] = cluster
 			if b.features.EnableFederation {
 				xdstpClusterName := xdstpCluster(b.authority, app.ClusterName)
+				xdstpEDSServiceName := xdstpEdsService(b.authority, app.EDSServiceName)
 				xdstpCluster, err := createCluster(
 					xdstpClusterName,
+					xdstpEDSServiceName,
 					app.Namespace,
 					app.ServiceAccountName,
 					b.features.EnableDataPlaneTLS,
@@ -142,11 +145,11 @@ func (b *SnapshotBuilder) AddGRPCApplications(apps []GRPCApplication) (*Snapshot
 		// Merge endpoints from multiple informers for the same app:
 		endpointsByClusterKey := fmt.Sprintf("%s-%d", app.ClusterName, app.Port)
 		b.endpointsByCluster[endpointsByClusterKey] = append(b.endpointsByCluster[endpointsByClusterKey], app.Endpoints...)
-		clusterLoadAssignment := createClusterLoadAssignment(app.ClusterName, app.Port, b.nodeHash, b.localityPriorityMapper, b.endpointsByCluster[endpointsByClusterKey])
+		clusterLoadAssignment := createClusterLoadAssignment(app.EDSServiceName, app.Port, b.nodeHash, b.localityPriorityMapper, b.endpointsByCluster[endpointsByClusterKey])
 		b.clusterLoadAssignments[clusterLoadAssignment.ClusterName] = clusterLoadAssignment
 		if b.features.EnableFederation {
-			xdstpClusterName := xdstpCluster(b.authority, app.ClusterName)
-			xdstpClusterLoadAssignment := createClusterLoadAssignment(xdstpClusterName, app.Port, b.nodeHash, b.localityPriorityMapper, b.endpointsByCluster[endpointsByClusterKey])
+			xdstpEDSServiceName := xdstpEdsService(b.authority, app.EDSServiceName)
+			xdstpClusterLoadAssignment := createClusterLoadAssignment(xdstpEDSServiceName, app.Port, b.nodeHash, b.localityPriorityMapper, b.endpointsByCluster[endpointsByClusterKey])
 			b.clusterLoadAssignments[xdstpClusterLoadAssignment.ClusterName] = xdstpClusterLoadAssignment
 		}
 	}
@@ -165,8 +168,8 @@ func xdstpCluster(authority string, clusterName string) string {
 	return fmt.Sprintf("xdstp://%s/envoy.config.cluster.v3.Cluster/%s", authority, clusterName)
 }
 
-func xdstpClusterLoadAssignment(authority string, clusterName string) string {
-	return fmt.Sprintf("xdstp://%s/envoy.config.endpoint.v3.ClusterLoadAssignment/%s", authority, clusterName)
+func xdstpEdsService(authority string, serviceName string) string {
+	return fmt.Sprintf("xdstp://%s/envoy.config.endpoint.v3.ClusterLoadAssignment/%s", authority, serviceName)
 }
 
 // AddServerListenerAddresses adds server listeners and associated route
@@ -508,7 +511,7 @@ func createRouteConfigurationForServerListener(name string) *routev3.RouteConfig
 
 // createCluster definition for CDS.
 // [gRFC A27]: https://github.com/grpc/proposal/blob/972b69ab1f0f7f6079af81a8c2b8a01a15ce3bec/A27-xds-global-load-balancing.md#cluster-proto
-func createCluster(name string, namespace string, serviceAccountName string, enableTLS bool, requireClientCerts bool) (*clusterv3.Cluster, error) {
+func createCluster(name string, edsServiceName string, namespace string, serviceAccountName string, enableTLS bool, requireClientCerts bool) (*clusterv3.Cluster, error) {
 	cluster := clusterv3.Cluster{
 		Name: name,
 		ClusterDiscoveryType: &clusterv3.Cluster_Type{
@@ -521,7 +524,7 @@ func createCluster(name string, namespace string, serviceAccountName string, ena
 					Ads: &corev3.AggregatedConfigSource{},
 				},
 			},
-			ServiceName: name,
+			ServiceName: edsServiceName,
 		},
 		ConnectTimeout: &durationpb.Duration{
 			Seconds: 3, // default is 5s
@@ -596,8 +599,9 @@ func createUpstreamTLSContext(namespace string, serviceAccountName string, requi
 }
 
 // createClusterLoadAssignment for EDS.
+// `edsServiceName` must match the `ServiceName` in the `EDSClusterConfig` in the CDS Cluster resource.
 // [gRFC A27]: https://github.com/grpc/proposal/blob/972b69ab1f0f7f6079af81a8c2b8a01a15ce3bec/A27-xds-global-load-balancing.md#clusterloadassignment-proto
-func createClusterLoadAssignment(clusterName string, port uint32, nodeHash string, localityPriorityMapper LocalityPriorityMapper, endpoints []GRPCApplicationEndpoints) *endpointv3.ClusterLoadAssignment {
+func createClusterLoadAssignment(edsServiceName string, port uint32, nodeHash string, localityPriorityMapper LocalityPriorityMapper, endpoints []GRPCApplicationEndpoints) *endpointv3.ClusterLoadAssignment {
 	addressesByZone := map[string][]string{}
 	for _, endpoint := range endpoints {
 		addressesByZone[endpoint.Zone] = append(addressesByZone[endpoint.Zone], endpoint.Addresses...)
@@ -610,7 +614,7 @@ func createClusterLoadAssignment(clusterName string, port uint32, nodeHash strin
 	}
 	zonePriorities := localityPriorityMapper.BuildPriorityMap(nodeHash, zones)
 	cla := &endpointv3.ClusterLoadAssignment{
-		ClusterName: clusterName,
+		ClusterName: edsServiceName,
 		Endpoints:   []*endpointv3.LocalityLbEndpoints{},
 	}
 	for zone, addresses := range addressesByZone {

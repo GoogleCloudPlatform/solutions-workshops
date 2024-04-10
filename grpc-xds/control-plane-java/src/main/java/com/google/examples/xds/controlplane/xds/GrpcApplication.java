@@ -18,24 +18,45 @@ import java.util.Collection;
 import java.util.List;
 import org.jetbrains.annotations.NotNull;
 
-/** Represents a gRPC application that clients discover using xDS. */
+/**
+ * Represents a gRPC application that clients discover using xDS.
+ *
+ * @param namespace the Kubernetes Namespace where the application is running
+ * @param serviceAccountName the name of the Kubernetes Service Account used by the application
+ * @param listenerName the name that clients should use to connect to the application, following the
+ *     <code>xds:///</code> scheme prefix. For instance, if <code>listenerName</code> is <code>
+ *     greeter-leaf</code>, clients connect using the {@link io.grpc.NameResolver}-compliant URI
+ *     <code>xds:///greeter-leaf</code>
+ * @param routeConfigurationName can be any value, but it is typically the same as <code>
+ *     listenerName</code>
+ * @param clusterName can be any value, but it is typically the same as <code>listenerName</code>
+ * @param edsServiceName is the name presented to EDS. It can be any value, but it is typically the
+ *     same as <code>listenerName</code>
+ * @param pathPrefix URL path prefix for the service exposed by the application. For a single route,
+ *     the path prefix can be an empty string. In general, for a gRPC service, the path prefix will
+ *     be in the format <code>/[package].[service]/</code>, e.g., <code>
+ *     /helloworld.Greeter/</code>
+ * @param port listening port of the server
+ * @param endpoints application server endpoints
+ */
 public record GrpcApplication(
     @NotNull String namespace,
     @NotNull String serviceAccountName,
     @NotNull String listenerName,
     @NotNull String routeConfigurationName,
     @NotNull String clusterName,
+    @NotNull String edsServiceName,
     @NotNull String pathPrefix,
     int port,
     @NotNull Collection<GrpcApplicationEndpoint> endpoints) {
 
   /**
-   * Convenience constructor for use in the common scenario where the Kubernetes ServiceAccount,
-   * Listener, RouteConfiguration, and Cluster all use the same name.
+   * Convenience constructor for use in the common scenario where the Kubernetes ServiceAccount, LDS
+   * Listener, RDS RouteConfiguration, CDS Cluster, and EDS ServiceName all share the same name.
    *
    * @param namespace the Kubernetes Namespace
-   * @param name the Kubernetes ServiceAccount, LDS Listener, RDS RouteConfiguration, and CDS
-   *     Cluster name
+   * @param name the Kubernetes ServiceAccount, LDS Listener, RDS RouteConfiguration, CDS Cluster
+   *     name, and EDS ServiceName
    * @param port listening port of the server
    * @param endpoints application server endpoints
    */
@@ -44,44 +65,6 @@ public record GrpcApplication(
       @NotNull String name,
       int port,
       @NotNull Collection<GrpcApplicationEndpoint> endpoints) {
-    this(namespace, name, name, name, name, "", port, endpoints);
-  }
-
-  /**
-   * Canonical constructor.
-   *
-   * @param namespace the Kubernetes Namespace where the application is running
-   * @param serviceAccountName the name of the Kubernetes Service Account used by the application
-   * @param listenerName the name that clients should use to connect to the application, following
-   *     the <code>xds:///</code> scheme prefix. For instance, if <code>listenerName</code> is
-   *     <code>greeter-leaf</code>, clients connect using the {@link io.grpc.NameResolver}-compliant
-   *     URI <code>xds:///greeter-leaf</code>
-   * @param routeConfigurationName can be any value, but it is typically the same as <code>
-   *     listenerName</code>
-   * @param clusterName can be any value, but it is typically the same as <code>listenerName</code>
-   * @param pathPrefix URL path prefix for the service exposed by the application. For a single
-   *     route, the path prefix can be an empty string. In general, for a gRPC service, the path
-   *     prefix will be in the format <code>/[package].[service]/</code>, e.g., <code>
-   *     /helloworld.Greeter/</code>
-   * @param port listening port of the server
-   * @param endpoints application server endpoints
-   */
-  public GrpcApplication(
-      @NotNull String namespace,
-      @NotNull String serviceAccountName,
-      @NotNull String listenerName,
-      @NotNull String routeConfigurationName,
-      @NotNull String clusterName,
-      @NotNull String pathPrefix,
-      int port,
-      @NotNull Collection<GrpcApplicationEndpoint> endpoints) {
-    this.namespace = namespace;
-    this.serviceAccountName = serviceAccountName;
-    this.listenerName = listenerName;
-    this.routeConfigurationName = routeConfigurationName;
-    this.clusterName = clusterName;
-    this.pathPrefix = pathPrefix;
-    this.port = port;
-    this.endpoints = List.copyOf(endpoints);
+    this(namespace, name, name, name, name, name, "", port, List.copyOf(endpoints));
   }
 }

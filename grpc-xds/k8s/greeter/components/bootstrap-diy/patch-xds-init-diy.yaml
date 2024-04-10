@@ -46,7 +46,7 @@ spec:
           {
             "xds_servers": [
               {
-                "server_uri": "control-plane.xds.svc.cluster.example.com:50051",
+                "server_uri": "dns:///control-plane.xds.svc.cluster.example.com:50051",
                 "channel_creds": [
                   {
                     "type": "insecure"

@@ -18,18 +18,15 @@ import com.google.examples.xds.controlplane.informers.InformerConfig;
 import com.google.examples.xds.controlplane.informers.Kubecontext;
 import com.google.examples.xds.controlplane.xds.XdsFeatures;
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Properties;
 import java.util.regex.Pattern;
-import javax.naming.Context;
-import javax.naming.NamingException;
-import javax.naming.directory.InitialDirContext;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -174,21 +171,14 @@ public class ServerConfig {
    *     href="https://github.com/openjdk/jdk/blob/6765f902505fbdd02f25b599f942437cd805cad1/src/jdk.naming.dns/share/classes/com/sun/jndi/dns/DnsContextFactory.java#L41">
    *     <code>com.sun.jndi.dns.DnsContextFactory</code></a>
    */
-  @SuppressWarnings("BanJNDI")
   String clusterDnsDomain() {
-    var env = new Properties();
-    env.put(Context.INITIAL_CONTEXT_FACTORY, "com.sun.jndi.dns.DnsContextFactory");
     try {
-      var initialDirContext = new InitialDirContext(env);
-      var cnameAttributes =
-          initialDirContext.getAttributes(KUBERNETES_SERVICE, new String[] {"CNAME"});
-      var k8sSvcFqdn = cnameAttributes.get("CNAME").get().toString();
-      var domain = k8sSvcFqdn.replaceFirst("^" + Pattern.quote(KUBERNETES_SERVICE), "");
+      var k8sSvcFqdn = InetAddress.getByName(KUBERNETES_SERVICE).getCanonicalHostName();
+      var domain = k8sSvcFqdn.replaceFirst("^" + Pattern.quote(KUBERNETES_SERVICE + "."), "");
       return domain.endsWith(".") ? domain.substring(0, domain.lastIndexOf(".")) : domain;
-    } catch (NamingException | NoSuchElementException e) {
+    } catch (UnknownHostException e) {
       throw new ConfigException(
-          "Could not determine the Kubernetes cluster DNS domain "
-              + "by looking up the DNS CNAME record for "
+          "Could not determine the Kubernetes cluster DNS domain by looking up the FQDN for "
               + KUBERNETES_SERVICE,
           e);
     }

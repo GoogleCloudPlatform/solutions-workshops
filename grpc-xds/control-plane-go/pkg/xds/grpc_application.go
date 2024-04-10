@@ -25,13 +25,14 @@ type GRPCApplication struct {
 	ListenerName           string
 	RouteConfigurationName string
 	ClusterName            string
+	EDSServiceName         string
 	PathPrefix             string
 	Port                   uint32
 	Endpoints              []GRPCApplicationEndpoints
 }
 
 // NewGRPCApplication is a convenience function that creates a GRPCApplication where the
-// k8s ServiceAccount, LDS Listener, RDS RouteConfiguration, and CDS Cluster all share the same name.
+// k8s ServiceAccount, LDS Listener, RDS RouteConfiguration, CDS Cluster, and EDS ServiceName all share the same name.
 func NewGRPCApplication(namespace string, name string, port uint32, endpoints []GRPCApplicationEndpoints) GRPCApplication {
 	endpointsCopy := make([]GRPCApplicationEndpoints, len(endpoints))
 	copy(endpointsCopy, endpoints)
@@ -44,6 +45,7 @@ func NewGRPCApplication(namespace string, name string, port uint32, endpoints []
 		ListenerName:           name,
 		RouteConfigurationName: name,
 		ClusterName:            name,
+		EDSServiceName:         name,
 		PathPrefix:             "",
 		Port:                   port,
 		Endpoints:              endpointsCopy,
@@ -67,6 +69,9 @@ func (a GRPCApplication) Compare(b GRPCApplication) int {
 	}
 	if a.ClusterName != b.ClusterName {
 		return strings.Compare(a.ClusterName, b.ClusterName)
+	}
+	if a.EDSServiceName != b.EDSServiceName {
+		return strings.Compare(a.EDSServiceName, b.EDSServiceName)
 	}
 	if a.PathPrefix != b.PathPrefix {
 		return strings.Compare(a.PathPrefix, b.PathPrefix)

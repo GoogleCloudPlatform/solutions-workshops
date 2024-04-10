@@ -80,6 +80,9 @@ public class Server {
   /** Runs the server. */
   public void run(@NotNull ServerConfig config) throws Exception {
     XdsFeatures xdsFeatures = config.xdsFeatures();
+    if (xdsFeatures.enableFederation()) {
+      LOG.info("Enabling xDS federation, authority={}", config.authorityName());
+    }
     Authenticators.registerAll();
 
     var xdsCache =
