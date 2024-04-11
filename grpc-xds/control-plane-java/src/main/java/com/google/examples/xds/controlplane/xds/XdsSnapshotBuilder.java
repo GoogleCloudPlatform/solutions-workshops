@@ -40,6 +40,9 @@ import io.envoyproxy.envoy.config.listener.v3.ApiListener;
 import io.envoyproxy.envoy.config.listener.v3.Filter;
 import io.envoyproxy.envoy.config.listener.v3.FilterChain;
 import io.envoyproxy.envoy.config.listener.v3.Listener;
+import io.envoyproxy.envoy.config.rbac.v3.Permission;
+import io.envoyproxy.envoy.config.rbac.v3.Policy;
+import io.envoyproxy.envoy.config.rbac.v3.Principal;
 import io.envoyproxy.envoy.config.route.v3.Decorator;
 import io.envoyproxy.envoy.config.route.v3.NonForwardingAction;
 import io.envoyproxy.envoy.config.route.v3.Route;
@@ -48,6 +51,8 @@ import io.envoyproxy.envoy.config.route.v3.RouteConfiguration;
 import io.envoyproxy.envoy.config.route.v3.RouteMatch;
 import io.envoyproxy.envoy.config.route.v3.VirtualHost;
 import io.envoyproxy.envoy.extensions.filters.http.fault.v3.HTTPFault;
+import io.envoyproxy.envoy.extensions.filters.http.rbac.v3.RBAC;
+import io.envoyproxy.envoy.extensions.filters.http.rbac.v3.RBACPerRoute;
 import io.envoyproxy.envoy.extensions.filters.http.router.v3.Router;
 import io.envoyproxy.envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager;
 import io.envoyproxy.envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager.CodecType;
@@ -106,6 +111,7 @@ public class XdsSnapshotBuilder<T> {
   private static final String ENVOY_FILTER_HTTP_ROUTER = "envoy.filters.http.router";
 
   private static final String ENVOY_FILTER_HTTP_FAULT = "envoy.filters.http.fault";
+  private static final String ENVOY_FILTER_HTTP_RBAC = "envoy.filters.http.rbac";
 
   /**
    * Used for the RouteConfiguration pointed to by server Listeners.
@@ -357,7 +363,8 @@ public class XdsSnapshotBuilder<T> {
       boolean useRds,
       boolean enableTls,
       boolean requireClientCerts) {
-    var httpConnectionManager = createHttpConnectionManagerForServerListener(useRds);
+    var httpConnectionManager =
+        createHttpConnectionManagerForServerListener(useRds, enableTls, requireClientCerts);
 
     var filterChainBuilder =
         FilterChain.newBuilder()
@@ -400,7 +407,8 @@ public class XdsSnapshotBuilder<T> {
         .build();
   }
 
-  private HttpConnectionManager createHttpConnectionManagerForServerListener(boolean useRds) {
+  private HttpConnectionManager createHttpConnectionManagerForServerListener(
+      boolean useRds, boolean enableTls, boolean requireClientCerts) {
     var httpConnectionManagerBuilder =
         HttpConnectionManager.newBuilder()
             .setCodecType(CodecType.AUTO)
@@ -432,6 +440,21 @@ public class XdsSnapshotBuilder<T> {
               .build());
     } else {
       httpConnectionManagerBuilder.setRouteConfig(createRouteConfigForServerListener());
+    }
+
+    if (enableTls && requireClientCerts) {
+      // Prepend RBAC HTTP filter. Not append, as Router must be the last HTTP filter.
+      httpConnectionManagerBuilder.addHttpFilters(
+          0,
+          HttpFilter.newBuilder()
+              .setName(ENVOY_FILTER_HTTP_RBAC)
+              .setTypedConfig(
+                  Any.pack(
+                      RBAC.newBuilder()
+                          // Present and empty `Rules` mean DENY all. Override per route.
+                          .setRules(io.envoyproxy.envoy.config.rbac.v3.RBAC.newBuilder().build())
+                          .build()))
+              .build());
     }
 
     return httpConnectionManagerBuilder.build();
@@ -531,6 +554,53 @@ public class XdsSnapshotBuilder<T> {
                                 .setOperation(SERVER_LISTENER_ROUTE_CONFIG_NAME + "/*")
                                 .build())
                         .setNonForwardingAction(NonForwardingAction.getDefaultInstance())
+                        .putTypedPerFilterConfig(
+                            ENVOY_FILTER_HTTP_RBAC,
+                            Any.pack(createRbacPerRouteConfig("xds", "host-certs")))
+                        .build())
+                .build())
+        .build();
+  }
+
+  @NotNull
+  RBACPerRoute createRbacPerRouteConfig(String... allowNamespaces) {
+    var pipedNamespaces = String.join("|", allowNamespaces);
+    return RBACPerRoute.newBuilder()
+        .setRbac(
+            RBAC.newBuilder()
+                .setRules(
+                    // No alias imports in Java :-(
+                    io.envoyproxy
+                        .envoy
+                        .config
+                        .rbac
+                        .v3
+                        .RBAC
+                        .newBuilder()
+                        .setAction(io.envoyproxy.envoy.config.rbac.v3.RBAC.Action.ALLOW)
+                        .putPolicies(
+                            "greeter-clients",
+                            Policy.newBuilder()
+                                // Permissions can match URL path, headers/metadata, and more.
+                                .addPermissions(Permission.newBuilder().setAny(true))
+                                .addPrincipals(
+                                    Principal.newBuilder()
+                                        .setAuthenticated(
+                                            Principal.Authenticated.newBuilder()
+                                                .setPrincipalName(
+                                                    // Matches against URI SANs, then DNS SANs, then
+                                                    // Subject DN.
+                                                    StringMatcher.newBuilder()
+                                                        .setSafeRegex(
+                                                            RegexMatcher.newBuilder()
+                                                                .setRegex(
+                                                                    "spiffe://[^/]+/ns/(%s)/sa/.+"
+                                                                        .formatted(pipedNamespaces))
+                                                                .build())
+                                                        .build())
+                                                .build())
+                                        .build())
+                                .build())
                         .build())
                 .build())
         .build();

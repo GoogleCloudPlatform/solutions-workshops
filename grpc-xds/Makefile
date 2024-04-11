@@ -139,25 +139,25 @@ copy-bastion-certs: check-kubectl
 # Port forwarding must be running. Verify that the port in the command below matches the local forwarded port.
 .PHONY: request
 request: check-grpcurl
-	grpcurl -plaintext -d '{"name": "World"}' dns:///localhost:50055 helloworld.Greeter/SayHello
+	grpcurl -proto ./greeter-java/third_party/src/main/proto/helloworld/helloworld.proto -plaintext -d '{"name": "World"}' dns:///localhost:50055 helloworld.Greeter/SayHello
 
 # request-leaf sends a plaintext request to the greeter-leaf server using the DNS resolver.
 # Port forwarding must be running. Verify that the port in the command below matches the local forwarded port.
 .PHONY: request-leaf
 request-leaf: check-grpcurl
-	grpcurl -plaintext -d '{"name": "World"}' dns:///localhost:50057 helloworld.Greeter/SayHello
+	grpcurl -proto ./greeter-java/third_party/src/main/proto/helloworld/helloworld.proto -plaintext -d '{"name": "World"}' dns:///localhost:50057 helloworld.Greeter/SayHello
 
 # request-mtls sends an mTLS request to the greeter-intermediary server using the DNS resolver.
 # Port forwarding must be running. Verify that the port in the command below matches the local forwarded port.
 .PHONY: request-mtls
 request-mtls: check-grpcurl certs/ca_certificates.pem
-	grpcurl -authority greeter-intermediary -cacert ./certs/ca_certificates.pem -cert ./certs/certificates.pem -key ./certs/private_key.pem -d '{"name": "World"}' dns:///localhost:50055 helloworld.Greeter/SayHello
+	grpcurl -proto ./greeter-java/third_party/src/main/proto/helloworld/helloworld.proto -authority greeter-intermediary -cacert ./certs/ca_certificates.pem -cert ./certs/certificates.pem -key ./certs/private_key.pem -d '{"name": "World"}' dns:///localhost:50055 helloworld.Greeter/SayHello
 
 # request-leaf-mtls sends an mTLS request to the greeter-leaf server using the DNS resolver.
 # Port forwarding must be running. Verify that the port in the command below matches the local forwarded port.
 .PHONY: request-leaf-mtls
 request-leaf-mtls: check-grpcurl certs/ca_certificates.pem
-	grpcurl -authority greeter-leaf -cacert ./certs/ca_certificates.pem -cert ./certs/certificates.pem -key ./certs/private_key.pem -d '{"name": "World"}' dns:///localhost:50057 helloworld.Greeter/SayHello
+	grpcurl -proto ./greeter-java/third_party/src/main/proto/helloworld/helloworld.proto -authority greeter-leaf -cacert ./certs/ca_certificates.pem -cert ./certs/certificates.pem -key ./certs/private_key.pem -d '{"name": "World"}' dns:///localhost:50057 helloworld.Greeter/SayHello
 
 # request-mtls-insecure sends an mTLS request to the greeter-intermediary server using the DNS resolver,
 # with certificate validation turned off. Use this target with GKE workload TLS certificates,
@@ -165,7 +165,7 @@ request-leaf-mtls: check-grpcurl certs/ca_certificates.pem
 # Port forwarding must be running. Verify that the port in the command below matches the local forwarded port.
 .PHONY: request-mtls-insecure
 request-mtls-insecure: check-grpcurl certs/ca_certificates.pem
-	grpcurl -insecure -cacert ./certs/ca_certificates.pem -cert ./certs/certificates.pem -key ./certs/private_key.pem -d '{"name": "World"}' dns:///localhost:50055 helloworld.Greeter/SayHello
+	grpcurl -proto ./greeter-java/third_party/src/main/proto/helloworld/helloworld.proto -insecure -cacert ./certs/ca_certificates.pem -cert ./certs/certificates.pem -key ./certs/private_key.pem -d '{"name": "World"}' dns:///localhost:50055 helloworld.Greeter/SayHello
 
 # request-leaf-mtls-insecure sends an mTLS request to the greeter-leaf server using the DNS resolver,
 # with certificate validation turned off. Use this target with GKE workload TLS certificates,
@@ -173,7 +173,7 @@ request-mtls-insecure: check-grpcurl certs/ca_certificates.pem
 # Port forwarding must be running. Verify that the port in the command below matches the local forwarded port.
 .PHONY: request-leaf-mtls-insecure
 request-leaf-mtls-insecure: check-grpcurl certs/ca_certificates.pem
-	grpcurl -insecure -cacert ./certs/ca_certificates.pem -cert ./certs/certificates.pem -key ./certs/private_key.pem -d '{"name": "World"}' dns:///localhost:50057 helloworld.Greeter/SayHello
+	grpcurl -proto ./greeter-java/third_party/src/main/proto/helloworld/helloworld.proto -insecure -cacert ./certs/ca_certificates.pem -cert ./certs/certificates.pem -key ./certs/private_key.pem -d '{"name": "World"}' dns:///localhost:50057 helloworld.Greeter/SayHello
 
 # tail-control-plane tails the control-plane logs
 .PHONY: tail-control-plane
