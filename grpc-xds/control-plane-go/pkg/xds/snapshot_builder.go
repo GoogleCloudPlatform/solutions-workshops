@@ -18,14 +18,17 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 	"time"
 
 	clusterv3 "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	endpointv3 "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	listenerv3 "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	rbacv3 "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
 	routev3 "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	faultv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/fault/v3"
+	rbacfilterv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/rbac/v3"
 	routerv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
 	hcmv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	tlsv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
@@ -40,6 +43,7 @@ import (
 
 const (
 	envoyFilterHTTPFaultName       = "envoy.filters.http.fault"
+	envoyFilterHTTPRBACName        = "envoy.filters.http.rbac"
 	envoyFilterHTTPRouterName      = "envoy.filters.http.router"
 	envoyHTTPConnectionManagerName = "envoy.http_connection_manager"
 	envoyTransportSocketsTLSName   = "envoy.transport_sockets.tls"
@@ -183,11 +187,16 @@ func (b *SnapshotBuilder) AddServerListenerAddresses(addresses []EndpointAddress
 
 // Build adds the server listeners and route configuration for the node hash, and then builds the snapshot.
 func (b *SnapshotBuilder) Build() (cachev3.ResourceSnapshot, error) {
+	rbacPerRouteConfig, err := createRBACPerRouteConfig("xds", "host-certs")
+	if err != nil {
+		return nil, fmt.Errorf("could not marshall RBACPerRoute typedConfig into Any instance: %w", err)
+	}
 	for address := range b.serverListenerAddresses {
 		serverListener, err := createServerListener(
 			address.Host,
 			address.Port,
 			serverListenerRouteConfigurationName,
+			rbacPerRouteConfig,
 			b.features.ServerListenerUsesRDS,
 			b.features.EnableDataPlaneTLS,
 			b.features.RequireDataPlaneClientCerts)
@@ -197,7 +206,7 @@ func (b *SnapshotBuilder) Build() (cachev3.ResourceSnapshot, error) {
 		b.listeners[serverListener.Name] = serverListener
 	}
 	if len(b.serverListenerAddresses) > 0 {
-		routeConfigurationForServerListener := createRouteConfigurationForServerListener(serverListenerRouteConfigurationName)
+		routeConfigurationForServerListener := createRouteConfigurationForServerListener(serverListenerRouteConfigurationName, rbacPerRouteConfig)
 		b.routeConfigurations[routeConfigurationForServerListener.Name] = routeConfigurationForServerListener
 	}
 
@@ -232,6 +241,44 @@ func (b *SnapshotBuilder) Build() (cachev3.ResourceSnapshot, error) {
 		resource.RouteType:    routeConfigurations,
 		resource.ClusterType:  clusters,
 		resource.EndpointType: clusterLoadAssignments,
+	})
+}
+
+func createRBACPerRouteConfig(allowNamespaces ...string) (*anypb.Any, error) {
+	pipedNamespaces := strings.Join(allowNamespaces, "|")
+	return anypb.New(&rbacfilterv3.RBACPerRoute{
+		Rbac: &rbacfilterv3.RBAC{
+			Rules: &rbacv3.RBAC{
+				Action: rbacv3.RBAC_ALLOW,
+				Policies: map[string]*rbacv3.Policy{
+					"greeter-users": {
+						Permissions: []*rbacv3.Permission{
+							{
+								Rule: &rbacv3.Permission_Any{
+									Any: true,
+								},
+							},
+						},
+						Principals: []*rbacv3.Principal{
+							{
+								Identifier: &rbacv3.Principal_Authenticated_{
+									Authenticated: &rbacv3.Principal_Authenticated{
+										PrincipalName: &matcherv3.StringMatcher{
+											MatchPattern: &matcherv3.StringMatcher_SafeRegex{
+												SafeRegex: &matcherv3.RegexMatcher{
+													// Matches against URI SANs, then DNS SANs, then Subject DN.
+													Regex: fmt.Sprintf("spiffe://[^/]+/ns/(%s)/sa/.+", pipedNamespaces),
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	})
 }
 
@@ -295,12 +342,18 @@ func createAPIListener(name string, statPrefix string, routeConfigurationName st
 }
 
 // createServerListener returns a listener for xDS clients that serve gRPC services.
-func createServerListener(host string, port uint32, routeConfigurationName string, useRDS bool, enableTLS bool, requireClientCerts bool) (*listenerv3.Listener, error) {
+func createServerListener(host string, port uint32, routeConfigurationName string, rbacPerRouteConfig *anypb.Any, useRDS bool, enableTLS bool, requireClientCerts bool) (*listenerv3.Listener, error) {
 	routerTypedConfig, err := anypb.New(&routerv3.Router{})
 	if err != nil {
-		return nil, fmt.Errorf("could not marshall Router typedConfig into Any instance: %w", err)
+		return nil, fmt.Errorf("could not marshall Router HTTP filter typedConfig into Any instance: %w", err)
 	}
-	httpConnectionManager := createHTTPConnectionManagerForServerListener(routeConfigurationName, routerTypedConfig, useRDS)
+	rbacFilterTypedConfig, err := anypb.New(&rbacfilterv3.RBAC{
+		Rules: &rbacv3.RBAC{}, // Present and empty `Rules` mean DENY all. Override per route.
+	})
+	if err != nil {
+		return nil, fmt.Errorf("could not marshall RBAC HTTP filter typedConfig into Any instance: %w", err)
+	}
+	httpConnectionManager := createHTTPConnectionManagerForServerListener(routeConfigurationName, routerTypedConfig, rbacFilterTypedConfig, rbacPerRouteConfig, useRDS, enableTLS, requireClientCerts)
 	anyWrappedHTTPConnectionManager, err := anypb.New(httpConnectionManager)
 	if err != nil {
 		return nil, fmt.Errorf("could not marshall HttpConnectionManager +%v into Any instance: %w", httpConnectionManager, err)
@@ -357,7 +410,7 @@ func createServerListener(host string, port uint32, routeConfigurationName strin
 	return &serverListener, nil
 }
 
-func createHTTPConnectionManagerForServerListener(routeConfigurationName string, routerTypedConfig *anypb.Any, useRDS bool) *hcmv3.HttpConnectionManager {
+func createHTTPConnectionManagerForServerListener(routeConfigurationName string, routerFilterTypedConfig *anypb.Any, rbacFilterTypedConfig *anypb.Any, rbacPerRouteTypedConfig *anypb.Any, useRDS bool, enableTLS bool, requireClientCerts bool) *hcmv3.HttpConnectionManager {
 	httpConnectionManager := hcmv3.HttpConnectionManager{
 		CodecType:  hcmv3.HttpConnectionManager_AUTO,
 		StatPrefix: routeConfigurationName,
@@ -366,7 +419,7 @@ func createHTTPConnectionManagerForServerListener(routeConfigurationName string,
 				// Router must be the last filter.
 				Name: envoyFilterHTTPRouterName,
 				ConfigType: &hcmv3.HttpFilter_TypedConfig{
-					TypedConfig: routerTypedConfig,
+					TypedConfig: routerFilterTypedConfig,
 				},
 			},
 		},
@@ -399,8 +452,20 @@ func createHTTPConnectionManagerForServerListener(routeConfigurationName string,
 	} else {
 		// Inline RouteConfiguration for server listeners:
 		httpConnectionManager.RouteSpecifier = &hcmv3.HttpConnectionManager_RouteConfig{
-			RouteConfig: createRouteConfigurationForServerListener(routeConfigurationName),
+			RouteConfig: createRouteConfigurationForServerListener(routeConfigurationName, rbacPerRouteTypedConfig),
 		}
+	}
+
+	if enableTLS && requireClientCerts {
+		// Prepend RBAC HTTP filter. Not append, as Router must be the last HTTP filter.
+		httpConnectionManager.HttpFilters = append([]*hcmv3.HttpFilter{
+			{
+				Name: envoyFilterHTTPRBACName,
+				ConfigType: &hcmv3.HttpFilter_TypedConfig{
+					TypedConfig: rbacFilterTypedConfig,
+				},
+			},
+		}, httpConnectionManager.HttpFilters...)
 	}
 
 	return &httpConnectionManager
@@ -481,7 +546,7 @@ func createRouteConfiguration(name string, virtualHostName string, routePrefix s
 }
 
 // createRouteConfigurationForServerListener returns an RDS route configuration for the server listeners.
-func createRouteConfigurationForServerListener(name string) *routev3.RouteConfiguration {
+func createRouteConfigurationForServerListener(name string, rbacPerRouteConfig *anypb.Any) *routev3.RouteConfiguration {
 	return &routev3.RouteConfiguration{
 		Name: name,
 		VirtualHosts: []*routev3.VirtualHost{
@@ -501,6 +566,9 @@ func createRouteConfigurationForServerListener(name string) *routev3.RouteConfig
 						},
 						Decorator: &routev3.Decorator{
 							Operation: name + "/*",
+						},
+						TypedPerFilterConfig: map[string]*anypb.Any{
+							envoyFilterHTTPRBACName: rbacPerRouteConfig,
 						},
 					},
 				},
