@@ -251,9 +251,10 @@ func createRBACPerRouteConfig(allowNamespaces ...string) (*anypb.Any, error) {
 			Rules: &rbacv3.RBAC{
 				Action: rbacv3.RBAC_ALLOW,
 				Policies: map[string]*rbacv3.Policy{
-					"greeter-users": {
+					"greeter-clients": {
 						Permissions: []*rbacv3.Permission{
 							{
+								// Permissions can match URL path, headers/metadata, and more.
 								Rule: &rbacv3.Permission_Any{
 									Any: true,
 								},
