@@ -20,19 +20,21 @@ import (
 )
 
 type GRPCApplicationEndpoints struct {
-	Node      string
-	Zone      string
-	Addresses []string
+	Node           string
+	Zone           string
+	Addresses      []string
+	EndpointStatus EndpointStatus
 }
 
-func NewGRPCApplicationEndpoints(node string, zone string, addresses []string) GRPCApplicationEndpoints {
+func NewGRPCApplicationEndpoints(node string, zone string, addresses []string, endpointStatus EndpointStatus) GRPCApplicationEndpoints {
 	addressesCopy := make([]string, len(addresses))
 	copy(addressesCopy, addresses)
 	slices.Sort(addressesCopy)
 	return GRPCApplicationEndpoints{
-		Node:      node,
-		Zone:      zone,
-		Addresses: addressesCopy,
+		Node:           node,
+		Zone:           zone,
+		Addresses:      addressesCopy,
+		EndpointStatus: endpointStatus,
 	}
 }
 
@@ -44,6 +46,9 @@ func (e GRPCApplicationEndpoints) Compare(f GRPCApplicationEndpoints) int {
 	}
 	if e.Zone != f.Zone {
 		return strings.Compare(e.Zone, f.Zone)
+	}
+	if e.EndpointStatus != f.EndpointStatus {
+		return strings.Compare(e.EndpointStatus.String(), f.EndpointStatus.String())
 	}
 	return slices.Compare(e.Addresses, f.Addresses)
 }

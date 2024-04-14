@@ -671,13 +671,17 @@ func createUpstreamTLSContext(namespace string, serviceAccountName string, requi
 // `edsServiceName` must match the `ServiceName` in the `EDSClusterConfig` in the CDS Cluster resource.
 // [gRFC A27]: https://github.com/grpc/proposal/blob/972b69ab1f0f7f6079af81a8c2b8a01a15ce3bec/A27-xds-global-load-balancing.md#clusterloadassignment-proto
 func createClusterLoadAssignment(edsServiceName string, port uint32, nodeHash string, localityPriorityMapper LocalityPriorityMapper, endpoints []GRPCApplicationEndpoints) *endpointv3.ClusterLoadAssignment {
-	addressesByZone := map[string][]string{}
+	// addressesByZone := map[string][]string{}
+	// for _, endpoint := range endpoints {
+	//	addressesByZone[endpoint.Zone] = append(addressesByZone[endpoint.Zone], endpoint.Addresses...)
+	//}
+	endpointsByZone := map[string][]GRPCApplicationEndpoints{}
 	for _, endpoint := range endpoints {
-		addressesByZone[endpoint.Zone] = append(addressesByZone[endpoint.Zone], endpoint.Addresses...)
+		endpointsByZone[endpoint.Zone] = append(endpointsByZone[endpoint.Zone], endpoint)
 	}
-	zones := make([]string, len(addressesByZone))
+	zones := make([]string, len(endpointsByZone))
 	i := 0
-	for zone := range addressesByZone {
+	for zone := range endpointsByZone {
 		zones[i] = zone
 		i++
 	}
@@ -686,7 +690,7 @@ func createClusterLoadAssignment(edsServiceName string, port uint32, nodeHash st
 		ClusterName: edsServiceName,
 		Endpoints:   []*endpointv3.LocalityLbEndpoints{},
 	}
-	for zone, addresses := range addressesByZone {
+	for zone, endpoints := range endpointsByZone {
 		localityLbEndpoints := &endpointv3.LocalityLbEndpoints{
 			// LbEndpoints is mandatory.
 			LbEndpoints: []*endpointv3.LbEndpoint{},
@@ -699,29 +703,30 @@ func createClusterLoadAssignment(edsServiceName string, port uint32, nodeHash st
 			// Priority is optional. If provided, must start from 0 and have no gaps.
 			Priority: zonePriorities[zone],
 		}
-		for _, address := range addresses {
-			localityLbEndpoints.LbEndpoints = append(localityLbEndpoints.LbEndpoints,
-				&endpointv3.LbEndpoint{
-					// HealthStatus should be HEALTHY or UNKNOWN
-					HealthStatus: corev3.HealthStatus_HEALTHY,
-					HostIdentifier: &endpointv3.LbEndpoint_Endpoint{
-						// Endpoint is mandatory.
-						Endpoint: &endpointv3.Endpoint{
-							// Address is mandatory, must be unique within the cluster.
-							Address: &corev3.Address{
-								Address: &corev3.Address_SocketAddress{
-									SocketAddress: &corev3.SocketAddress{
-										Protocol: corev3.SocketAddress_TCP,
-										Address:  address, // mandatory, IPv4 or IPv6
-										PortSpecifier: &corev3.SocketAddress_PortValue{
-											PortValue: port, // mandatory
+		for _, endpoint := range endpoints {
+			for _, address := range endpoint.Addresses {
+				localityLbEndpoints.LbEndpoints = append(localityLbEndpoints.LbEndpoints,
+					&endpointv3.LbEndpoint{
+						HealthStatus: endpoint.EndpointStatus.HealthStatus(),
+						HostIdentifier: &endpointv3.LbEndpoint_Endpoint{
+							// Endpoint is mandatory.
+							Endpoint: &endpointv3.Endpoint{
+								// Address is mandatory, must be unique within the cluster.
+								Address: &corev3.Address{
+									Address: &corev3.Address_SocketAddress{
+										SocketAddress: &corev3.SocketAddress{
+											Protocol: corev3.SocketAddress_TCP,
+											Address:  address, // mandatory, IPv4 or IPv6
+											PortSpecifier: &corev3.SocketAddress_PortValue{
+												PortValue: port, // mandatory
+											},
 										},
 									},
 								},
 							},
 						},
-					},
-				})
+					})
+			}
 		}
 		cla.Endpoints = append(cla.Endpoints, localityLbEndpoints)
 	}

@@ -20,7 +20,10 @@ import org.jetbrains.annotations.NotNull;
 
 /** Represents a gRPC application endpoint. */
 public record GrpcApplicationEndpoint(
-    @NotNull String node, @NotNull String zone, @NotNull Collection<String> addresses) {
+    @NotNull String node,
+    @NotNull String zone,
+    @NotNull Collection<String> addresses,
+    EndpointStatus endpointStatus) {
 
   /**
    * Represents a gRPC application endpoint.
@@ -29,11 +32,16 @@ public record GrpcApplicationEndpoint(
    * @param zone cloud provider zone name
    * @param addresses is typically just a list of one entry, but since the Kubernetes API spec for
    *     EndpointSlices allows for multiple addresses, this class uses a collection.
+   * @param endpointStatus health status of the endpoint
    */
   public GrpcApplicationEndpoint(
-      @NotNull String node, @NotNull String zone, @NotNull Collection<String> addresses) {
+      @NotNull String node,
+      @NotNull String zone,
+      @NotNull Collection<String> addresses,
+      @NotNull EndpointStatus endpointStatus) {
     this.node = node;
     this.zone = zone;
     this.addresses = List.copyOf(addresses);
+    this.endpointStatus = endpointStatus;
   }
 }

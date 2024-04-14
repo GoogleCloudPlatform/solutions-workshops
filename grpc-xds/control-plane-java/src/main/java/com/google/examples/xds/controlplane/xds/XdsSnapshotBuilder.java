@@ -27,7 +27,6 @@ import io.envoyproxy.envoy.config.core.v3.Address;
 import io.envoyproxy.envoy.config.core.v3.AggregatedConfigSource;
 import io.envoyproxy.envoy.config.core.v3.ApiVersion;
 import io.envoyproxy.envoy.config.core.v3.ConfigSource;
-import io.envoyproxy.envoy.config.core.v3.HealthStatus;
 import io.envoyproxy.envoy.config.core.v3.Locality;
 import io.envoyproxy.envoy.config.core.v3.SocketAddress;
 import io.envoyproxy.envoy.config.core.v3.SocketAddress.Protocol;
@@ -737,12 +736,17 @@ public class XdsSnapshotBuilder<T> {
               .setLoadBalancingWeight(UInt32Value.of(100000))
               // Priority is optional. If provided, must start from 0 and have no gaps.
               .setPriority(priority);
-      List<String> addressesForLocality =
-          endpointsByLocality.get(locality).stream()
-              .flatMap(endpoint -> endpoint.addresses().stream())
-              .toList();
-      for (String address : addressesForLocality) {
+      Map<String, EndpointStatus> addressesForLocality = new HashMap<>();
+      for (var endpoint : endpointsByLocality.get(locality)) {
+        for (String address : endpoint.addresses()) {
+          addressesForLocality.put(address, endpoint.endpointStatus());
+        }
+      }
+      for (Map.Entry<String, EndpointStatus> addressEndpointStatus :
+          addressesForLocality.entrySet()) {
         // LbEndpoints is mandatory.
+        String address = addressEndpointStatus.getKey();
+        var endpointStatus = addressEndpointStatus.getValue();
         localityLbEndpointsBuilder.addLbEndpoints(
             LbEndpoint.newBuilder()
                 // Endpoint is mandatory.
@@ -759,7 +763,7 @@ public class XdsSnapshotBuilder<T> {
                                         .build())
                                 .build())
                         .build())
-                .setHealthStatus(HealthStatus.HEALTHY)
+                .setHealthStatus(endpointStatus.getHealthStatus())
                 .build());
       }
       clusterLoadAssignmentBuilder.addEndpoints(localityLbEndpointsBuilder.build());

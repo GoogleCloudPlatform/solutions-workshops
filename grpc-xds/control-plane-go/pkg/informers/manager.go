@@ -145,16 +145,15 @@ func getAppsForInformer(logger logr.Logger, informer informercache.SharedIndexIn
 		namespace := endpointSlice.GetObjectMeta().GetNamespace()
 		// TODO: Handle more than one port?
 		port := uint32(*endpointSlice.Ports[0].Port)
-		appEndpoints := getReadyApplicationEndpoints(endpointSlice)
+		appEndpoints := getApplicationEndpoints(endpointSlice)
 		app := xds.NewGRPCApplication(namespace, k8sServiceName, port, appEndpoints)
 		apps = append(apps, app)
 	}
 	return apps
 }
 
-// getReadyApplicationEndpoints filters the k8s endpoints in the EndpointSlice to only include `Ready` endpoints.
-// The function returns the endpoints as `GRPCApplicationEndpoints`.
-func getReadyApplicationEndpoints(endpointSlice *discoveryv1.EndpointSlice) []xds.GRPCApplicationEndpoints {
+// getApplicationEndpoints returns the endpoints as `GRPCApplicationEndpoints`.
+func getApplicationEndpoints(endpointSlice *discoveryv1.EndpointSlice) []xds.GRPCApplicationEndpoints {
 	var appEndpoints []xds.GRPCApplicationEndpoints
 	for _, endpoint := range endpointSlice.Endpoints {
 		if endpoint.Conditions.Ready != nil && *endpoint.Conditions.Ready {
@@ -165,7 +164,7 @@ func getReadyApplicationEndpoints(endpointSlice *discoveryv1.EndpointSlice) []xd
 			if endpoint.Zone != nil {
 				zone = *endpoint.Zone
 			}
-			appEndpoints = append(appEndpoints, xds.NewGRPCApplicationEndpoints(k8sNode, zone, endpoint.Addresses))
+			appEndpoints = append(appEndpoints, xds.NewGRPCApplicationEndpoints(k8sNode, zone, endpoint.Addresses, xds.EndpointStatusFromConditions(endpoint.Conditions)))
 		}
 	}
 	return appEndpoints
