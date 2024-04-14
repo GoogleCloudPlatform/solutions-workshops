@@ -14,6 +14,7 @@
 
 package com.google.examples.xds.controlplane.informers;
 
+import com.google.examples.xds.controlplane.xds.EndpointStatus;
 import com.google.examples.xds.controlplane.xds.GrpcApplication;
 import com.google.examples.xds.controlplane.xds.GrpcApplicationEndpoint;
 import com.google.examples.xds.controlplane.xds.XdsSnapshotCache;
@@ -196,18 +197,14 @@ public class InformerManager<T> {
   private List<GrpcApplicationEndpoint> toGrpcApplicationEndpoints(
       @NotNull V1EndpointSlice endpointSlice) {
     return endpointSlice.getEndpoints().stream()
-        .filter(
-            // https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/#ready
-            endpoint ->
-                endpoint.getConditions() != null
-                    && Boolean.TRUE.equals(endpoint.getConditions().getReady()))
         .map(
             // https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/#topology
             endpoint ->
                 new GrpcApplicationEndpoint(
                     Objects.requireNonNullElse(endpoint.getNodeName(), ""),
                     Objects.requireNonNullElse(endpoint.getZone(), ""),
-                    endpoint.getAddresses()))
+                    endpoint.getAddresses(),
+                    EndpointStatus.fromConditions(endpoint.getConditions())))
         .toList();
   }
 
