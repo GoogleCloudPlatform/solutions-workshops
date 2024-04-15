@@ -31,20 +31,9 @@ labels:
   includeSelectors: false
   includeTemplates: true
 patches:
-# patch-gke-workload-identity.yaml is populated by the GKE setup steps.
-# It will remain an empty file if not using GKE.
-- path: patch-gke-workload-identity.yaml
-  target:
-    version: v1
-    kind: ServiceAccount
-    name: control-plane
 - path: patch-kubeconfig-env.yaml
   target:
     group: apps
     version: v1
     kind: Deployment
     name: control-plane
-resources:
-# cluster-role-binding-gcp.yaml is populated by the GKE setup steps.
-# It will remain an empty file if not using GKE.
-- cluster-role-binding-gcp.yaml

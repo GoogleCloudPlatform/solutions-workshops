@@ -26,6 +26,7 @@ metadata:
     config.kubernetes.io/local-config: "true"
 components:
 - ../../../../k8s/control-plane/components/gke-workload-identity
+- ../../../../k8s/control-plane/components/kubeconfig
 - ../../../../k8s/control-plane/components/tls-gke-workload-certs
 - ../../components/app-config-multi-cluster
 resources:

@@ -18,7 +18,7 @@
 # Unspecified flags default to `false`.
 
 serverListenerUsesRds: true # `false` value means that RouteConfiguration is inline in the server Listener instead of dynamic via RDS
-enableControlPlaneTls: false
+enableControlPlaneTls: false # `true` value requires changes to the gRPC xDS bootstrap configuration file
 requireControlPlaneClientCerts: false # `true` value requires enableControlPlaneTls=true
 enableDataPlaneTls: true
 requireDataPlaneClientCerts: true # `true` value requires enableDataPlaneTls=true

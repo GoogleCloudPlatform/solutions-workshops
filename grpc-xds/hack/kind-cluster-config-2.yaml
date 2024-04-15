@@ -34,7 +34,7 @@ nodes:
       dnsDomain: cluster2.example.com
 - role: worker
   labels:
-    topology.kubernetes.io/zone: us-east-1a
+    topology.kubernetes.io/zone: us-west1-a
 - role: worker
   labels:
-    topology.kubernetes.io/zone: us-east-1b
+    topology.kubernetes.io/zone: us-west1-b

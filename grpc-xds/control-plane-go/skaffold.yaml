@@ -63,6 +63,18 @@ profiles:
       namespace: xds # kpt-set: ${control-plane-namespace}
       localPort: 56270
       port: 56268 # delve debug port
+# Multi-cluster, and GKE workload TLS certificates.
+- name: multi-cluster-gke
+  manifests:
+    kustomize:
+      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+      paths: ["k8s/overlays/tls-gke-workload-certs-multi-cluster"]
+# Multi-cluster, and workload TLS certificates from cert-manager CA.
+- name: multi-cluster-kind
+  manifests:
+    kustomize:
+      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+      paths: ["k8s/overlays/tls-cert-manager-multi-cluster"]
 # Add workload TLS certificates from cert-manager CA.
 - name: tls-cert-manager
   activation:
