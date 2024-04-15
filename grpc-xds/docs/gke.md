@@ -82,35 +82,34 @@ information, see [Clean up](#clean-up).
 [Cloud NAT](https://cloud.google.com/nat/docs/) enables internet access from
 GKE cluster nodes and pods, even if the nodes do not have public IP addresses.
 
-0.  Define the region where you will create the Cloud Router:
+0.  Define the
+    [Compute Engine region(s)](https://cloud.google.com/compute/docs/regions-zones)
+    where you will create GKE clusters:
 
     ```shell
-    REGION=us-central1
+    REGIONS=(us-central1 us-west1)
     ```
 
-    Note the following about the environment variable:
-
-    - `REGION`: the
-      [Compute Engine region](https://cloud.google.com/compute/docs/regions-zones),
-      that contains the zones to be used for the GKE cluster
-      [node pools](https://cloud.google.com/kubernetes-engine/docs/concepts/node-pools).
-
-1.  Create a Cloud Router:
+1.  Create Cloud Routers:
 
     ```shell
-    gcloud compute routers create grpc-xds \
-      --network default \
-      --region "$REGION"
+    for region in "${REGIONS[@]}"; do
+      gcloud compute routers create grpc-xds \
+        --network default \
+        --region "$region"
+    done
     ```
 
-2.  Create a Cloud NAT gateway:
+2.  Create Cloud NAT gateways:
 
     ```shell
-    gcloud compute routers nats create grpc-xds \
-      --router grpc-xds \
-      --region "$REGION" \
-      --auto-allocate-nat-external-ips \
-      --nat-all-subnet-ip-ranges
+    for region in "${REGIONS[@]}"; do
+      gcloud compute routers nats create grpc-xds \
+        --router grpc-xds \
+        --region "$region" \
+        --auto-allocate-nat-external-ips \
+        --nat-all-subnet-ip-ranges
+    done
     ```
 
 ## Artifact Registry setup
@@ -119,17 +118,17 @@ GKE cluster nodes and pods, even if the nodes do not have public IP addresses.
     Registry container image repository:
 
     ```shell
-    LOCATION=us-central1
+    AR_LOCATION="${REGIONS[0]}"
     PROJECT_ID="$(gcloud config get project 2> /dev/null)"
     PROJECT_NUMBER="$(gcloud projects describe $PROJECT_ID --format 'value(projectNumber)')"
     ```
 
     Note the following about the environment variables:
 
-    - `LOCATION`: an
-      [Artifact Registry location](https://cloud.google.com/artifact-registry/docs/repositories/repo-locations),
-      for instance `us-central1`.
-      You can use a different location if you like.
+    - `AR_LOCATION`: an
+      [Artifact Registry location](https://cloud.google.com/artifact-registry/docs/repositories/repo-locations).
+      In order to reduce network cost, you can use one of the regions that you
+      will use for your GKE clusters, or a multi-region location such as `us`.
     - `PROJECT_ID`: the project ID of your
       [Google Cloud project](https://cloud.google.com/resource-manager/docs/creating-managing-projects).
     - `PROJECT_NUMBER`: the automatically generate project number of your
@@ -139,7 +138,7 @@ GKE cluster nodes and pods, even if the nodes do not have public IP addresses.
 
     ```shell
     gcloud artifacts repositories create grpc-xds \
-      --location "$LOCATION" \
+      --location "$AR_LOCATION" \
       --repository-format docker
     ```
 
@@ -147,7 +146,7 @@ GKE cluster nodes and pods, even if the nodes do not have public IP addresses.
     Artifact Registry host of your repository location:
 
     ```shell
-    gcloud auth configure-docker "${LOCATION}-docker.pkg.dev"
+    gcloud auth configure-docker "${AR_LOCATION}-docker.pkg.dev"
     ```
 
 3.  Grant the
@@ -157,36 +156,27 @@ GKE cluster nodes and pods, even if the nodes do not have public IP addresses.
 
     ```shell
     gcloud artifacts repositories add-iam-policy-binding grpc-xds \
-      --location "$LOCATION" \
+      --location "$AR_LOCATION" \
       --member "serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
       --role roles/artifactregistry.reader
     ```
 
 ## Creating the Google Kubernetes Engine (GKE) cluster
 
-0.  Define environment variables that you use when creating the GKE clusters:
+0.  Define an environment variable that you use when creating the GKE clusters:
 
     ```shell
-    ZONES=(us-central1-a us-central1-f)
     PROJECT_ID="$(gcloud config get project 2> /dev/null)"
     ```
 
-    Note the following about the environment variables:
+    `PROJECT_ID` is the project ID of your
+    [Google Cloud project](https://cloud.google.com/resource-manager/docs/creating-managing-projects).
 
-    - `ZONES`: the
-      [Compute Engine zones](https://cloud.google.com/compute/docs/regions-zones),
-      to be used for the GKE cluster control planes and the default
-      [node pools](https://cloud.google.com/kubernetes-engine/docs/concepts/node-pools).
-      In the next step you create a GKE cluster for each of the zones in this
-      array. You can use different zones if you like.
-    - `PROJECT_ID`: the project ID of your
-      [Google Cloud project](https://cloud.google.com/resource-manager/docs/creating-managing-projects).
-
-1.  Create GKE clusters with zonal control planes and default node pools:
+1.  Create GKE clusters:
 
     ```shell
     iter=1
-    for zone in "${ZONES[@]}"; do
+    for region in "${REGIONS[@]}"; do
       gcloud container clusters create grpc-xds \
         --cluster-dns clouddns \
         --cluster-dns-domain "cluster${iter%1}.example.com" \
@@ -197,34 +187,36 @@ GKE cluster nodes and pods, even if the nodes do not have public IP addresses.
         --enable-master-global-access \
         --enable-mesh-certificates \
         --enable-private-nodes \
-        --location "$zone" \
+        --location "$region" \
         --master-ipv4-cidr "172.16.${iter}.64/28" \
         --network default \
         --release-channel rapid \
         --subnetwork default \
         --workload-pool "${PROJECT_ID}.svc.id.goog" \
         --enable-autoscaling \
-        --max-nodes 5 \
-        --min-nodes 3 \
+        --max-nodes 3 \
+        --min-nodes 1 \
+        --num-nodes 1 \
         --scopes cloud-platform,userinfo-email \
         --tags allow-health-checks,grpc-xds-node \
         --workload-metadata GKE_METADATA
       kubectl config set-context --current --namespace=xds
       iter=$(expr $iter + 1)
     done
-    kubectl config use-context "gke_${PROJECT_ID}_${ZONES[1]}_grpc-xds"
+    kubectl config use-context "gke_${PROJECT_ID}_${REGIONS[0]}_grpc-xds"
     ```
 
 2.  Optional: If you want to create firewalls that only allows access to the
-    cluster API servers from your current public IP address:
+    cluster API servers from your current public IP address and private IP
+    addresses in your VPC network:
 
     ```shell
     public_ip="$(dig TXT +short o-o.myaddr.l.google.com @ns1.google.com | sed 's/"//g')"
-    for zone in "${ZONES[@]}"; do
+    for region in "${REGIONS[@]}"; do
       gcloud container clusters update grpc-xds \
         --enable-master-authorized-networks \
-        --location "$zone" \
-        --master-authorized-networks "${public_ip}/32"
+        --location "$region" \
+        --master-authorized-networks "${public_ip}/32,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
     done
     ```
 
@@ -295,15 +287,17 @@ an IAM service account without storing long-lived credentials.
     EOF
     ```
 
-5.  Apply the `endpointslices-reader` ClusterRole and
+5.  Apply the Kubernetes `endpointslices-reader` ClusterRole and
     `control-plane-endpointslices-reader-gcp` ClusterRoleBinding to the GKE
-    cluster where the xDS control plane is _not_ deployed:
+    clusters:
 
     ```shell
-    kubectl apply --context "gke_${PROJECT_ID}_${ZONES[2]}_grpc-xds" \
-      --filename k8s/control-plane/base/cluster-role.yaml
-    kubectl apply --context "gke_${PROJECT_ID}_${ZONES[2]}_grpc-xds" \
-      --filename k8s/control-plane/components/gke-workload-identity/cluster-role-binding-gcp.yaml
+    for region in "${REGIONS[@]}"; do
+      kubectl apply --context "gke_${PROJECT_ID}_${region}_grpc-xds" \
+        --filename k8s/control-plane/base/cluster-role.yaml
+      kubectl apply --context "gke_${PROJECT_ID}_${region}_grpc-xds" \
+        --filename k8s/control-plane/components/gke-workload-identity/cluster-role-binding-gcp.yaml
+    done
     ```
 
 ## kubeconfig file
@@ -317,13 +311,16 @@ resource that contains a
 for each cluster:
 
 ```shell
+REGIONS=(us-central1 us-west1)
+PROJECT_ID="$(gcloud config get project 2> /dev/null)"
+
 kubeconfig_dir=k8s/control-plane/components/kubeconfig
 kubeconfig_file="${kubeconfig_dir}/kubeconfig.yaml"
 rm -f "$kubeconfig_file"
 
 iter=1
-for zone in "${ZONES[@]}"; do
-  cluster="grpc-xds-${zone}"
+for region in "${REGIONS[@]}"; do
+  cluster="grpc-xds-${region}"
   context="grpc-xds-${iter}"
   context="${context%-1}"
 
@@ -333,11 +330,11 @@ for zone in "${ZONES[@]}"; do
     --kubeconfig "$kubeconfig_file"
 
   cluster_ca_file="$(mktemp)"
-  gcloud container clusters describe grpc-xds --format='value(masterAuth.clusterCaCertificate)' --location=$zone | base64 --decode > "$cluster_ca_file"
+  gcloud container clusters describe grpc-xds --format='value(masterAuth.clusterCaCertificate)' --location=$region | base64 --decode > "$cluster_ca_file"
   kubectl config set-cluster "$cluster" \
     --certificate-authority "$cluster_ca_file" \
     --embed-certs \
-    --server "https://$(gcloud container clusters describe grpc-xds --format='value(privateClusterConfig.privateEndpoint)' --location=$zone)" \
+    --server "https://$(gcloud container clusters describe grpc-xds --format='value(privateClusterConfig.privateEndpoint)' --location=$region)" \
     --kubeconfig "$kubeconfig_file"
   rm -f "$cluster_ca_file"
 
@@ -357,14 +354,7 @@ if you
 or
 [rotate your GKE cluster control plane IP address](https://cloud.google.com/kubernetes-engine/docs/how-to/ip-rotation).
 
-## Workload TLS certificates
-
-To issue workload TLS certificates, you can use certificate authorities in
-either
-[CA Service](https://cloud.google.com/certificate-authority-service/docs)
-or [cert-manager](https://cert-manager.io/docs/).
-
-### Use CA Service
+## Workload TLS certificates using CA Service
 
 In the Traffic Director document on
 [setting up service security with proxyless gRPC](https://cloud.google.com/traffic-director/docs/security-proxyless-setup),
@@ -373,69 +363,34 @@ follow the steps in the section titled
 to set up certificate authorities in CA Service to issue workload TLS
 certificates to pods on the GKE clusters.
 
-Create the `WorkloadCertificateConfig` and `TrustConfig` resources in both of
+Create the `WorkloadCertificateConfig` and `TrustConfig` resources in all of
 the GKE clusters.
 
-The commands are listed below:
+Create the root CA:
 
 ```shell
-LOCATION=us-central1
+CAS_ROOT_LOCATION="${REGIONS[0]}"
 PROJECT_ID="$(gcloud config get project 2> /dev/null)"
 PROJECT_NUMBER="$(gcloud projects describe $PROJECT_ID --format 'value(projectNumber)')"
 
-gcloud privateca pools create grpc-xds-root-ca-pool \
-  --location "$LOCATION" \
+gcloud privateca pools create grpc-xds-root \
+  --location "$CAS_ROOT_LOCATION" \
   --tier enterprise
 
-gcloud privateca roots create grpc-xds-root-ca \
+gcloud privateca roots create grpc-xds \
   --auto-enable \
-  --pool grpc-xds-root-ca-pool \
+  --pool grpc-xds-root \
   --subject "CN=grpc-xds-root-ca, O=Example LLC" \
   --key-algorithm ec-p256-sha256 \
   --max-chain-length 1 \
-  --location "$LOCATION"
+  --location "$CAS_ROOT_LOCATION"
 
-gcloud privateca pools create grpc-xds-subordinate-ca-pool \
-  --location "$LOCATION" \
-  --tier devops
-
-gcloud privateca subordinates create grpc-xds-subordinate-ca \
-  --auto-enable \
-  --pool grpc-xds-subordinate-ca-pool \
-  --location "$LOCATION" \
-  --issuer-pool grpc-xds-root-ca-pool \
-  --issuer-location "$LOCATION" \
-  --subject "CN=grpc-xds-subordinate-ca, O=Example LLC" \
-  --key-algorithm ec-p256-sha256 \
-  --use-preset-profile subordinate_mtls_pathlen_0
-
-gcloud privateca pools add-iam-policy-binding grpc-xds-root-ca-pool \
-  --location "$LOCATION" \
+gcloud privateca pools add-iam-policy-binding grpc-xds-root \
+  --location "$CAS_ROOT_LOCATION" \
   --role roles/privateca.auditor \
   --member "serviceAccount:service-${PROJECT_NUMBER}@container-engine-robot.iam.gserviceaccount.com"
 
-gcloud privateca pools add-iam-policy-binding grpc-xds-subordinate-ca-pool \
-  --location "$LOCATION" \
-  --role roles/privateca.certificateManager \
-  --member "serviceAccount:service-${PROJECT_NUMBER}@container-engine-robot.iam.gserviceaccount.com"
-
-cat << EOF > WorkloadCertificateConfig.yaml
-apiVersion: security.cloud.google.com/v1
-kind: WorkloadCertificateConfig
-metadata:
-  name: default
-spec:
-  certificateAuthorityConfig:
-    certificateAuthorityServiceConfig:
-      endpointURI: //privateca.googleapis.com/projects/${PROJECT_ID}/locations/${LOCATION}/caPools/grpc-xds-subordinate-ca-pool
-  keyAlgorithm:
-    ecdsa:
-      curve: P256
-  validityDurationSeconds: 86400
-  rotationWindowPercentage: 50
-EOF
-
-cat << EOF > TrustConfig.yaml
+cat << EOF > trust-config-grpc-xds.yaml
 apiVersion: security.cloud.google.com/v1
 kind: TrustConfig
 metadata:
@@ -444,46 +399,64 @@ spec:
   trustStores:
   - trustDomain: ${PROJECT_ID}.svc.id.goog
     trustAnchors:
-    - certificateAuthorityServiceURI: //privateca.googleapis.com/projects/${PROJECT_ID}/locations/${LOCATION}/caPools/grpc-xds-root-ca-pool
+    - certificateAuthorityServiceURI: //privateca.googleapis.com/projects/${PROJECT_ID}/locations/${CAS_ROOT_LOCATION}/caPools/grpc-xds-root
 EOF
-
-for zone in "${ZONES[@]}"; do
-  context="gke_${PROJECT_ID}_${zone}_grpc-xds"
-  kubectl apply --filename WorkloadCertificateConfig.yaml --context "$context"
-  kubectl apply --filename TrustConfig.yaml --context "$context"
-done
 ```
 
-### Use cert-manager
+Create a subordinate CA in each region:
 
-If you want to use a GKE cluster, but you do not want to set up certificate
-authorities in CA Service, you can instead use workload TLS certificates
-issued by certificate authorities created using
-[cert-manager](https://cert-manager.io/docs/).
+```shell
+for region in "${REGIONS[@]}"; do
+  gcloud privateca pools create grpc-xds-subordinate \
+    --location "$region" \
+    --tier devops
+  
+  gcloud privateca subordinates create grpc-xds \
+    --auto-enable \
+    --pool grpc-xds-subordinate \
+    --location "$region" \
+    --issuer-pool grpc-xds-root \
+    --issuer-location "$CAS_ROOT_LOCATION" \
+    --subject "CN=grpc-xds-subordinate-ca, O=Example LLC" \
+    --key-algorithm ec-p256-sha256 \
+    --use-preset-profile subordinate_mtls_pathlen_0
+  
+  gcloud privateca pools add-iam-policy-binding grpc-xds-subordinate \
+    --location "$region" \
+    --role roles/privateca.certificateManager \
+    --member "serviceAccount:service-${PROJECT_NUMBER}@container-engine-robot.iam.gserviceaccount.com"
+  
+  context="gke_${PROJECT_ID}_${region}_grpc-xds"
+  kubectl apply --filename trust-config-grpc-xds.yaml --context "$context"
 
-To do so, run the `make cert-manager` target after creating your GKE cluster.
-This target installs cert-manager in the Kubernetes cluster, and creates a
-root CA that can issue TLS certificates to any namespace in the cluster.
+  cat << EOF > "workload-certificate-config-grpc-xds-$region.yaml"
+apiVersion: security.cloud.google.com/v1
+kind: WorkloadCertificateConfig
+metadata:
+  name: default
+spec:
+  certificateAuthorityConfig:
+    certificateAuthorityServiceConfig:
+      endpointURI: //privateca.googleapis.com/projects/${PROJECT_ID}/locations/${region}/caPools/grpc-xds-subordinate
+  keyAlgorithm:
+    ecdsa:
+      curve: P256
+  validityDurationSeconds: 86400
+  rotationWindowPercentage: 50
+EOF
 
-When you want to deploy the xDS control plane and sample gRPC application to
-your GKE cluster, use the `make` targets that end in `-tls-cert-manager`, i.e.
-`make run-go-tls-cert-manager` and `make run-java-tls-cert-manager`.
-
-See the [Makefile](../Makefile) for further details.
-
-Advanced: Alternatively, you can rename your kubeconfig context so it matches
-the regular expression `kind.*`. This kubeconfig context name will cause
-Skaffold to use Kubernetes manifests intended for a kind cluster with
-cert-manager.
+ kubectl apply --filename "workload-certificate-config-grpc-xds-$region.yaml" --context "$context"
+done
+```
 
 ## Cleaning up
 
 1.  Delete the GKE clusters:
 
     ```shell
-    for zone in "${ZONES[@]}"; do
+    for region in "${REGIONS[@]}"; do
       gcloud container clusters delete grpc-xds \
-        --location "$zone" --quiet --async
+        --location "$region" --quiet --async
     done
     ```
 
@@ -497,39 +470,43 @@ cert-manager.
 
     ```shell
     gcloud artifacts repositories delete grpc-xds \
-      --location "$LOCATION" --async --quiet
+      --location "$AR_LOCATION" --async --quiet
     ```
 
 4.  Delete the CA Service resources:
 
     ```shell
-    gcloud privateca subordinates disable grpc-xds-subordinate-ca \
-      --location "$LOCATION" --pool grpc-xds-subordinate-ca-pool --quiet
+    for region in "${REGIONS[@]}"; do
+      gcloud privateca subordinates disable grpc-xds \
+        --location "$region" --pool grpc-xds-subordinate --quiet
+  
+      gcloud privateca subordinates delete grpc-xds \
+        --location "$region" --pool grpc-xds-subordinate \
+        --ignore-active-certificates --skip-grace-period --quiet
+  
+      gcloud privateca pools delete grpc-xds-subordinate \
+        --location "$region" --quiet
+      done
 
-    gcloud privateca subordinates delete grpc-xds-subordinate-ca \
-      --location "$LOCATION" --pool grpc-xds-subordinate-ca-pool \
+    gcloud privateca roots disable grpc-xds \
+      --location "$CAS_ROOT_LOCATION" --pool grpc-xds-root --quiet
+
+    gcloud privateca roots delete grpc-xds \
+      --location "$CAS_ROOT_LOCATION" --pool grpc-xds-root \
       --ignore-active-certificates --skip-grace-period --quiet
 
-    gcloud privateca pools delete grpc-xds-subordinate-ca-pool \
-      --location "$LOCATION" --quiet
-
-    gcloud privateca roots disable grpc-xds-root-ca \
-      --location "$LOCATION" --pool grpc-xds-root-ca-pool --quiet
-
-    gcloud privateca roots delete grpc-xds-root-ca \
-      --location "$LOCATION" --pool grpc-xds-root-ca-pool \
-      --ignore-active-certificates --skip-grace-period --quiet
-
-    gcloud privateca pools delete grpc-xds-root-ca-pool \
-      --location "$LOCATION" --quiet
+    gcloud privateca pools delete grpc-xds-root \
+      --location "$CAS_ROOT_LOCATION" --quiet
     ```
 
 5.  Delete the Cloud NAT resources:
 
     ```shell
-    gcloud compute routers nats delete grpc-xds \
-      --router grpc-xds --region "$REGION" --quiet
+    for region in "${REGIONS[@]}"; do
+      gcloud compute routers nats delete grpc-xds --region "$region" \
+        --router grpc-xds --router-region "$region" --quiet
 
-    gcloud compute routers delete grpc-xds \
-      --region "$REGION" --quiet
+      gcloud compute routers delete grpc-xds \
+        --region "$region" --quiet
+    done
     ```

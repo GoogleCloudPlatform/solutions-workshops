@@ -159,20 +159,20 @@ request-mtls: check-grpcurl certs/ca_certificates.pem
 request-leaf-mtls: check-grpcurl certs/ca_certificates.pem
 	grpcurl -proto ./greeter-java/third_party/src/main/proto/helloworld/helloworld.proto -authority greeter-leaf -cacert ./certs/ca_certificates.pem -cert ./certs/certificates.pem -key ./certs/private_key.pem -d '{"name": "World"}' dns:///localhost:50057 helloworld.Greeter/SayHello
 
-# request-mtls-insecure sends an mTLS request to the greeter-intermediary server using the DNS resolver,
+# request-mtls-noverify sends an mTLS request to the greeter-intermediary server using the DNS resolver,
 # with certificate validation turned off. Use this target with GKE workload TLS certificates,
 # as these certificates do not have common names or subject alternate names that grpcurl can verify.
 # Port forwarding must be running. Verify that the port in the command below matches the local forwarded port.
-.PHONY: request-mtls-insecure
-request-mtls-insecure: check-grpcurl certs/ca_certificates.pem
+.PHONY: request-mtls-noverify
+request-mtls-noverify: check-grpcurl certs/ca_certificates.pem
 	grpcurl -proto ./greeter-java/third_party/src/main/proto/helloworld/helloworld.proto -insecure -cacert ./certs/ca_certificates.pem -cert ./certs/certificates.pem -key ./certs/private_key.pem -d '{"name": "World"}' dns:///localhost:50055 helloworld.Greeter/SayHello
 
-# request-leaf-mtls-insecure sends an mTLS request to the greeter-leaf server using the DNS resolver,
+# request-leaf-mtls-noverify sends an mTLS request to the greeter-leaf server using the DNS resolver,
 # with certificate validation turned off. Use this target with GKE workload TLS certificates,
 # as these certificates do not have common names or subject alternate names that grpcurl can verify.
 # Port forwarding must be running. Verify that the port in the command below matches the local forwarded port.
-.PHONY: request-leaf-mtls-insecure
-request-leaf-mtls-insecure: check-grpcurl certs/ca_certificates.pem
+.PHONY: request-leaf-mtls-noverify
+request-leaf-mtls-noverify: check-grpcurl certs/ca_certificates.pem
 	grpcurl -proto ./greeter-java/third_party/src/main/proto/helloworld/helloworld.proto -insecure -cacert ./certs/ca_certificates.pem -cert ./certs/certificates.pem -key ./certs/private_key.pem -d '{"name": "World"}' dns:///localhost:50057 helloworld.Greeter/SayHello
 
 # tail-control-plane tails the control-plane logs
@@ -244,16 +244,11 @@ delete-greeter: check-kubectl
 .PHONY: delete
 delete: delete-control-plane delete-greeter
 
-# delete-multi-cluster deletes the Deployments, Service, and ConfigMaps for control-plane and
-# greeter-[intermediary|leaf] in both clusters, but leaves any bastion Pods running.
-.PHONY: delete-multi-cluster
-delete-multi-cluster: check-kubectl
-	./hack/delete-multi-cluster.sh
-
-# delete-federation deletes the Deployments, Service, and ConfigMaps for control-plane and
-# greeter-[intermediary|leaf] in both clusters, but leaves any bastion Pods running.
-.PHONY: delete-federation
-delete-federation: delete-multi-cluster
+# delete-apps deletes the Deployments, Service, and ConfigMaps for control-plane and
+# greeter-[intermediary|leaf] in both Kubernetes clusters, but leaves any bastion Pods running.
+.PHONY: delete-apps
+delete-apps: check-kubectl
+	./hack/delete-apps.sh
 
 # clean removes running instances of control-plane-[go|java], greeter-[go|java], and bastion.
 .PHONY: clean
