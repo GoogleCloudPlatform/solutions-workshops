@@ -42,8 +42,18 @@ information, see [Clean up](#clean-up).
     ```shell
     gcloud components install gke-gcloud-auth-plugin kubectl kustomize skaffold --quiet
     ```
- 
-4.  Enable the Artifact Registry, GKE, Cloud DNS, and CA Service APIs:
+
+4.  Set the Google Cloud project you want to use:
+
+    ```shell
+    gcloud config set project PROJECT_ID
+    ```
+
+    Replace `PROJECT_ID` with the
+    [project ID](https://cloud.google.com/resource-manager/docs/creating-managing-projects)
+    of the Google Cloud project you want to use.
+
+5.  Enable the Artifact Registry, GKE, Cloud DNS, and CA Service APIs:
 
     ```shell
     gcloud services enable \
@@ -82,7 +92,7 @@ information, see [Clean up](#clean-up).
 [Cloud NAT](https://cloud.google.com/nat/docs/) enables internet access from
 GKE cluster nodes and pods, even if the nodes do not have public IP addresses.
 
-0.  Define the
+1.  Define the
     [Compute Engine region(s)](https://cloud.google.com/compute/docs/regions-zones)
     where you will create GKE clusters:
 
@@ -90,7 +100,7 @@ GKE cluster nodes and pods, even if the nodes do not have public IP addresses.
     REGIONS=(us-central1 us-west1)
     ```
 
-1.  Create Cloud Routers:
+2.  Create Cloud Routers:
 
     ```shell
     for region in "${REGIONS[@]}"; do
@@ -100,25 +110,25 @@ GKE cluster nodes and pods, even if the nodes do not have public IP addresses.
     done
     ```
 
-2.  Create Cloud NAT gateways:
+3.  Create Cloud NAT gateways:
 
     ```shell
     for region in "${REGIONS[@]}"; do
       gcloud compute routers nats create grpc-xds \
-        --router grpc-xds \
-        --region "$region" \
         --auto-allocate-nat-external-ips \
-        --nat-all-subnet-ip-ranges
+        --nat-all-subnet-ip-ranges \
+        --region "$region" \
+        --router grpc-xds
     done
     ```
 
 ## Artifact Registry setup
 
-0.  Define environment variables that you use when creating the Artifact
+1.  Define environment variables that you use when creating the Artifact
     Registry container image repository:
 
     ```shell
-    AR_LOCATION="${REGIONS[0]}"
+    AR_LOCATION="${REGIONS[@]:0:1}"
     PROJECT_ID="$(gcloud config get project 2> /dev/null)"
     PROJECT_NUMBER="$(gcloud projects describe $PROJECT_ID --format 'value(projectNumber)')"
     ```
@@ -134,7 +144,7 @@ GKE cluster nodes and pods, even if the nodes do not have public IP addresses.
     - `PROJECT_NUMBER`: the automatically generate project number of your
       [Google Cloud project](https://cloud.google.com/resource-manager/docs/creating-managing-projects).
 
-1.  Create a container image repository called `grpc-xds` in Artifact Registry:
+2.  Create a container image repository called `grpc-xds` in Artifact Registry:
 
     ```shell
     gcloud artifacts repositories create grpc-xds \
@@ -142,14 +152,14 @@ GKE cluster nodes and pods, even if the nodes do not have public IP addresses.
       --repository-format docker
     ```
 
-2.  Configure authentication for `gcloud` and other command-line tools to the
+3.  Configure authentication for `gcloud` and other command-line tools to the
     Artifact Registry host of your repository location:
 
     ```shell
     gcloud auth configure-docker "${AR_LOCATION}-docker.pkg.dev"
     ```
 
-3.  Grant the
+4.  Grant the
     [Artifact Registry Reader role](https://cloud.google.com/artifact-registry/docs/access-control#roles)
     on the container image repository to the
     [Compute Engine default service account](https://cloud.google.com/compute/docs/access/service-accounts#default_service_account):
@@ -163,7 +173,7 @@ GKE cluster nodes and pods, even if the nodes do not have public IP addresses.
 
 ## Creating the Google Kubernetes Engine (GKE) cluster
 
-0.  Define an environment variable that you use when creating the GKE clusters:
+1.  Define an environment variable that you use when creating the GKE clusters:
 
     ```shell
     PROJECT_ID="$(gcloud config get project 2> /dev/null)"
@@ -172,7 +182,7 @@ GKE cluster nodes and pods, even if the nodes do not have public IP addresses.
     `PROJECT_ID` is the project ID of your
     [Google Cloud project](https://cloud.google.com/resource-manager/docs/creating-managing-projects).
 
-1.  Create GKE clusters:
+2.  Create GKE clusters:
 
     ```shell
     iter=1
@@ -203,12 +213,11 @@ GKE cluster nodes and pods, even if the nodes do not have public IP addresses.
       kubectl config set-context --current --namespace=xds
       iter=$(expr $iter + 1)
     done
-    kubectl config use-context "gke_${PROJECT_ID}_${REGIONS[0]}_grpc-xds"
+    kubectl config use-context "gke_${PROJECT_ID}_${REGIONS[@]:0:1}_grpc-xds"
     ```
 
-2.  Optional: If you want to create firewalls that only allows access to the
-    cluster API servers from your current public IP address and private IP
-    addresses in your VPC network:
+3.  Allows access to the cluster API servers from your current public IP
+    address and private IP addresses in your VPC network:
 
     ```shell
     public_ip="$(dig TXT +short o-o.myaddr.l.google.com @ns1.google.com | sed 's/"//g')"
@@ -220,6 +229,11 @@ GKE cluster nodes and pods, even if the nodes do not have public IP addresses.
     done
     ```
 
+    If you want to allow access from other IP address ranges, or if you use
+    [non-RFC1918 IPv4 address ranges](https://cloud.google.com/vpc/docs/subnets#valid-ranges)
+    for your GKE cluster nodes and/or Pods, add those address ranges to the
+    `--master-authorized-networks` flag.
+
 ## Workload identity federation for GKE
 
 To enable the xDS control plane to communicate with another GKE cluster
@@ -228,7 +242,7 @@ control plane, use
 to enable the xDS control plane Kubernetes service account to authenticate as
 an IAM service account without storing long-lived credentials.
 
-0.  Define the name of the IAM service account as an environment variable:
+1.  Define the name of the IAM service account as an environment variable:
 
     ```shell
     GSA=xds-control-plane
@@ -236,13 +250,13 @@ an IAM service account without storing long-lived credentials.
 
     You can use a different name if you like.
 
-1.  Create the IAM service account:
+2.  Create the IAM service account:
 
     ```shell
-    gcloud iam service-accounts create $GSA
+    gcloud iam service-accounts create $GSA --display-name "xDS control plane"
     ```
 
-2.  Grant the
+3.  Grant the
     [Workload Identity User role](https://cloud.google.com/iam/docs/understanding-roles#iam.workloadIdentityUser)
     on the IAM service account to the `control-plane` Kubernetes service
     account in the `xds` namespace:
@@ -253,7 +267,7 @@ an IAM service account without storing long-lived credentials.
       --role roles/iam.workloadIdentityUser
     ```
 
-3.  Create a patch to bind the xDS control plane Kubernetes service account to
+4.  Create a patch to bind the xDS control plane Kubernetes service account to
     the IAM service account, by adding the workload identity federation for
     GKE annotation:
 
@@ -264,7 +278,7 @@ an IAM service account without storing long-lived credentials.
       > k8s/control-plane/components/gke-workload-identity/patch-gke-workload-identity.yaml
     ```
 
-4.  Create a Kubernetes ClusterRoleBinding manifest that grants a Kubernetes
+5.  Create a Kubernetes ClusterRoleBinding manifest that grants a Kubernetes
     ClusterRole named `endpointslices-reader` to the IAM service account. The
     ClusterRole provides permissions to list and get EndpointSlices:
 
@@ -369,7 +383,7 @@ the GKE clusters.
 Create the root CA:
 
 ```shell
-CAS_ROOT_LOCATION="${REGIONS[0]}"
+CAS_ROOT_LOCATION="${REGIONS[@]:0:1}"
 PROJECT_ID="$(gcloud config get project 2> /dev/null)"
 PROJECT_NUMBER="$(gcloud projects describe $PROJECT_ID --format 'value(projectNumber)')"
 
@@ -445,11 +459,20 @@ spec:
   rotationWindowPercentage: 50
 EOF
 
- kubectl apply --filename "workload-certificate-config-grpc-xds-$region.yaml" --context "$context"
+  kubectl apply --filename "workload-certificate-config-grpc-xds-$region.yaml" --context "$context"
 done
 ```
 
 ## Cleaning up
+
+0. Set up environment variables:
+
+    ```shell
+    PROJECT_ID="$(gcloud config get project 2> /dev/null)"
+    REGIONS=(us-central1 us-west1)
+    AR_LOCATION="${REGIONS[@]:0:1}"
+    CAS_ROOT_LOCATION="${REGIONS[@]:0:1}"
+    ```
 
 1.  Delete the GKE clusters:
 

@@ -3,7 +3,7 @@
 [kind](https://kind.sigs.k8s.io/) is a command-line tool for running local
 Kubernetes clusters using [podman](https://podman.io/) or
 [Docker](https://www.docker.com/).
-kind is handy for development purposes if you don't have access to a hosted
+kind is useful for development purposes if you don't have access to a hosted
 Kubernetes cluster and container image registry.
 
 Follow the instructions below to create multi-node Kubernetes clusters using
@@ -12,6 +12,11 @@ Follow the instructions below to create multi-node Kubernetes clusters using
 for simulating clusters with nodes across multiple cloud provider zones, and
 with [cert-manager](https://cert-manager.io/docs/) and a root certificate
 authority (CA) to issue workload certificates for TLS and mTLS.
+
+## Install kind
+
+1.  Install kind by following the
+    [kind installation guide](https://kind.sigs.k8s.io/docs/user/quick-start#installation).
 
 ## Docker Desktop setup
 
@@ -30,6 +35,8 @@ authority (CA) to issue workload certificates for TLS and mTLS.
 ## Podman setup
 
 If you want to use kind with podman, follow the steps in this section.
+
+<style>ol ol { list-style-type: lower-alpha; }</style>
 
 1.  Increase the virtual machine CPU and memory allocation, so that the
     Kubernetes cluster(s) will have sufficient capacity.
@@ -72,7 +79,7 @@ If you want to use kind with podman, follow the steps in this section.
 
     On macOS, the output should look similar to this:
 
-    ```
+    ```shell
     /Users/$USER/.local/share/containers/podman/machine/podman.sock
     ```
 
@@ -127,7 +134,7 @@ You can view the kind cluster configuration files:
 
 ## Cleaning up
 
-1.  When you are done, delete the kind Kubernetes cluster
+1.  When you are done, delete the kind Kubernetes cluster(s).
 
     If you created two kind clusters, delete both:
 

@@ -453,7 +453,7 @@ Some troubleshooting commands:
 - [gRFC A39: xDS HTTP Filter Support](https://github.com/grpc/proposal/blob/b2093bc96e045d7a13ccc01886b9dde346c2b83b/A39-xds-http-filters.md)
 - [gRFC A40: xDS Configuration Dump via Client Status Discovery Service in gRPC](https://github.com/grpc/proposal/blob/312af83e2f6af1ccb9b048b967635f67c8d40643/A40-csds-support.md)
 - [gRFC A41: xDS RBAC Support](https://github.com/grpc/proposal/blob/c83f0cb8ed534c4192e0e5d7a4550a1f5a76ef65/A41-xds-rbac.md)
-- [Envoy Role Based Access Control (RBAC) Filter](https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/rbac_filter)
+- [Envoy Role Based Access Control (RBAC) HTTP Filter](https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/rbac_filter)
 - [gRFC A42: xDS Ring Hash LB Policy](https://github.com/grpc/proposal/blob/1d50990f5e95d5d15233e35e56ac1dc33fcd56b3/A42-xds-ring-hash-lb-policy.md)
 - [gRFC A44: gRPC xDS Retry Support](https://github.com/grpc/proposal/blob/6b550edf7407047d423c8fa530e4f9d2e50a2fd2/A44-xds-retry.md)
 - [gRFC A47: xDS Federation](https://github.com/grpc/proposal/blob/e85c66e48348867937688d89117bad3dcaa6f4f5/A47-xds-federation.md)
