@@ -34,14 +34,7 @@ if [ "$KIND_EXPERIMENTAL_PROVIDER" == "podman" ] ; then
      echo "fs.inotify.max_user_watches=1048576" | sudo tee -a /etc/sysctl.conf > /dev/null &&
      echo "fs.inotify.max_user_instances=8192" | sudo tee -a /etc/sysctl.conf > /dev/null &&
      sudo sysctl -p /etc/sysctl.conf'
-elif [ "$(uname -s)" != "Linux" ] ; then
-  # Assuming Docker Desktop
-  docker run -it --privileged --pid=host debian:stable nsenter -t 1 -m -u -n -i sh -c \
-    'grep -v "fs.inotify.max_user_[instances|watches]" /etc/sysctl.conf | sudo tee /etc/sysctl.conf > /dev/null &&
-     echo "fs.inotify.max_user_watches=1048576" | sudo tee -a /etc/sysctl.conf > /dev/null &&
-     echo "fs.inotify.max_user_instances=8192" | sudo tee -a /etc/sysctl.conf > /dev/null &&
-     sudo sysctl -p /etc/sysctl.conf'
-else
+elif [ "$(uname -s)" == "Linux" ] ; then
   # In case of Docker Engine on a Linux host, don't just change the host.
   echo "******************************************************************************************
 * It looks like you are using Docker Engine on a machine running Linux.                  *
