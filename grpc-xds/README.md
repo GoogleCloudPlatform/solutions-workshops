@@ -80,29 +80,23 @@ or later.
 
 You also need the following tools:
 
-- [kubectl](https://kubernetes.io/docs/reference/kubectl/)
-- [Kustomize](https://kustomize.io/)
-- [Skaffold](https://skaffold.dev/)
-- [gRPCurl](https://github.com/fullstorydev/grpcurl)
-- [yq](https://mikefarah.gitbook.io/yq/)
+- [kubectl](https://kubernetes.io/docs/reference/kubectl/) at a version that is
+  [supported by the Kubernetes control plane version that you use (`kube-apiserver` specifically)](https://kubernetes.io/releases/version-skew-policy/#kubectl)
+- [Kustomize](https://kustomize.io/) v4.5.5 or later
+- [Skaffold](https://skaffold.dev/) v2.10.1 or later
+- [gRPCurl](https://github.com/fullstorydev/grpcurl) v1.9.1 or later
+- [yq](https://mikefarah.gitbook.io/yq/) v4.41.1 or later
 
 To make it easier to switch between kubeconfig contexts for multiple
 Kubernetes clusters, you can also optionally install
 [`kubectx`](https://github.com/ahmetb/kubectx).
 
-If you have already installed the
-[Google Cloud SDK](https://cloud.google.com/sdk/docs/install),
-you can install kubectl, Kustomize, and Skaffold using the `gcloud` command:
-
-```shell
-gcloud components install kubectl kustomize skaffold
-```
-
 If you use macOS, you can use `brew` to install kubectl, Kustomize, Skaffold,
-gRPCurl, yq, and kubectx:
+gRPCurl, yq, kind, and kubectx:
 
 ```shell
-brew install kubectl kustomize skaffold grpcurl yq kubectx
+brew update
+brew install kubectl kustomize skaffold grpcurl yq kind kubectx
 ```
 
 Follow the steps in the documents

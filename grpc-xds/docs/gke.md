@@ -36,14 +36,24 @@ information, see [Clean up](#clean-up).
     that has
     [billing enabled](https://cloud.google.com/billing/docs/how-to/verify-billing-enabled).
 
-3.  Install additional tools that you will use to deploy the xDS control plane
-    management service, and the sample gRPC application:
+3.  Install the `gke-gcloud-auth-plugin` plugin for `kubectl`. This plugin
+    enables `kubectl` to authenticate to GKE clusters using credentials
+    obtained using `gcloud`:
 
     ```shell
-    gcloud components install gke-gcloud-auth-plugin kubectl kustomize skaffold --quiet
+    gcloud components install gke-gcloud-auth-plugin
     ```
 
-4.  Set the Google Cloud project you want to use:
+4.  Install additional tools that you will use to deploy the xDS control plane
+    management service, and the sample gRPC application:
+
+    - [kubectl](https://kubernetes.io/docs/reference/kubectl/)
+    - [Kustomize](https://kustomize.io/) v4.5.5 or later
+    - [Skaffold](https://skaffold.dev/) v2.10.1 or later
+    - [gRPCurl](https://github.com/fullstorydev/grpcurl) v1.9.1 or later
+    - [yq](https://mikefarah.gitbook.io/yq/) v4.41.1 or later
+
+5.  Set the Google Cloud project you want to use:
 
     ```shell
     gcloud config set project PROJECT_ID
@@ -53,7 +63,7 @@ information, see [Clean up](#clean-up).
     [project ID](https://cloud.google.com/resource-manager/docs/creating-managing-projects)
     of the Google Cloud project you want to use.
 
-5.  Enable the Artifact Registry, GKE, Cloud DNS, and CA Service APIs:
+6.  Enable the Artifact Registry, GKE, Cloud DNS, and CA Service APIs:
 
     ```shell
     gcloud services enable \
@@ -463,7 +473,7 @@ EOF
 done
 ```
 
-## Cleaning up
+## Clean up
 
 0. Set up environment variables:
 

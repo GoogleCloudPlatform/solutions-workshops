@@ -18,6 +18,8 @@ authority (CA) to issue workload certificates for TLS and mTLS.
 1.  Install kind by following the
     [kind installation guide](https://kind.sigs.k8s.io/docs/user/quick-start#installation).
 
+    Use kind version v0.20.0 or later.
+
 ## Docker Desktop setup
 
 1.  If you want to use kind with Docker Desktop, increase the virtual machine
