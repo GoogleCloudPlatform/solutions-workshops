@@ -28,12 +28,13 @@ pushd "$base_dir"
 # Workaround for
 # https://kind.sigs.k8s.io/docs/user/known-issues/#pod-errors-due-to-too-many-open-files
 KIND_EXPERIMENTAL_PROVIDER=${KIND_EXPERIMENTAL_PROVIDER:-}
-if [ "$KIND_EXPERIMENTAL_PROVIDER" == "podman" && "$(uname -s)" != "Linux" ] ; then
+if [[ "$KIND_EXPERIMENTAL_PROVIDER" == "podman" && "$(uname -s)" != "Linux" ]] ; then
   podman machine ssh \
     'grep -v "fs.inotify.max_user_[instances|watches]" /etc/sysctl.conf | sudo tee /etc/sysctl.conf > /dev/null &&
      echo "fs.inotify.max_user_watches=1048576" | sudo tee -a /etc/sysctl.conf > /dev/null &&
      echo "fs.inotify.max_user_instances=8192" | sudo tee -a /etc/sysctl.conf > /dev/null &&
      sudo sysctl -p /etc/sysctl.conf'
+fi
 if [ "$(uname -s)" == "Linux" ] ; then
   # In case of podman or Docker Engine on a Linux host, don't just change the host.
   echo "******************************************************************************************
