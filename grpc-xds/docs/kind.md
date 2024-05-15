@@ -38,8 +38,6 @@ authority (CA) to issue workload certificates for TLS and mTLS.
 
 If you want to use kind with podman, follow the steps in this section.
 
-<style>ol ol { list-style-type: lower-alpha; }</style>
-
 1.  Increase the virtual machine CPU and memory allocation, so that the
     Kubernetes cluster(s) will have sufficient capacity.
 

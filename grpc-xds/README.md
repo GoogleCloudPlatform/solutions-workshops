@@ -75,7 +75,7 @@ If you want to build and deploy the Java implementation of the xDS control
 plane and sample gRPC application, you need [Java 17](https://adoptium.net/).
 
 If you want to build and deploy the Go implementation of the xDS control plane
-and sample gRPC applications, you need [Go 1.21](https://go.dev/doc/install)
+and sample gRPC applications, you need [Go 1.22](https://go.dev/doc/install)
 or later.
 
 You also need the following tools:
@@ -137,8 +137,6 @@ to issue workload TLS certificates.
       e.g., `grpc-xds`.
 
 ## Running the xDS control plane and sample gRPC applications
-
-<style>ol ol { list-style-type: lower-alpha; }</style>
 
 1.  Build the container images for the xDS control plane and the sample gRPC
     applications, render the Kubernetes resource manifests, apply them to the
@@ -433,6 +431,7 @@ Some troubleshooting commands:
 - [xDS API Overview](https://www.envoyproxy.io/docs/envoy/latest/configuration/overview/overview)
 - [xDS REST and gRPC protocol](https://www.envoyproxy.io/docs/envoy/latest/api-docs/xds_protocol)
 - [Aggregated Discovery Service (ADS)](https://www.envoyproxy.io/docs/envoy/latest/configuration/overview/xds_api#aggregated-discovery-service)
+- [Load Reporting Service (LRS)](https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/load_stats/v3/lrs.proto)
 - [On the state of Envoy Proxy control planes](https://mattklein123.dev/2020/03/15/2020-03-14-on-the-state-of-envoy-proxy-control-planes/)
 - [xDS Features in gRPC](https://github.com/grpc/grpc/blob/1b31c6e0ba711787c05e8e78719896a682fca102/doc/grpc_xds_features.md)
 - [gRFC A27: xDS-Based Global Load Balancing](https://github.com/grpc/proposal/blob/972b69ab1f0f7f6079af81a8c2b8a01a15ce3bec/A27-xds-global-load-balancing.md)
@@ -453,10 +452,13 @@ Some troubleshooting commands:
 - [gRFC A47: xDS Federation](https://github.com/grpc/proposal/blob/e85c66e48348867937688d89117bad3dcaa6f4f5/A47-xds-federation.md)
 - [gRFC A48: xDS Least Request LB Policy](https://github.com/grpc/proposal/blob/fc4ade7b042a614aba5df8b6b82f4ca55f59a37e/A48-xds-least-request-lb-policy.md)
 - [gRFC A50: gRPC xDS Outlier Detection Support](https://github.com/grpc/proposal/blob/ee75a4010214ddda02ba992e69f1c57be7f71497/A50-xds-outlier-detection.md)
+- [gRFC A51: Custom Backend Metrics Support](https://github.com/grpc/proposal/blob/9208d9866293fcf85f2802332f34bdec106717a9/A51-custom-backend-metrics.md)
+- [Open Request Cost Aggregation (ORCA)](https://github.com/envoyproxy/envoy/issues/6614)
 - [gRFC A52: gRPC xDS Custom Load Balancer Configuration](https://github.com/grpc/proposal/blob/7c05212d14f4abef5f74f71695f95ba8dd3f7dd3/A52-xds-custom-lb-policies.md)
 - [gRFC A53: Option for Ignoring xDS Resource Deletion](https://github.com/grpc/proposal/blob/1f9b52226bf45d9f54d0eda34446b4cffabfcec6/A53-xds-ignore-resource-deletion.md)
 - [gRFC A55: xDS-Based Stateful Session Affinity for Proxyless gRPC](https://github.com/grpc/proposal/blob/9a2bd577d48b45aa9125e6a49b115690042371fe/A55-xds-stateful-session-affinity.md)
 - [gRFC A57: XdsClient Failure Mode Behavior](https://github.com/grpc/proposal/blob/f1ef153e9955d3507e8322727e96e56e04933605/A57-xds-client-failure-mode-behavior.md)
+- [gRFC A58: `weighted_round_robin` LB policy](https://github.com/grpc/proposal/blob/0ba0c1905050525f9b0aee46f3f23c8e1e515489/A58-client-side-weighted-round-robin-lb-policy.md)
 - [gRFC A65: mTLS Credentials in xDS Bootstrap File](https://github.com/grpc/proposal/blob/e027a56d7d900b47948602e6d72413b5cba80d54/A65-xds-mtls-creds-in-bootstrap.md)
 - [xRFC TP1: `xdstp://` structured resource naming, caching and federation support](https://github.com/cncf/xds/blob/70da609f752ed4544772f144411161d41798f07e/proposals/TP1-xds-transport-next.md)
 - [xRFC TP2: Dynamically Generated Cacheable xDS Resources](https://github.com/cncf/xds/blob/70da609f752ed4544772f144411161d41798f07e/proposals/TP2-dynamically-generated-cacheable-xds-resources.md)
