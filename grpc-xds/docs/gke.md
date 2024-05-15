@@ -214,9 +214,9 @@ GKE cluster nodes and pods, even if the nodes do not have public IP addresses.
         --subnetwork default \
         --workload-pool "${PROJECT_ID}.svc.id.goog" \
         --enable-autoscaling \
-        --max-nodes 3 \
-        --min-nodes 1 \
-        --num-nodes 1 \
+        --max-nodes 5 \
+        --min-nodes 2 \
+        --num-nodes 2 \
         --scopes cloud-platform,userinfo-email \
         --tags allow-health-checks,grpc-xds-node \
         --workload-metadata GKE_METADATA

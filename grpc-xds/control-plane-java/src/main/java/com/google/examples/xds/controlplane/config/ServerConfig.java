@@ -171,6 +171,7 @@ public class ServerConfig {
    *     href="https://github.com/openjdk/jdk/blob/6765f902505fbdd02f25b599f942437cd805cad1/src/jdk.naming.dns/share/classes/com/sun/jndi/dns/DnsContextFactory.java#L41">
    *     <code>com.sun.jndi.dns.DnsContextFactory</code></a>
    */
+  @SuppressWarnings("AddressSelection")
   String clusterDnsDomain() {
     try {
       var k8sSvcFqdn = InetAddress.getByName(KUBERNETES_SERVICE).getCanonicalHostName();

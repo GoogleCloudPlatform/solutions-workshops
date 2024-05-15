@@ -30,6 +30,7 @@ plugins {
     id 'com.github.sherter.google-java-format' version '0.9'
     id 'com.google.cloud.tools.jib' version '3.4.2'
     id 'com.google.protobuf' version '0.9.4'
+    id 'net.ltgt.errorprone' version '3.1.0'
 }
 
 repositories {
@@ -47,6 +48,9 @@ java {
 }
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+    options.errorprone {
+        disableWarningsInGeneratedCode = true
+    }
 }
 
 group = 'com.google.examples.xds.greeter'
@@ -93,6 +97,7 @@ tasks.withType(Checkstyle) {
     }
 }
 
+def errorProneCoreVersion = '2.27.1'
 def grpcVersion = '1.63.0'
 def gsonVersion = '2.10.1'
 def jetbrainsAnnotationsVersion = '24.1.0'
@@ -100,7 +105,7 @@ def junitJupiterVersion = '5.10.2'
 def junitVersion = '4.13.2'
 def log4jVersion = '2.23.1'
 def protobufVersion = '3.25.3'
-def slf4jVersion = '2.0.12'
+def slf4jVersion = '2.0.13'
 def tomcatAnnotationsApiVersion = '6.0.53'
 
 dependencies {
@@ -129,6 +134,8 @@ dependencies {
     testCompileOnly("junit:junit:${junitVersion}")
 
     testRuntimeOnly("org.junit.vintage:junit-vintage-engine:${junitJupiterVersion}")
+
+    errorprone("com.google.errorprone:error_prone_core:${errorProneCoreVersion}")
 }
 
 jar {

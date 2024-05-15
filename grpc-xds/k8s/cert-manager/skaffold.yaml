@@ -35,7 +35,7 @@ deploy:
           command: ["kubectl", "rollout", "status", "--namespace=cert-manager", "deployment", "cert-manager-webhook"]
 manifests:
   rawYaml:
-  - https://github.com/cert-manager/cert-manager/releases/download/v1.14.4/cert-manager.yaml # kpt-set: https://github.com/cert-manager/cert-manager/releases/download/${cert-manager-version}/cert-manager.yaml
+  - https://github.com/cert-manager/cert-manager/releases/download/v1.14.5/cert-manager.yaml # kpt-set: https://github.com/cert-manager/cert-manager/releases/download/${cert-manager-version}/cert-manager.yaml
 ---
 apiVersion: skaffold/v3
 kind: Config
