@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # Patch to request GKE workload TLS certificate ("mesh certificate").
-# Ref: https://cloud.google.com/traffic-director/docs/security-proxyless-setup#create-service
+# Ref: https://cloud.google.com/service-mesh/docs/service-routing/security-proxyless-setup#create-service
 
 apiVersion: apps/v1
 kind: Deployment

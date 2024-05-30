@@ -21,7 +21,8 @@ clusters, or on local [kind](https://kind.sigs.k8s.io/) Kubernetes clusters.
 
 The code in this repository in not recommended for production environments.
 If you want a production-ready xDS control plane, we recommend
-[Traffic Director](https://cloud.google.com/traffic-director/docs) from Google Cloud.
+[Cloud Service Mesh](https://cloud.google.com/service-mesh/docs/service-routing/proxyless-overview)
+from Google Cloud.
 
 ## Directory structure
 
@@ -428,12 +429,14 @@ Some troubleshooting commands:
 
 ## xDS references
 
+- [On the state of Envoy Proxy control planes](https://mattklein123.dev/2020/03/15/2020-03-14-on-the-state-of-envoy-proxy-control-planes/)
 - [xDS API Overview](https://www.envoyproxy.io/docs/envoy/latest/configuration/overview/overview)
 - [xDS REST and gRPC protocol](https://www.envoyproxy.io/docs/envoy/latest/api-docs/xds_protocol)
+- [xDS Features in gRPC](https://github.com/grpc/grpc/blob/1b31c6e0ba711787c05e8e78719896a682fca102/doc/grpc_xds_features.md)
 - [Aggregated Discovery Service (ADS)](https://www.envoyproxy.io/docs/envoy/latest/configuration/overview/xds_api#aggregated-discovery-service)
 - [Load Reporting Service (LRS)](https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/load_stats/v3/lrs.proto)
-- [On the state of Envoy Proxy control planes](https://mattklein123.dev/2020/03/15/2020-03-14-on-the-state-of-envoy-proxy-control-planes/)
-- [xDS Features in gRPC](https://github.com/grpc/grpc/blob/1b31c6e0ba711787c05e8e78719896a682fca102/doc/grpc_xds_features.md)
+- [Open Request Cost Aggregation (ORCA)](https://github.com/envoyproxy/envoy/issues/6614)
+- [gRFC A14: gRPC Channelz](https://github.com/grpc/proposal/blob/6657c0723c185bda949babd120cf6e5e701cb91b/A14-channelz.md)
 - [gRFC A27: xDS-Based Global Load Balancing](https://github.com/grpc/proposal/blob/972b69ab1f0f7f6079af81a8c2b8a01a15ce3bec/A27-xds-global-load-balancing.md)
 - [gRFC A28: gRPC xDS traffic splitting and routing](https://github.com/grpc/proposal/blob/f6d38361da31ffad3158dbef84f8af3cdd89d8c1/A28-xds-traffic-splitting-and-routing.md)
 - [gRFC A29: xDS-Based Security for gRPC Clients and Servers](https://github.com/grpc/proposal/blob/deaf1bcf248d1e48e83c470b00930cbd363fab6d/A29-xds-tls-security.md)
@@ -453,7 +456,6 @@ Some troubleshooting commands:
 - [gRFC A48: xDS Least Request LB Policy](https://github.com/grpc/proposal/blob/fc4ade7b042a614aba5df8b6b82f4ca55f59a37e/A48-xds-least-request-lb-policy.md)
 - [gRFC A50: gRPC xDS Outlier Detection Support](https://github.com/grpc/proposal/blob/ee75a4010214ddda02ba992e69f1c57be7f71497/A50-xds-outlier-detection.md)
 - [gRFC A51: Custom Backend Metrics Support](https://github.com/grpc/proposal/blob/9208d9866293fcf85f2802332f34bdec106717a9/A51-custom-backend-metrics.md)
-- [Open Request Cost Aggregation (ORCA)](https://github.com/envoyproxy/envoy/issues/6614)
 - [gRFC A52: gRPC xDS Custom Load Balancer Configuration](https://github.com/grpc/proposal/blob/7c05212d14f4abef5f74f71695f95ba8dd3f7dd3/A52-xds-custom-lb-policies.md)
 - [gRFC A53: Option for Ignoring xDS Resource Deletion](https://github.com/grpc/proposal/blob/1f9b52226bf45d9f54d0eda34446b4cffabfcec6/A53-xds-ignore-resource-deletion.md)
 - [gRFC A55: xDS-Based Stateful Session Affinity for Proxyless gRPC](https://github.com/grpc/proposal/blob/9a2bd577d48b45aa9125e6a49b115690042371fe/A55-xds-stateful-session-affinity.md)
