@@ -32,7 +32,7 @@ spec:
         secret:
           secretName: greeter-leaf-cert
           items:
-          # https://cloud.google.com/traffic-director/docs/security-proxyless-setup#create-service%7D
+          # https://cloud.google.com/service-mesh/docs/service-routing/security-proxyless-setup#create-service%7D
           - key: tls.key
             path: private_key.pem
           - key: tls.crt

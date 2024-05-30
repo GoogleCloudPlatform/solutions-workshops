@@ -17,7 +17,7 @@
 # Deploy to a GKE cluster, with a self-managed xDS control plane,
 # and use GKE workload TLS certificates ("mesh certificates").
 # Requires that a certificate authority (CA) has been set up in CA Service,
-# see: https://cloud.google.com/traffic-director/docs/security-proxyless-setup
+# see: https://cloud.google.com/service-mesh/docs/service-routing/security-proxyless-setup
 
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization

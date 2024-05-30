@@ -7,9 +7,10 @@ The goal of this implementation is to provide a practical understanding of xDS,
 beyond the API specifications and the
 [pithy examples](https://github.com/grpc/grpc-go/tree/v1.59.0/examples/features/xds).
 
-This sample implementation is not recommended for production deployments, and
-there are no plans to make it production-ready. Instead, we recommend
-[Traffic Director](https://cloud.google.com/traffic-director/docs) from Google Cloud.
+This sample implementation is not recommended for production deployments.
+If you want a production-ready xDS control plane, we recommend
+[Cloud Service Mesh](https://cloud.google.com/service-mesh/docs/service-routing/proxyless-overview)
+from Google Cloud.
 
 ## References
 

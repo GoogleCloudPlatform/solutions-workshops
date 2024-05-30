@@ -380,10 +380,10 @@ or
 
 ## Workload TLS certificates using CA Service
 
-In the Traffic Director document on
-[setting up service security with proxyless gRPC](https://cloud.google.com/traffic-director/docs/security-proxyless-setup),
+In the Cloud Service Mesh document on
+[setting up service security with proxyless gRPC](https://cloud.google.com/service-mesh/docs/service-routing/security-proxyless-setup),
 follow the steps in the section titled
-[Create certificate authorities to issue certificates](https://cloud.google.com/traffic-director/docs/security-proxyless-setup#configure-cas)
+[Create certificate authorities to issue certificates](https://cloud.google.com/service-mesh/docs/service-routing/security-proxyless-setup#configure-cas)
 to set up certificate authorities in CA Service to issue workload TLS
 certificates to pods on the GKE clusters.
 

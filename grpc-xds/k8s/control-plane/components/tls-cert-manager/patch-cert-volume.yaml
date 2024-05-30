@@ -32,7 +32,7 @@ spec:
       - name: workload-certs
         secret:
           secretName: control-plane-certificate
-          # https://cloud.google.com/traffic-director/docs/security-proxyless-setup#create-service
+          # https://cloud.google.com/service-mesh/docs/service-routing/security-proxyless-setup#create-service
           items:
           - key: tls.key
             path: private_key.pem
