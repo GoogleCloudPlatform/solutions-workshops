@@ -1,0 +1,55 @@
+# Copyright 2024 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Patch to mount cert-manager issued TLS certificates as a volume.
+# Volume mount paths set to match those used by GKE workload TLS certificates.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: envoy
+spec:
+  template:
+    spec:
+      containers:
+      - name: app
+        volumeMounts:
+        - name: workload-certs
+          mountPath: /var/run/secrets/workload-spiffe-credentials
+          readOnly: true
+        - name: server-certs
+          mountPath: /etc/envoy-ssl
+          readOnly: true
+      volumes:
+      - name: workload-certs
+        secret:
+          secretName: envoy-client-certs
+          # https://cloud.google.com/service-mesh/docs/service-routing/security-proxyless-setup#create-service
+          items:
+          - key: tls.key
+            path: private_key.pem
+          - key: tls.crt
+            path: certificates.pem
+          - key: ca.crt
+            path: ca_certificates.pem
+      - name: server-certs
+        secret:
+          secretName: envoy-server-certs
+          items:
+          - key: tls.key
+            path: private_key.pem
+          - key: tls.crt
+            path: certificates.pem
+          - key: ca.crt
+            path: ca_certificates.pem

@@ -18,20 +18,20 @@ import (
 	"sync"
 )
 
-type ServerListenerCache struct {
+type GRPCServerListenerCache struct {
 	mu    sync.RWMutex
 	cache map[string]map[EndpointAddress]bool
 }
 
-func NewServerListenerCache() *ServerListenerCache {
-	return &ServerListenerCache{
+func NewGRPCServerListenerCache() *GRPCServerListenerCache {
+	return &GRPCServerListenerCache{
 		cache: map[string]map[EndpointAddress]bool{},
 	}
 }
 
-// Add returns true if at least one of the new server listener addresses did not already exist in the cache
+// Add returns true if at least one of the new gRPC server listener addresses did not already exist in the cache
 // for the provided `nodeHash` cache key.
-func (c *ServerListenerCache) Add(nodeHash string, newAddresses []EndpointAddress) bool {
+func (c *GRPCServerListenerCache) Add(nodeHash string, newAddresses []EndpointAddress) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	addresses, exists := c.cache[nodeHash]
@@ -49,7 +49,7 @@ func (c *ServerListenerCache) Add(nodeHash string, newAddresses []EndpointAddres
 	return added
 }
 
-func (c *ServerListenerCache) Get(nodeHash string) []EndpointAddress {
+func (c *GRPCServerListenerCache) Get(nodeHash string) []EndpointAddress {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	addresses := make([]EndpointAddress, len(c.cache[nodeHash]))

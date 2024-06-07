@@ -92,7 +92,7 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
    * appsCache stores the most recent gRPC application configuration information from k8s cluster
    * EndpointSlices. The appsCache is used to populate new entries (previously unseen `nodeHash`es)
    * in the xDS resource snapshot cache, so that the new subscribers don't have to wait for an
-   * EndpointSlice update before they can receive xDS resource.
+   * EndpointSlice update before they can receive xDS resources.
    */
   private final GrpcApplicationCache appsCache;
 

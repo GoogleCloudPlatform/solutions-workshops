@@ -1,6 +1,6 @@
 # vi: set ft=yaml :
 #
-# Copyright 2023 Google LLC
+# Copyright 2024 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,10 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Use this for a no-xDS deployment.
+
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 metadata:
-  name: control-plane
+  name: envoy-base
   annotations:
     config.kubernetes.io/local-config: "true"
 labels:
@@ -25,29 +27,33 @@ labels:
     app.kubernetes.io/part-of: grpc-xds
   includeSelectors: false
   includeTemplates: true
+images:
+- name: busybox
+  newName: docker.io/library/busybox:stable-glibc
+- name: envoy
+  newName: docker.io/envoyproxy/envoy:v1.30-latest
+  # newName: docker.io/envoyproxy/envoy:distroless-v1.30-latest
 patches:
 - path: patch-config.yaml
   target:
     group: apps
     version: v1
     kind: Deployment
-    name: control-plane
-- path: patch-probes.yaml
-  target:
-    group: apps
-    version: v1
-    kind: Deployment
-    name: control-plane
+    name: envoy
+# - path: patch-probes.yaml
+#   target:
+#     group: apps
+#     version: v1
+#     kind: Deployment
+#     name: envoy
 - path: patch-resources.yaml
   target:
     group: apps
     version: v1
     kind: Deployment
-    name: control-plane
+    name: envoy
 resources:
 - namespace.yaml
 - service-account.yaml
-- cluster-role.yaml
-- cluster-role-binding.yaml
 - deployment.yaml
 - service.yaml

@@ -1,6 +1,6 @@
 # vi: set ft=yaml :
 #
-# Copyright 2023 Google LLC
+# Copyright 2024 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,40 +14,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
+# Patch and k8s resources for fetching labels from the k8s node where the pod runs.
+# Not required for GKE, since the bootstrap-generating initContainer can query
+# the GKE metadata server to look up the Compute Engine zone and other attributes.
+
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
 metadata:
-  name: control-plane
+  name: envoy-node-labels
   annotations:
     config.kubernetes.io/local-config: "true"
-labels:
-- pairs:
-    app.kubernetes.io/part-of: grpc-xds
-  includeSelectors: false
-  includeTemplates: true
+images:
+- name: kubectl
+  newName: docker.io/bitnami/kubectl
 patches:
-- path: patch-config.yaml
+- path: patch-node-labels-init.yaml
   target:
     group: apps
     version: v1
     kind: Deployment
-    name: control-plane
-- path: patch-probes.yaml
-  target:
-    group: apps
-    version: v1
-    kind: Deployment
-    name: control-plane
-- path: patch-resources.yaml
-  target:
-    group: apps
-    version: v1
-    kind: Deployment
-    name: control-plane
+    name: envoy
 resources:
-- namespace.yaml
-- service-account.yaml
 - cluster-role.yaml
 - cluster-role-binding.yaml
-- deployment.yaml
-- service.yaml

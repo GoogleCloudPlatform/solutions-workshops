@@ -30,6 +30,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	informercache "k8s.io/client-go/tools/cache"
 
+	"github.com/googlecloudplatform/solutions-workshops/grpc-xds/control-plane-go/pkg/applications"
 	"github.com/googlecloudplatform/solutions-workshops/grpc-xds/control-plane-go/pkg/xds"
 )
 
@@ -125,7 +126,7 @@ func logEndpointSlice(logger logr.Logger, obj interface{}) {
 	}
 }
 
-func (m *Manager) handleEndpointSliceEvent(ctx context.Context, logger logr.Logger, namespace string, apps []xds.GRPCApplication) {
+func (m *Manager) handleEndpointSliceEvent(ctx context.Context, logger logr.Logger, namespace string, apps []applications.Application) {
 	logger.V(2).Info("Informer resource update", "apps", apps)
 	if err := m.xdsCache.UpdateResources(ctx, logger, m.kubecontext, namespace, apps); err != nil {
 		// Can't propagate this error, and we probably shouldn't end the goroutine anyway.
@@ -133,8 +134,8 @@ func (m *Manager) handleEndpointSliceEvent(ctx context.Context, logger logr.Logg
 	}
 }
 
-func getAppsForInformer(logger logr.Logger, informer informercache.SharedIndexInformer) []xds.GRPCApplication {
-	var apps []xds.GRPCApplication
+func getAppsForInformer(logger logr.Logger, informer informercache.SharedIndexInformer) []applications.Application {
+	var apps []applications.Application
 	for _, eps := range informer.GetIndexer().List() {
 		endpointSlice, err := validateEndpointSlice(eps)
 		if err != nil {
@@ -146,15 +147,15 @@ func getAppsForInformer(logger logr.Logger, informer informercache.SharedIndexIn
 		// TODO: Handle more than one port?
 		port := uint32(*endpointSlice.Ports[0].Port)
 		appEndpoints := getApplicationEndpoints(endpointSlice)
-		app := xds.NewGRPCApplication(namespace, k8sServiceName, port, appEndpoints)
+		app := applications.NewApplication(namespace, k8sServiceName, port, appEndpoints)
 		apps = append(apps, app)
 	}
 	return apps
 }
 
 // getApplicationEndpoints returns the endpoints as `GRPCApplicationEndpoints`.
-func getApplicationEndpoints(endpointSlice *discoveryv1.EndpointSlice) []xds.GRPCApplicationEndpoints {
-	var appEndpoints []xds.GRPCApplicationEndpoints
+func getApplicationEndpoints(endpointSlice *discoveryv1.EndpointSlice) []applications.ApplicationEndpoints {
+	var appEndpoints []applications.ApplicationEndpoints
 	for _, endpoint := range endpointSlice.Endpoints {
 		if endpoint.Conditions.Ready != nil && *endpoint.Conditions.Ready {
 			var k8sNode, zone string
@@ -164,7 +165,7 @@ func getApplicationEndpoints(endpointSlice *discoveryv1.EndpointSlice) []xds.GRP
 			if endpoint.Zone != nil {
 				zone = *endpoint.Zone
 			}
-			appEndpoints = append(appEndpoints, xds.NewGRPCApplicationEndpoints(k8sNode, zone, endpoint.Addresses, xds.EndpointStatusFromConditions(endpoint.Conditions)))
+			appEndpoints = append(appEndpoints, applications.NewApplicationEndpoints(k8sNode, zone, endpoint.Addresses, applications.EndpointStatusFromConditions(endpoint.Conditions)))
 		}
 	}
 	return appEndpoints

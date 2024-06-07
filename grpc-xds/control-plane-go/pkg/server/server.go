@@ -46,6 +46,7 @@ import (
 	"github.com/googlecloudplatform/solutions-workshops/grpc-xds/control-plane-go/pkg/interceptors"
 	"github.com/googlecloudplatform/solutions-workshops/grpc-xds/control-plane-go/pkg/logging"
 	"github.com/googlecloudplatform/solutions-workshops/grpc-xds/control-plane-go/pkg/xds"
+	"github.com/googlecloudplatform/solutions-workshops/grpc-xds/control-plane-go/pkg/xds/eds"
 )
 
 // gRPC configuration based on https://github.com/envoyproxy/go-control-plane/blob/v0.11.1/internal/example/server.go
@@ -96,7 +97,7 @@ func Run(ctx context.Context, servingPort int, healthPort int, kubecontexts []in
 	reflection.Register(server)
 	reflection.Register(healthGRPCServer)
 
-	xdsCache := xds.NewSnapshotCache(ctx, true, xds.ZoneHash{}, xds.LocalityPriorityByZone{}, xdsFeatures, authority)
+	xdsCache := xds.NewSnapshotCache(ctx, true, xds.ZoneHash{}, eds.LocalityPriorityByZone{}, xdsFeatures, authority)
 	xdsServer := serverv3.NewServer(ctx, xdsCache, xdsServerCallbackFuncs(logger))
 
 	registerXDSServices(server, xdsServer)
@@ -241,22 +242,20 @@ func createServerCredentials(logger logr.Logger, xdsFeatures *xds.Features) (*tr
 	}
 	providers := []certprovider.Provider{identityProvider}
 
-	options := &advancedtls.ServerOptions{
+	options := &advancedtls.Options{
 		IdentityOptions: advancedtls.IdentityCertificateOptions{
 			IdentityProvider: identityProvider,
 		},
-		// VerifyPeer: func(params *advancedtls.VerificationFuncParams) (*advancedtls.VerificationResults, error) {
-		// 	return &advancedtls.VerificationResults{}, nil
-		// },
-		VerifyPeer: func(params *advancedtls.VerificationFuncParams) (*advancedtls.VerificationResults, error) {
+		AdditionalPeerVerification: func(params *advancedtls.HandshakeVerificationInfo) (*advancedtls.PostHandshakeVerificationResults, error) {
 			// Not actually checking anything, just logging the client's SPIFFE ID.
 			// SPIFFE certificates must have exactly one URI SAN.
 			if len(params.Leaf.URIs) == 1 && params.Leaf.URIs[0] != nil {
 				logger.V(2).Info("Client TLS certificate", "spiffeID", *params.Leaf.URIs[0])
 			}
-			return &advancedtls.VerificationResults{}, nil
+			return &advancedtls.PostHandshakeVerificationResults{}, nil
 		},
-		VType: advancedtls.CertVerification,
+		RequireClientCert: false,
+		VerificationType:  advancedtls.CertVerification,
 	}
 
 	if xdsFeatures.RequireControlPlaneClientCerts {

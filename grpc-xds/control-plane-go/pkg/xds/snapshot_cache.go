@@ -26,12 +26,15 @@ import (
 	"github.com/envoyproxy/go-control-plane/pkg/server/stream/v3"
 	"github.com/go-logr/logr"
 
+	"github.com/googlecloudplatform/solutions-workshops/grpc-xds/control-plane-go/pkg/applications"
 	"github.com/googlecloudplatform/solutions-workshops/grpc-xds/control-plane-go/pkg/logging"
+	"github.com/googlecloudplatform/solutions-workshops/grpc-xds/control-plane-go/pkg/xds/eds"
+	"github.com/googlecloudplatform/solutions-workshops/grpc-xds/control-plane-go/pkg/xds/lds"
 )
 
 // Server listener resource names typically follow the template `grpc/server?xds.resource.listening_address=%s`.
 // serverListenerNamePrefix is the part up to and including the `=` sign.
-var serverListenerNamePrefix = strings.SplitAfter(serverListenerResourceNameTemplate, "=")[0]
+var serverListenerNamePrefix = strings.SplitAfter(lds.GRPCServerListenerResourceNameTemplate, "=")[0]
 
 // SnapshotCache stores snapshots of xDS resources in a delegate cache.
 //
@@ -48,15 +51,15 @@ type SnapshotCache struct {
 	// hash is the function to determine the cache key (`nodeHash`) for nodes.
 	hash cachev3.NodeHash
 	// localityPriorityMapper constructs a priority map for localities, to be used in EDS ClusterLoadAssignment resources.
-	localityPriorityMapper LocalityPriorityMapper
+	localityPriorityMapper eds.LocalityPriorityMapper
 	// appsCache stores the most recent gRPC application configuration information from k8s cluster EndpointSlices.
-	// The appsCache is used to populate new entries (previously unseen `nodeHash`es in the xDS resource snapshot cache,
-	// so that the new subscribers don't have to wait for an EndpointSlice update before they can receive xDS resource.
-	appsCache *GRPCApplicationCache
-	// serverListenerCache stores known server listener names for each snapshot cache key (`nodeHash`).
+	// The appsCache is used to populate new entries (previously unseen `nodeHash`es) in the xDS resource snapshot cache,
+	// so that the new subscribers don't have to wait for an EndpointSlice update before they can receive xDS resources.
+	appsCache *applications.ApplicationCache
+	// grpcServerListenerCache stores known server listener names for each snapshot cache key (`nodeHash`).
 	// These names are captured when new Listener streams are created, see `CreateWatch()`.
 	// The server listener names are added to xDS resource snapshots, to be included in LDS responded for xDS-enabled gRPC servers.
-	serverListenerCache *ServerListenerCache
+	grpcServerListenerCache *GRPCServerListenerCache
 	// features contains flags to enable and disable xDS features, e.g., mTLS.
 	features *Features
 	// authority is the authority name of this control plane for xDS federation.
@@ -69,17 +72,17 @@ var _ cachev3.Cache = &SnapshotCache{}
 //
 // If `allowPartialRequests` is true, the DiscoveryServer will respond to requests for a resource
 // type even if some resources in the snapshot are not named in the request.
-func NewSnapshotCache(ctx context.Context, allowPartialRequests bool, hash cachev3.NodeHash, localityPriorityMapper LocalityPriorityMapper, features *Features, authority string) *SnapshotCache {
+func NewSnapshotCache(ctx context.Context, allowPartialRequests bool, hash cachev3.NodeHash, localityPriorityMapper eds.LocalityPriorityMapper, features *Features, authority string) *SnapshotCache {
 	return &SnapshotCache{
-		ctx:                    ctx,
-		logger:                 logging.FromContext(ctx),
-		delegate:               cachev3.NewSnapshotCache(!allowPartialRequests, hash, logging.SnapshotCacheLogger(ctx)),
-		hash:                   hash,
-		localityPriorityMapper: localityPriorityMapper,
-		appsCache:              NewGRPCApplicationCache(),
-		serverListenerCache:    NewServerListenerCache(),
-		features:               features,
-		authority:              authority,
+		ctx:                     ctx,
+		logger:                  logging.FromContext(ctx),
+		delegate:                cachev3.NewSnapshotCache(!allowPartialRequests, hash, logging.SnapshotCacheLogger(ctx)),
+		hash:                    hash,
+		localityPriorityMapper:  localityPriorityMapper,
+		appsCache:               applications.NewApplicationCache(),
+		grpcServerListenerCache: NewGRPCServerListenerCache(),
+		features:                features,
+		authority:               authority,
 	}
 }
 
@@ -91,19 +94,20 @@ func NewSnapshotCache(ctx context.Context, allowPartialRequests bool, hash cache
 //     server listener addresses the node hash, creates a new snapshot for that node hash,
 //     with the server listeners and associated route configuration.
 //
-// This solves (in a slightly hacky way) bootstrapping of xDS-enabled gRPC servers.
+// This solves (in a slightly hacky way) bootstrapping of xDS-enabled gRPC servers and Envoy proxy
+// instances that fetch configuration dynamically using ADS.
 func (c *SnapshotCache) CreateWatch(request *cachev3.Request, state stream.StreamState, responses chan cachev3.Response) (cancel func()) {
-	if request != nil && len(request.ResourceNames) > 0 && request.GetTypeUrl() == "type.googleapis.com/envoy.config.listener.v3.Listener" {
-		c.logger.Info("CreateWatch", "request.ResourceNames", request.ResourceNames)
+	if request != nil && (len(request.ResourceNames) > 0 || request.Node.UserAgentName == "envoy") && request.GetTypeUrl() == "type.googleapis.com/envoy.config.listener.v3.Listener" {
+		c.logger.Info("CreateWatch", "typeUrl", request.TypeUrl, "resourceNames", request.ResourceNames, "node.cluster", request.Node.Cluster, "node.user_agent_name", request.Node.UserAgentName, "node.id", request.Node.Id)
 		nodeHash := c.hash.ID(request.GetNode())
 		addressesFromRequest, err := findServerListenerAddresses(request.ResourceNames)
 		if err != nil {
 			c.logger.Error(err, "Problem encountered when looking for server listener addresses in new Listener stream request", "nodeHash", nodeHash)
 			return func() {}
 		}
-		changes := c.serverListenerCache.Add(nodeHash, addressesFromRequest)
-		_, err = c.delegate.GetSnapshot(nodeHash)
-		if err != nil || changes {
+		changes := c.grpcServerListenerCache.Add(nodeHash, addressesFromRequest)
+		existingSnapshot, err := c.delegate.GetSnapshot(nodeHash)
+		if err != nil || existingSnapshot == nil || changes {
 			apps := c.appsCache.GetAll()
 			if err := c.createNewSnapshot(nodeHash, apps); err != nil {
 				c.logger.Error(err, "Could not set new xDS resource snapshot", "nodeHash", nodeHash, "apps", apps)
@@ -117,7 +121,7 @@ func (c *SnapshotCache) CreateWatch(request *cachev3.Request, state stream.Strea
 // UpdateResources creates a new snapshot for each node hash in the cache,
 // based on the provided gRPC application configuration,
 // with the addition of server listeners and their associated route configurations.
-func (c *SnapshotCache) UpdateResources(_ context.Context, logger logr.Logger, kubecontextName string, namespace string, updatedApps []GRPCApplication) error {
+func (c *SnapshotCache) UpdateResources(_ context.Context, logger logr.Logger, kubecontextName string, namespace string, updatedApps []applications.Application) error {
 	var errs []error
 	changed := c.appsCache.Put(kubecontextName, namespace, updatedApps)
 	if !changed {
@@ -138,14 +142,14 @@ func (c *SnapshotCache) UpdateResources(_ context.Context, logger logr.Logger, k
 }
 
 // createNewSnapshot sets a new snapshot for the provided `nodeHash` and gRPC application configuration.
-func (c *SnapshotCache) createNewSnapshot(nodeHash string, apps []GRPCApplication) error {
+func (c *SnapshotCache) createNewSnapshot(nodeHash string, apps []applications.Application) error {
 	c.logger.Info("Creating a new snapshot", "nodeHash", nodeHash, "apps", apps)
 	snapshotBuilder, err := NewSnapshotBuilder(nodeHash, c.localityPriorityMapper, c.features, c.authority).AddGRPCApplications(apps)
 	if err != nil {
 		return fmt.Errorf("could not create xDS resource snapshot builder for nodeHash=%s: %w", nodeHash, err)
 	}
 	snapshot, err := snapshotBuilder.
-		AddServerListenerAddresses(c.serverListenerCache.Get(nodeHash)).
+		AddGRPCServerListenerAddresses(c.grpcServerListenerCache.Get(nodeHash)).
 		Build()
 	if err != nil {
 		return fmt.Errorf("could not create new xDS resource snapshot for nodeHash=%s: %w", nodeHash, err)

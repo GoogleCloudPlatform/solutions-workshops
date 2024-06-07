@@ -219,7 +219,7 @@ cert-manager: check-skaffold
 # run-bastion deploys a bastion Pod with troubleshooting tools.
 .PHONY: run-bastion
 run-bastion: check-skaffold
-	skaffold run --module=troubleshoot
+	skaffold run --filename=k8s/troubleshoot/skaffold.yaml
 
 # troubleshoot executes a shell in the bastion Pod, in raw terminal mode.
 .PHONY: troubleshoot
@@ -250,12 +250,13 @@ delete: delete-control-plane delete-greeter
 delete-apps: check-kubectl
 	./hack/delete-apps.sh
 
-# clean removes running instances of control-plane-[go|java], greeter-[go|java], and bastion.
+# clean removes running instances of control-plane-[go|java], greeter-[go|java], Envoy front proxy, and bastion.
 .PHONY: clean
 clean: check-skaffold
 	skaffold delete --module=go
 	skaffold delete --module=java
-	skaffold delete --module=troubleshoot
+	skaffold delete --filename=k8s/envoy/skaffold.yaml
+	skaffold delete --filename=k8s/troubleshoot/skaffold.yaml
 
 .PHONY: check-go
 check-go:

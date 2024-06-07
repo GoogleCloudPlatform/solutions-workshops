@@ -31,8 +31,9 @@ const (
 )
 
 var (
-	errControlPlaneClientCertsRequireTLS = errors.New("enableControlPlaneTls=true is required when requireControlPlaneClientCerts=true")
-	errDataPlaneClientCertsRequireTLS    = errors.New("enableDataPlaneTls=true is required when requireDataPlaneClientCerts=true")
+	errEBACRequiresDataPlaneMTLS         = errors.New("enableRbac=true requires enableDataPlaneTls=true and requireDataPlaneClientCerts=true")
+	errControlPlaneClientCertsRequireTLS = errors.New("requireControlPlaneClientCerts=true requires enableControlPlaneTls=true")
+	errDataPlaneClientCertsRequireTLS    = errors.New("requireDataPlaneClientCerts=true requires enableDataPlaneTls=true")
 )
 
 func XDSFeatures(logger logr.Logger) (*xds.Features, error) {
@@ -51,22 +52,22 @@ func XDSFeatures(logger logr.Logger) (*xds.Features, error) {
 	if err != nil {
 		return nil, fmt.Errorf("could not unmarshall xDS feature flags YAML file contents [%s]: %w", yamlBytes, err)
 	}
-	if err := validateXDSFeatureFlags(logger, xdsFeatures); err != nil {
+	if err := validateXDSFeatureFlags(xdsFeatures); err != nil {
 		return nil, fmt.Errorf("xDS feature flags validation failed: %w", err)
 	}
 	logger.V(2).Info("xDS features", "flags", xdsFeatures)
 	return &xdsFeatures, err
 }
 
-func validateXDSFeatureFlags(logger logr.Logger, xdsFeatures xds.Features) error {
-	if !xdsFeatures.EnableControlPlaneTLS && xdsFeatures.RequireControlPlaneClientCerts {
+func validateXDSFeatureFlags(xdsFeatures xds.Features) error {
+	if xdsFeatures.RequireControlPlaneClientCerts && !xdsFeatures.EnableControlPlaneTLS {
 		return errControlPlaneClientCertsRequireTLS
 	}
-	if !xdsFeatures.EnableDataPlaneTLS && xdsFeatures.RequireDataPlaneClientCerts {
+	if xdsFeatures.RequireDataPlaneClientCerts && !xdsFeatures.EnableDataPlaneTLS {
 		return errDataPlaneClientCertsRequireTLS
 	}
-	if xdsFeatures.ServerListenerUsesRDS {
-		logger.V(1).Info("Warning: xDS clients implemented using Go must use gRPC-Go v1.61.0 or later for dynamic RouteConfiguration via RDS for server Listeners, see https://github.com/grpc/grpc-go/issues/6788")
+	if xdsFeatures.EnableRBAC && (!xdsFeatures.EnableDataPlaneTLS || !xdsFeatures.RequireDataPlaneClientCerts) {
+		return errEBACRequiresDataPlaneMTLS
 	}
 	return nil
 }

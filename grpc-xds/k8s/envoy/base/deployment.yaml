@@ -1,0 +1,59 @@
+# Copyright 2024 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Using a Deployment instead of a Pod so that we can reuse the patch for the
+# gRPC xDS bootstrap file generation from greeter.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: envoy
+  namespace: xds # kpt-set: ${envoy-namespace}
+  labels:
+    app.kubernetes.io/component: front-proxy
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: envoy
+      app.kubernetes.io/component: front-proxy
+  template:
+    metadata:
+      annotations:
+        debug.cloud.google.com/config: "" # Never debug this pod.
+      labels:
+        app.kubernetes.io/name: envoy
+        app.kubernetes.io/component: front-proxy
+    spec:
+      containers:
+      - name: app
+        image: envoy # kpt-set: ${envoy-image}
+        ports:
+        - name: https
+          containerPort: 8443
+          hostPort: 8443
+        - name: admin
+          containerPort: 19000
+          hostPort: 19000
+        - name: grpc
+          containerPort: 50051
+          hostPort: 50051
+      nodeSelector:
+        ingress-ready: "true"
+      serviceAccountName: envoy
+      tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Equal
+        effect: NoSchedule

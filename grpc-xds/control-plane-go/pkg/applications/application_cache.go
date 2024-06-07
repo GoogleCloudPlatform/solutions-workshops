@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package xds
+package applications
 
 import (
 	"fmt"
@@ -20,25 +20,25 @@ import (
 	"sync"
 )
 
-// The GRPCApplicationCache key is `<kubecontext>/<namespace>`.
-type GRPCApplicationCache struct {
+// The ApplicationCache key is `<kubecontext>/<namespace>`.
+type ApplicationCache struct {
 	mu    sync.RWMutex
-	cache map[string][]GRPCApplication
+	cache map[string][]Application
 }
 
-func NewGRPCApplicationCache() *GRPCApplicationCache {
-	return &GRPCApplicationCache{
-		cache: map[string][]GRPCApplication{},
+func NewApplicationCache() *ApplicationCache {
+	return &ApplicationCache{
+		cache: map[string][]Application{},
 	}
 }
 
 // Put returns true iff the update changed the cache.
 // Use the return value to avoid sending xDS updates to clients when nothing has changed.
-func (c *GRPCApplicationCache) Put(kubecontextName string, namespace string, apps []GRPCApplication) bool {
+func (c *ApplicationCache) Put(kubecontextName string, namespace string, apps []Application) bool {
 	if apps == nil {
-		apps = []GRPCApplication{}
+		apps = []Application{}
 	}
-	slices.SortFunc(apps, func(a GRPCApplication, b GRPCApplication) int {
+	slices.SortFunc(apps, func(a Application, b Application) int {
 		return a.Compare(b)
 	})
 	c.mu.Lock()
@@ -46,19 +46,19 @@ func (c *GRPCApplicationCache) Put(kubecontextName string, namespace string, app
 	key := key(kubecontextName, namespace)
 	oldApps := c.cache[key]
 	c.cache[key] = apps
-	return !slices.EqualFunc(oldApps, apps, func(a GRPCApplication, b GRPCApplication) bool {
+	return !slices.EqualFunc(oldApps, apps, func(a Application, b Application) bool {
 		return a.Equal(b)
 	})
 }
 
-func (c *GRPCApplicationCache) Get(kubecontextName string, namespace string) []GRPCApplication {
+func (c *ApplicationCache) Get(kubecontextName string, namespace string) []Application {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.cache[key(kubecontextName, namespace)]
 }
 
-func (c *GRPCApplicationCache) GetAll() []GRPCApplication {
-	apps := []GRPCApplication{}
+func (c *ApplicationCache) GetAll() []Application {
+	apps := []Application{}
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	for _, appsForKey := range c.cache {

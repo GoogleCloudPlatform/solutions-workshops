@@ -29,21 +29,21 @@ patches:
 - path: patch-experimental-flags.yaml
   target:
     group: apps
+    version: v1
     kind: Deployment
     name: greeter-.*
-    version: v1
 - path: patch-probes.yaml
   target:
     group: apps
+    version: v1
     kind: Deployment
     name: greeter-.*
-    version: v1
 - path: patch-resources.yaml
   target:
     group: apps
+    version: v1
     kind: Deployment
     name: greeter-.*
-    version: v1
 resources:
 - namespace.yaml
 - service-accounts.yaml

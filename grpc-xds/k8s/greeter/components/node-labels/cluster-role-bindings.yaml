@@ -12,8 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# The control plane needs `get`, `list`, and `watch` access to
-# `EndpointSlices` resources in the `discovery.k8s.io` API group.
+# Grant permissions to read node information, such as zone labels.
 
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

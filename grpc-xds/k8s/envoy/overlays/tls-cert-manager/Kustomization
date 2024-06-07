@@ -1,4 +1,6 @@
-# Copyright 2023 Google LLC
+# vi: set ft=yaml :
+#
+# Copyright 2024 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,15 +14,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
 metadata:
-  name: nodes-reader
-rules:
-- apiGroups:
-  - ""
-  resources:
-  - nodes
-  verbs:
-  - get
-  - list
+  name: envoy-tls-cert-manager
+  annotations:
+    config.kubernetes.io/local-config: "true"
+components:
+- ../../components/node-labels
+patches:
+- path: patch-cert-volume.yaml
+  target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: envoy
+resources:
+- ../../base
+- certificate-client.yaml
+- certificate-server.yaml

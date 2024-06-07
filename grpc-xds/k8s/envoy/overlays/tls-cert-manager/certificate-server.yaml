@@ -1,0 +1,56 @@
+# Copyright 2024 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Ref: https://cert-manager.io/docs/reference/api-docs/#cert-manager.io/v1.Certificate
+
+# An external facing certificate is often signed by a different CA, but here
+# we are using same CA as for internal facing cerificates.
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: envoy-server
+  namespace: xds # kpt-set: ${envoy-namespace}
+  labels:
+    app.kubernetes.io/component: front-proxy
+spec:
+  commonName: greeter
+  duration: 24h
+  renewBefore: 8h
+  dnsNames:
+  - greeter-intermediary
+  - greeter-leaf
+  - greeter-intermediary.example.com
+  - greeter-leaf.example.com
+  - greeter-intermediary.xds.example.com
+  - greeter-leaf.xds.example.com
+  secretName: envoy-server-certs
+  issuerRef:
+    name: root-ca
+    kind: ClusterIssuer
+    group: cert-manager.io
+  isCA: false
+  usages:
+  # https://cert-manager.io/docs/reference/api-docs/#cert-manager.io/v1.KeyUsage
+  - digital signature
+  - key encipherment
+  - key agreement
+  # https://cert-manager.io/docs/usage/certificate/#x509-key-usages-and-extended-key-usages
+  - client auth
+  - server auth
+  privateKey:
+    algorithm: ECDSA
+    encoding: PKCS8
+    rotationPolicy: Always
+    size: 256

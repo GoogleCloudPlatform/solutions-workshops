@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package xds
+package applications
 
 import (
 	"slices"
 	"strings"
 )
 
-type GRPCApplication struct {
+type Application struct {
 	Namespace              string
 	ServiceAccountName     string
 	ListenerName           string
@@ -28,18 +28,18 @@ type GRPCApplication struct {
 	EDSServiceName         string
 	PathPrefix             string
 	Port                   uint32
-	Endpoints              []GRPCApplicationEndpoints
+	Endpoints              []ApplicationEndpoints
 }
 
-// NewGRPCApplication is a convenience function that creates a GRPCApplication where the
+// NewApplication is a convenience function that creates a Application where the
 // k8s ServiceAccount, LDS Listener, RDS RouteConfiguration, CDS Cluster, and EDS ServiceName all share the same name.
-func NewGRPCApplication(namespace string, name string, port uint32, endpoints []GRPCApplicationEndpoints) GRPCApplication {
-	endpointsCopy := make([]GRPCApplicationEndpoints, len(endpoints))
+func NewApplication(namespace string, name string, port uint32, endpoints []ApplicationEndpoints) Application {
+	endpointsCopy := make([]ApplicationEndpoints, len(endpoints))
 	copy(endpointsCopy, endpoints)
-	slices.SortFunc(endpointsCopy, func(a GRPCApplicationEndpoints, b GRPCApplicationEndpoints) int {
+	slices.SortFunc(endpointsCopy, func(a ApplicationEndpoints, b ApplicationEndpoints) int {
 		return a.Compare(b)
 	})
-	return GRPCApplication{
+	return Application{
 		Namespace:              namespace,
 		ServiceAccountName:     name,
 		ListenerName:           name,
@@ -53,8 +53,8 @@ func NewGRPCApplication(namespace string, name string, port uint32, endpoints []
 }
 
 // Compare assumes that the list of endpoints is sorted,
-// as done in `NewGRPCApplication()`.
-func (a GRPCApplication) Compare(b GRPCApplication) int {
+// as done in `NewApplication()`.
+func (a Application) Compare(b Application) int {
 	if a.Namespace != b.Namespace {
 		return strings.Compare(a.Namespace, b.Namespace)
 	}
@@ -80,13 +80,13 @@ func (a GRPCApplication) Compare(b GRPCApplication) int {
 		return int(a.Port - b.Port)
 	}
 	return slices.CompareFunc(a.Endpoints, b.Endpoints,
-		func(e GRPCApplicationEndpoints, f GRPCApplicationEndpoints) int {
+		func(e ApplicationEndpoints, f ApplicationEndpoints) int {
 			return e.Compare(f)
 		})
 }
 
 // Equal assumes that the list of endpoints is sorted,
-// as done in `NewGRPCApplication()`.
-func (a GRPCApplication) Equal(b GRPCApplication) bool {
+// as done in `NewApplication()`.
+func (a Application) Equal(b Application) bool {
 	return a.Compare(b) == 0
 }

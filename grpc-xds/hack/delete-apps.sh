@@ -18,8 +18,8 @@ set -Eefuo pipefail
 
 delete_resources () {
   echo "Deleting resources from context $1:"
-  kubectl delete --context="$1" --ignore-not-found --namespace=xds deployment control-plane greeter-intermediary greeter-leaf
-  kubectl delete --context="$1" --ignore-not-found --namespace=xds service control-plane greeter-intermediary greeter-leaf
+  kubectl delete --context="$1" --ignore-not-found --namespace=xds deployment control-plane envoy greeter-intermediary greeter-leaf
+  kubectl delete --context="$1" --ignore-not-found --namespace=xds service control-plane envoy greeter-intermediary greeter-leaf
   kubectl delete --context="$1" --ignore-not-found --namespace=xds configmaps --selector='app.kubernetes.io/part-of=grpc-xds'
 }
 export -f delete_resources
