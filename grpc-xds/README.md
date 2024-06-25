@@ -144,8 +144,6 @@ to issue workload TLS certificates.
 
 ## Running the xDS control plane and sample gRPC applications
 
-<style>ol ol { list-style-type: lower-alpha; }</style>
-
 1.  Build the container images for the xDS control plane and the sample gRPC
     applications, render the Kubernetes resource manifests, apply them to the
     Kubernetes cluster, and set up port forwarding.

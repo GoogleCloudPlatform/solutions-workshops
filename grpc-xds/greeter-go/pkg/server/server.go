@@ -49,12 +49,11 @@ const (
 
 // Config provides server parameters read from the environment.
 type Config struct {
-	ServingPort       int
-	HealthPort        int
-	GreeterName       string
-	NextHop           string
-	UseXDS            bool
-	UseXDSCredentials bool
+	ServingPort int
+	HealthPort  int
+	GreeterName string
+	NextHop     string
+	UseXDS      bool
 }
 
 // grpcserver is implemented by both grpc.Server and xds.GRPCServer.
@@ -69,7 +68,7 @@ type grpcserver interface {
 func Run(ctx context.Context, c Config) error {
 	logger := logging.FromContext(ctx)
 	healthServer := health.NewServer()
-	serverOptions, err := configureServerOptions(logger, c.UseXDSCredentials, healthServer)
+	serverOptions, err := configureServerOptions(logger, healthServer)
 	if err != nil {
 		return fmt.Errorf("could not set gRPC server options: %w", err)
 	}
@@ -110,15 +109,11 @@ func Run(ctx context.Context, c Config) error {
 	return serve(logger, c, servingGRPCServer, healthServer, healthGRPCServer)
 }
 
-func configureServerOptions(logger logr.Logger, useXDSCredentials bool, healthServer *health.Server) ([]grpc.ServerOption, error) {
-	// https://github.com/grpc/grpc-go/blob/v1.59.0/xds/server.go#L145
-	serverCredentials := insecure.NewCredentials()
-	if useXDSCredentials {
-		logger.V(1).Info("Using xDS server-side credentials, with insecure as fallback")
-		var err error
-		if serverCredentials, err = xdscredentials.NewServerCredentials(xdscredentials.ServerOptions{FallbackCreds: insecure.NewCredentials()}); err != nil {
-			return nil, fmt.Errorf("could not create server-side transport credentials for xDS: %w", err)
-		}
+func configureServerOptions(logger logr.Logger, healthServer *health.Server) ([]grpc.ServerOption, error) {
+	logger.V(1).Info("Using xDS server-side credentials, with insecure as fallback")
+	serverCredentials, err := xdscredentials.NewServerCredentials(xdscredentials.ServerOptions{FallbackCreds: insecure.NewCredentials()})
+	if err != nil {
+		return nil, fmt.Errorf("could not create server-side transport credentials for xDS: %w", err)
 	}
 	return []grpc.ServerOption{
 		grpc.ChainStreamInterceptor(interceptors.StreamServerLogging(logger)),
@@ -197,7 +192,7 @@ func registerGreeterServer(ctx context.Context, logger logr.Logger, c Config, se
 		greeterService = greeter.NewLeafService(ctx, c.GreeterName)
 	} else {
 		logger.V(1).Info("Adding intermediary Greeter service", "NEXT_HOP", c.NextHop)
-		greeterClient, err := greeter.NewClient(ctx, c.NextHop, c.UseXDSCredentials)
+		greeterClient, err := greeter.NewClient(ctx, c.NextHop)
 		if err != nil {
 			return fmt.Errorf("could not create greeter client %w", err)
 		}
