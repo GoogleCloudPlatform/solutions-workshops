@@ -33,10 +33,6 @@ nodes:
     networking:
       dnsDomain: cluster.example.com
   extraPortMappings:
-  - containerPort: 8443
-    hostPort: 8443
-    listenAddress: 127.0.0.1
-    protocol: TCP
   - containerPort: 19000
     hostPort: 19000
     listenAddress: 127.0.0.1
@@ -47,10 +43,10 @@ nodes:
     protocol: TCP
   labels:
     ingress-ready: "true"
-    topology.kubernetes.io/zone: us-central1-a
+    topology.kubernetes.io/zone: us-west1-c
 - role: worker
   labels:
-    topology.kubernetes.io/zone: us-central1-c
+    topology.kubernetes.io/zone: us-west1-a
 - role: worker
   labels:
-    topology.kubernetes.io/zone: us-central1-f
+    topology.kubernetes.io/zone: us-west1-b

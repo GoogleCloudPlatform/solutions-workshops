@@ -34,10 +34,5 @@ portForward:
 - resourceType: Service
   resourceName: envoy
   namespace: xds # kpt-set: ${envoy-namespace}
-  localPort: 8444
-  port: 8443 # HTTPS serving port
-- resourceType: Service
-  resourceName: envoy
-  namespace: xds # kpt-set: ${envoy-namespace}
   localPort: 50052
   port: 50051 # gRPC serving port

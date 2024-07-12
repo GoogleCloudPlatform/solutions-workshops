@@ -19,9 +19,9 @@ import com.google.examples.xds.controlplane.config.ServerConfig;
 import com.google.examples.xds.controlplane.informers.InformerManager;
 import com.google.examples.xds.controlplane.informers.Kubecontext;
 import com.google.examples.xds.controlplane.interceptors.LoggingServerInterceptor;
-import com.google.examples.xds.controlplane.xds.LocalityPriorityByZone;
 import com.google.examples.xds.controlplane.xds.XdsFeatures;
 import com.google.examples.xds.controlplane.xds.XdsSnapshotCache;
+import com.google.examples.xds.controlplane.xds.eds.LocalityPriorityByZone;
 import io.envoyproxy.controlplane.cache.NodeGroup;
 import io.envoyproxy.controlplane.server.V3DiscoveryServer;
 import io.grpc.BindableService;
@@ -80,6 +80,7 @@ public class Server {
   /** Runs the server. */
   public void run(@NotNull ServerConfig config) throws Exception {
     XdsFeatures xdsFeatures = config.xdsFeatures();
+    LOG.info("xDS feature flags: {}", xdsFeatures);
     if (xdsFeatures.enableFederation()) {
       LOG.info("Enabling xDS federation, authority={}", config.authorityName());
     }
@@ -101,7 +102,7 @@ public class Server {
         createManagementServer(controlPlanePort, serverCredentials, discoveryServer, health);
     server.start();
 
-    // Serve health, admin and reflection services on the health port
+    // Serve health, admin and reflection services on the health servingPort
     var healthServer =
         Grpc.newServerBuilderForPort(config.healthPort(), InsecureServerCredentials.create())
             .addService(health.getHealthService())
@@ -111,7 +112,7 @@ public class Server {
             .start();
 
     addServerShutdownHook(server, healthServer, health);
-    LOG.info("xDS control plane management server listening on port {}", server.getPort());
+    LOG.info("xDS control plane management server listening on servingPort {}", server.getPort());
 
     server.awaitTermination();
   }

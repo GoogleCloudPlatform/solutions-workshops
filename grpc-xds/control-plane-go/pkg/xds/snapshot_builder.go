@@ -63,15 +63,15 @@ func NewSnapshotBuilder(nodeHash string, localityPriorityMapper eds.LocalityPrio
 // AddGRPCApplications adds the provided application configurations to the xDS resource snapshot.
 func (b *SnapshotBuilder) AddGRPCApplications(apps []applications.Application) (*SnapshotBuilder, error) {
 	for _, app := range apps {
-		if b.listeners[app.ListenerName] == nil {
-			apiListener, err := lds.CreateAPIListener(app.ListenerName, app.RouteConfigurationName)
+		if b.listeners[app.Name] == nil {
+			apiListener, err := lds.CreateAPIListener(app.Name, app.Name)
 			if err != nil {
 				return nil, fmt.Errorf("could not create LDS API listener for gRPC application %+v: %w", app, err)
 			}
 			b.listeners[apiListener.Name] = apiListener
 			if b.features.EnableFederation {
-				xdstpListenerName := xdstpListener(b.authority, app.ListenerName)
-				xdstpRouteConfigurationName := xdstpRouteConfiguration(b.authority, app.RouteConfigurationName)
+				xdstpListenerName := xdstpListener(b.authority, app.Name)
+				xdstpRouteConfigurationName := xdstpRouteConfiguration(b.authority, app.Name)
 				xdstpListener, err := lds.CreateAPIListener(xdstpListenerName, xdstpRouteConfigurationName)
 				if err != nil {
 					return nil, fmt.Errorf("could not create federation LDS API listener for authority=%s and gRPC application %+v: %w", b.authority, app, err)
@@ -79,22 +79,25 @@ func (b *SnapshotBuilder) AddGRPCApplications(apps []applications.Application) (
 				b.listeners[xdstpListener.Name] = xdstpListener
 			}
 		}
-		if b.routeConfigurations[app.RouteConfigurationName] == nil {
-			routeConfiguration := rds.CreateRouteConfigurationForAPIListener(app.RouteConfigurationName, app.ListenerName, app.PathPrefix, app.ClusterName)
+		if b.routeConfigurations[app.Name] == nil {
+			routeConfiguration := rds.CreateRouteConfigurationForAPIListener(app.Name, app.Name, app.PathPrefix, app.Name)
 			b.routeConfigurations[routeConfiguration.Name] = routeConfiguration
 			if b.features.EnableFederation {
-				xdstpRouteConfigurationName := xdstpRouteConfiguration(b.authority, app.RouteConfigurationName)
-				xdstpClusterName := xdstpCluster(b.authority, app.ClusterName)
-				xdstpRouteConfiguration := rds.CreateRouteConfigurationForAPIListener(xdstpRouteConfigurationName, app.ListenerName, app.PathPrefix, xdstpClusterName)
+				xdstpRouteConfigurationName := xdstpRouteConfiguration(b.authority, app.Name)
+				xdstpClusterName := xdstpCluster(b.authority, app.Name)
+				xdstpRouteConfiguration := rds.CreateRouteConfigurationForAPIListener(xdstpRouteConfigurationName, app.Name, app.PathPrefix, xdstpClusterName)
 				b.routeConfigurations[xdstpRouteConfiguration.Name] = xdstpRouteConfiguration
 			}
 		}
-		if b.clusters[app.ClusterName] == nil {
+		if b.clusters[app.Name] == nil {
 			cluster, err := cds.CreateCluster(
-				app.ClusterName,
-				app.EDSServiceName,
+				app.Name,
+				app.Name,
 				app.Namespace,
 				app.ServiceAccountName,
+				app.HealthCheckPort,
+				app.HealthCheckProtocol,
+				"",
 				b.features.EnableDataPlaneTLS,
 				b.features.RequireDataPlaneClientCerts)
 			if err != nil {
@@ -102,13 +105,16 @@ func (b *SnapshotBuilder) AddGRPCApplications(apps []applications.Application) (
 			}
 			b.clusters[cluster.Name] = cluster
 			if b.features.EnableFederation {
-				xdstpClusterName := xdstpCluster(b.authority, app.ClusterName)
-				xdstpEDSServiceName := xdstpEdsService(b.authority, app.EDSServiceName)
+				xdstpClusterName := xdstpCluster(b.authority, app.Name)
+				xdstpEDSServiceName := xdstpEdsService(b.authority, app.Name)
 				xdstpCluster, err := cds.CreateCluster(
 					xdstpClusterName,
 					xdstpEDSServiceName,
 					app.Namespace,
 					app.ServiceAccountName,
+					app.HealthCheckPort,
+					app.HealthCheckProtocol,
+					"",
 					b.features.EnableDataPlaneTLS,
 					b.features.RequireDataPlaneClientCerts)
 				if err != nil {
@@ -118,13 +124,13 @@ func (b *SnapshotBuilder) AddGRPCApplications(apps []applications.Application) (
 			}
 		}
 		// Merge endpoints from multiple informers for the same app:
-		endpointsByClusterKey := fmt.Sprintf("%s-%d", app.ClusterName, app.Port)
+		endpointsByClusterKey := fmt.Sprintf("%s-%d", app.Name, app.ServingPort)
 		b.endpointsByCluster[endpointsByClusterKey] = append(b.endpointsByCluster[endpointsByClusterKey], app.Endpoints...)
-		clusterLoadAssignment := eds.CreateClusterLoadAssignment(app.EDSServiceName, app.Port, b.nodeHash, b.localityPriorityMapper, b.endpointsByCluster[endpointsByClusterKey])
+		clusterLoadAssignment := eds.CreateClusterLoadAssignment(app.Name, app.ServingPort, b.nodeHash, b.localityPriorityMapper, b.endpointsByCluster[endpointsByClusterKey])
 		b.clusterLoadAssignments[clusterLoadAssignment.ClusterName] = clusterLoadAssignment
 		if b.features.EnableFederation {
-			xdstpEDSServiceName := xdstpEdsService(b.authority, app.EDSServiceName)
-			xdstpClusterLoadAssignment := eds.CreateClusterLoadAssignment(xdstpEDSServiceName, app.Port, b.nodeHash, b.localityPriorityMapper, b.endpointsByCluster[endpointsByClusterKey])
+			xdstpEDSServiceName := xdstpEdsService(b.authority, app.Name)
+			xdstpClusterLoadAssignment := eds.CreateClusterLoadAssignment(xdstpEDSServiceName, app.ServingPort, b.nodeHash, b.localityPriorityMapper, b.endpointsByCluster[endpointsByClusterKey])
 			b.clusterLoadAssignments[xdstpClusterLoadAssignment.ClusterName] = xdstpClusterLoadAssignment
 		}
 	}
@@ -177,7 +183,7 @@ func (b *SnapshotBuilder) Build() (cachev3.ResourceSnapshot, error) {
 	// specify `NonForwardingAction` as the action.
 	// Envoy proxies will also not accept the API Listeners created for gRPC clients, because Envoy proxies can only
 	// have at most one API Listener defined, and that API Listener must be a static resource (not fetched via xDS).
-	// TODO: Add Envoy HTTPS Listener with gRPC-JSON transcoding and gRPC HTTP/1.1 bridge.
+	// TODO: Add gRPC-JSON transcoding and gRPC HTTP/1.1 bridge.
 	// https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/grpc_json_transcoder_filter
 	// https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/grpc_http1_bridge_filter
 	envoyGRPCListener, err := lds.CreateEnvoyGRPCListener(50051, true)

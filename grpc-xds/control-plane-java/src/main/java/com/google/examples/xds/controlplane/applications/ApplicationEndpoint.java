@@ -12,21 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package com.google.examples.xds.controlplane.xds;
+package com.google.examples.xds.controlplane.applications;
 
 import java.util.Collection;
 import java.util.List;
 import org.jetbrains.annotations.NotNull;
 
-/** Represents a gRPC application endpoint. */
-public record GrpcApplicationEndpoint(
+/** Represents an application endpoint, e.g, the endpoint of an xDS-enabled gRPC server. */
+public record ApplicationEndpoint(
     @NotNull String node,
     @NotNull String zone,
     @NotNull Collection<String> addresses,
     EndpointStatus endpointStatus) {
 
   /**
-   * Represents a gRPC application endpoint.
+   * Represents an application endpoint.
    *
    * @param node VM name
    * @param zone cloud provider zone name
@@ -34,7 +34,7 @@ public record GrpcApplicationEndpoint(
    *     EndpointSlices allows for multiple addresses, this class uses a collection.
    * @param endpointStatus health status of the endpoint
    */
-  public GrpcApplicationEndpoint(
+  public ApplicationEndpoint(
       @NotNull String node,
       @NotNull String zone,
       @NotNull Collection<String> addresses,

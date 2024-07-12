@@ -20,6 +20,9 @@ import (
 )
 
 // EndpointStatus represents the serving status of an endpoint.
+//
+// Translates from Kubernetes EndpointSlice conditions to xDS HealthStatus as used in EDS
+// ClusterLoadAssignment resources.
 type EndpointStatus int
 
 const (

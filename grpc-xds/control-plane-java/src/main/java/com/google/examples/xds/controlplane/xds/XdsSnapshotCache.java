@@ -14,6 +14,9 @@
 
 package com.google.examples.xds.controlplane.xds;
 
+import com.google.examples.xds.controlplane.applications.Application;
+import com.google.examples.xds.controlplane.applications.ApplicationCache;
+import com.google.examples.xds.controlplane.xds.eds.LocalityPriorityMapper;
 import com.google.protobuf.ProtocolStringList;
 import io.envoyproxy.controlplane.cache.ConfigWatcher;
 import io.envoyproxy.controlplane.cache.DeltaResponse;
@@ -52,26 +55,46 @@ import org.slf4j.LoggerFactory;
  * @param <T> node hash type
  */
 public class XdsSnapshotCache<T> implements ConfigWatcher {
+
   private static final Logger LOG = LoggerFactory.getLogger(XdsSnapshotCache.class);
 
   /**
-   * Prefix used to look for server listeners when creating new listeners streams. Server listener
-   * resource names use templates such as `grpc/server?xds.resource.listening_address=%s`.
-   * SERVER_LISTENER_NAME_PREFIX is the part up to and including the `=` sign.
+   * Listener name template used by xDS-enabled gRPC servers.
+   *
+   * <p>Must match the value of <code>server_listener_resource_name_template</code> in the gRPC xDS
+   * bootstrap configuration.
+   *
+   * <p>Using the template value from gRPC-Java unit tests, and the <a
+   * href="https://github.com/GoogleCloudPlatform/traffic-director-grpc-bootstrap/blob/v0.15.0/main.go#L300">Traffic
+   * Director gRPC bootstrap utility</a>, but this is not important.
+   *
+   * @see <a
+   *     href="https://github.com/grpc/proposal/blob/fd10c1a86562b712c2c5fa23178992654c47a072/A36-xds-for-servers.md#xds-protocol">gRFC
+   *     A36: xDS-Enabled Servers</a>
    */
-  private static final String SERVER_LISTENER_NAME_PREFIX;
+  public static final String GRPC_SERVER_LISTENER_RESOURCE_NAME_TEMPLATE =
+      "grpc/server?xds.resource.listening_address=%s";
 
   /**
-   * Regex pattern used to extract the ipAddress (IPv4 or IPv6) and port from server listener names.
+   * Prefix used to look for gRPC server listeners when creating new Listener streams. gRPC server
+   * Listener resource names use templates such as `grpc/server?xds.resource.listening_address=%s`.
+   * SERVER_LISTENER_NAME_PREFIX is the part up to and including the `=` sign.
    */
-  private static final Pattern SERVER_LISTENER_NAME_PATTERN;
+  private static final String GRPC_SERVER_LISTENER_NAME_PREFIX;
+
+  /**
+   * Regex pattern used to extract the ipAddress (IPv4 or IPv6) and servingPort from gRPC server
+   * Listener names.
+   */
+  private static final Pattern GRPC_SERVER_LISTENER_NAME_PATTERN;
 
   static {
-    SERVER_LISTENER_NAME_PREFIX =
-        Strings.split(XdsSnapshotBuilder.SERVER_LISTENER_RESOURCE_NAME_TEMPLATE, '=')[0] + "=";
+    GRPC_SERVER_LISTENER_NAME_PREFIX =
+        Strings.split(GRPC_SERVER_LISTENER_RESOURCE_NAME_TEMPLATE, '=')[0] + "=";
 
-    SERVER_LISTENER_NAME_PATTERN =
-        Pattern.compile(Pattern.quote(SERVER_LISTENER_NAME_PREFIX) + "([0-9a-f:.]*):([0-9]{1,5})");
+    GRPC_SERVER_LISTENER_NAME_PATTERN =
+        Pattern.compile(
+            Pattern.quote(GRPC_SERVER_LISTENER_NAME_PREFIX) + "([0-9a-f:.]*):([0-9]{1,5})");
   }
 
   /** The actual cache. */
@@ -94,15 +117,15 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
    * in the xDS resource snapshot cache, so that the new subscribers don't have to wait for an
    * EndpointSlice update before they can receive xDS resources.
    */
-  private final GrpcApplicationCache appsCache;
+  private final ApplicationCache appsCache;
 
   /**
-   * serverListenerCache stores known server listener names for each snapshot cache key
+   * grpcServerListenerCache stores known server listener names for each snapshot cache key
    * (`nodeHash`). These names are captured when new Listener streams are created, see
    * `CreateWatch()`. The server listener names are added to xDS resource snapshots, to be included
    * in LDS responded for xDS-enabled gRPC servers.
    */
-  private final ServerListenerCache<T> serverListenerCache;
+  private final GrpcServerListenerCache<T> grpcServerListenerCache;
 
   /** xdsFeatures contains flags to enable and disable xDS features, e.g., mTLS. */
   private final XdsFeatures xdsFeatures;
@@ -124,8 +147,8 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
     this.localityPriorityMapper = localityPriorityMapper;
     this.xdsFeatures = xdsFeatures;
     this.authority = authority;
-    this.appsCache = new GrpcApplicationCache();
-    this.serverListenerCache = new ServerListenerCache<>();
+    this.appsCache = new ApplicationCache();
+    this.grpcServerListenerCache = new GrpcServerListenerCache<>();
   }
 
   /**
@@ -133,10 +156,10 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
    * the following:
    *
    * <ol>
-   *   <li>Extracts addresses and ports of any server listeners in the request and adds them to the
-   *       set of known server socket addresses for the node hash.
-   *   <li>If there is no existing snapshot for creates a snapshot with the server listener and
-   *       associated route configuration
+   *   <li>Extracts addresses and ports of any gRPC server Listeners in the request and adds them to
+   *       the set of known server socket addresses for the snapshot (by node hash).
+   *   <li>If there is no existing snapshot for the node hash in the request, creates a snapshot
+   *       with the gRPC server Listener and associated RouteConfiguration.
    * </ol>
    *
    * <p>This solves (in a slightly hacky way) bootstrapping of xDS-enabled gRPC servers.
@@ -151,10 +174,11 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
       boolean allowDefaultEmptyEdsUpdate) {
     if (isListenerRequest(request)) {
       T nodeHash = nodeHashFn.hash(request.v3Request().getNode());
-      Set<EndpointAddress> listenerAddressesFromRequest =
-          getServerListenerAddresses(request.getResourceNamesList());
-      LOG.info("serverListenerAddressesFromRequest={}", listenerAddressesFromRequest);
-      boolean isAdded = serverListenerCache.add(nodeHash, listenerAddressesFromRequest);
+      Set<EndpointAddress> grpcServerListenerAddressesFromRequest =
+          getGrpcServerListenerAddresses(request.getResourceNamesList());
+      LOG.info("grpcServerListenerAddressesFromRequest={}", grpcServerListenerAddressesFromRequest);
+      boolean isAdded =
+          grpcServerListenerCache.add(nodeHash, grpcServerListenerAddressesFromRequest);
       if (isAdded || delegate.getSnapshot(nodeHash) == null) {
         var snapshot = createNewSnapshot(nodeHash, appsCache.getAll());
         delegate.setSnapshot(nodeHash, snapshot);
@@ -172,27 +196,29 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
   private boolean isListenerRequest(@Nullable XdsRequest request) {
     return request != null
         && request.v3Request() != null
+        && (request.v3Request().getResourceNamesCount() > 0
+            || "envoy".equalsIgnoreCase(request.v3Request().getNode().getUserAgentName()))
         && request.getResourceType() == ResourceType.LISTENER;
   }
 
   /**
-   * Looks for server Listener names in the provided resource names, and extracts the address and
-   * port for each server Listener found.
+   * Looks for gRPC server Listener names in the provided resource names, and extracts the address
+   * and servingPort for each gRPC server Listener found.
    *
    * <p>TODO: Handle xDS federation server Listener names using `xdstp://` names, e.g., {@code
    * xdstp://xds-authority.example.com/envoy.config.listener.v3.Listener/grpc/server/%s}.
    */
   @NotNull
-  private Set<EndpointAddress> getServerListenerAddresses(
+  private Set<EndpointAddress> getGrpcServerListenerAddresses(
       @Nullable ProtocolStringList resourceNames) {
     if (resourceNames == null) {
       return Collections.emptySet();
     }
     return resourceNames.stream()
-        .filter(name -> name != null && name.startsWith(SERVER_LISTENER_NAME_PREFIX))
+        .filter(name -> name != null && name.startsWith(GRPC_SERVER_LISTENER_NAME_PREFIX))
         .flatMap(
             name -> {
-              Matcher matcher = SERVER_LISTENER_NAME_PATTERN.matcher(name);
+              Matcher matcher = GRPC_SERVER_LISTENER_NAME_PATTERN.matcher(name);
               if (!matcher.matches()) {
                 return null;
               }
@@ -204,8 +230,8 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
 
   /**
    * UpdateResources creates a new snapshot for each node hash in the cache, based on the provided
-   * gRPC application configuration, with the addition of server listeners and their associated
-   * route configurations.
+   * gRPC application configuration, with the addition of gRPC server Listeners, an Envoy Listener,
+   * and their associated RouteConfigurations.
    *
    * @param kubecontext the kubeconfig context where the gRPC applications came from
    * @param namespace the Kubernetes namespace of the informer
@@ -214,7 +240,7 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
   public void updateResources(
       String kubecontext,
       @NotNull String namespace,
-      @NotNull Set<GrpcApplication> appsForContextAndNamespace) {
+      @NotNull Set<Application> appsForContextAndNamespace) {
     boolean changesMade = appsCache.set(kubecontext, namespace, appsForContextAndNamespace);
     if (!changesMade) {
       LOG.info(
@@ -235,10 +261,10 @@ public class XdsSnapshotCache<T> implements ConfigWatcher {
   }
 
   @NotNull
-  private Snapshot createNewSnapshot(T nodeHash, Set<GrpcApplication> apps) {
+  private Snapshot createNewSnapshot(T nodeHash, Set<Application> apps) {
     return new XdsSnapshotBuilder<>(nodeHash, localityPriorityMapper, xdsFeatures, authority)
         .addGrpcApplications(apps)
-        .addServerListenerAddresses(serverListenerCache.get(nodeHash))
+        .addGrpcServerListenerAddresses(grpcServerListenerCache.get(nodeHash))
         .build();
   }
 

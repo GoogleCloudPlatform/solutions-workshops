@@ -27,6 +27,15 @@ spec:
     port: 50051
     protocol: TCP
     targetPort: app-port
+    # Enable discovering the health check protocol and port from the EndpointSlice for this Service.
+    # Alternative approaches:
+    # - Look up the readiness probes from the Pods that match the Service's label selector.
+    # - Annotations or labels in the Service metadata containing health check configuration.
+  - appProtocol: gRPC
+    name: health
+    port: 50052
+    protocol: TCP
+    targetPort: health-port
   selector:
     app.kubernetes.io/name: greeter-intermediary
   type: ClusterIP
@@ -46,6 +55,15 @@ spec:
     port: 50051
     protocol: TCP
     targetPort: app-port
+  # Enable discovering the health check protocol and port from the EndpointSlice for this Service.
+  # Alternative approaches:
+  # - Look up the readiness probes from the Pods that match the Service's label selector.
+  # - Annotations or labels in the Service metadata containing health check configuration.
+  - appProtocol: gRPC
+    name: health
+    port: 50052
+    protocol: TCP
+    targetPort: health-port
   selector:
     app.kubernetes.io/name: greeter-leaf
   type: ClusterIP

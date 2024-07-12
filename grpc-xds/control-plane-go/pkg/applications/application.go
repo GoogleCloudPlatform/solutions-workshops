@@ -19,36 +19,37 @@ import (
 	"strings"
 )
 
+// Application represents an application, e.g., a gRPC server, that clients discover using xDS.
 type Application struct {
-	Namespace              string
-	ServiceAccountName     string
-	ListenerName           string
-	RouteConfigurationName string
-	ClusterName            string
-	EDSServiceName         string
-	PathPrefix             string
-	Port                   uint32
-	Endpoints              []ApplicationEndpoints
+	Namespace           string
+	ServiceAccountName  string
+	Name                string
+	PathPrefix          string
+	ServingPort         uint32
+	ServingProtocol     string
+	HealthCheckPort     uint32
+	HealthCheckProtocol string
+	Endpoints           []ApplicationEndpoints
 }
 
 // NewApplication is a convenience function that creates a Application where the
-// k8s ServiceAccount, LDS Listener, RDS RouteConfiguration, CDS Cluster, and EDS ServiceName all share the same name.
-func NewApplication(namespace string, name string, port uint32, endpoints []ApplicationEndpoints) Application {
+// k8s ServiceAccount and the application share the same name.
+func NewApplication(namespace string, name string, servingPort uint32, servingProtocol string, healthCheckPort uint32, healthCheckProtocol string, endpoints []ApplicationEndpoints) Application {
 	endpointsCopy := make([]ApplicationEndpoints, len(endpoints))
 	copy(endpointsCopy, endpoints)
 	slices.SortFunc(endpointsCopy, func(a ApplicationEndpoints, b ApplicationEndpoints) int {
 		return a.Compare(b)
 	})
 	return Application{
-		Namespace:              namespace,
-		ServiceAccountName:     name,
-		ListenerName:           name,
-		RouteConfigurationName: name,
-		ClusterName:            name,
-		EDSServiceName:         name,
-		PathPrefix:             "",
-		Port:                   port,
-		Endpoints:              endpointsCopy,
+		Namespace:           namespace,
+		ServiceAccountName:  name,
+		Name:                name,
+		PathPrefix:          "",
+		ServingPort:         servingPort,
+		ServingProtocol:     servingProtocol,
+		HealthCheckPort:     healthCheckPort,
+		HealthCheckProtocol: healthCheckProtocol,
+		Endpoints:           endpointsCopy,
 	}
 }
 
@@ -61,23 +62,23 @@ func (a Application) Compare(b Application) int {
 	if a.ServiceAccountName != b.ServiceAccountName {
 		return strings.Compare(a.ServiceAccountName, b.ServiceAccountName)
 	}
-	if a.ListenerName != b.ListenerName {
-		return strings.Compare(a.ListenerName, b.ListenerName)
-	}
-	if a.RouteConfigurationName != b.RouteConfigurationName {
-		return strings.Compare(a.RouteConfigurationName, b.RouteConfigurationName)
-	}
-	if a.ClusterName != b.ClusterName {
-		return strings.Compare(a.ClusterName, b.ClusterName)
-	}
-	if a.EDSServiceName != b.EDSServiceName {
-		return strings.Compare(a.EDSServiceName, b.EDSServiceName)
+	if a.Name != b.Name {
+		return strings.Compare(a.Name, b.Name)
 	}
 	if a.PathPrefix != b.PathPrefix {
 		return strings.Compare(a.PathPrefix, b.PathPrefix)
 	}
-	if a.Port != b.Port {
-		return int(a.Port - b.Port)
+	if a.ServingPort != b.ServingPort {
+		return int(a.ServingPort - b.ServingPort)
+	}
+	if a.ServingProtocol != b.ServingProtocol {
+		return strings.Compare(a.ServingProtocol, b.ServingProtocol)
+	}
+	if a.HealthCheckPort != b.HealthCheckPort {
+		return int(a.HealthCheckPort - b.HealthCheckPort)
+	}
+	if a.HealthCheckProtocol != b.HealthCheckProtocol {
+		return strings.Compare(a.HealthCheckProtocol, b.HealthCheckProtocol)
 	}
 	return slices.CompareFunc(a.Endpoints, b.Endpoints,
 		func(e ApplicationEndpoints, f ApplicationEndpoints) int {

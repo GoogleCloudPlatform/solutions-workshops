@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package com.google.examples.xds.controlplane.xds;
+package com.google.examples.xds.controlplane.xds.eds;
 
 import io.envoyproxy.envoy.config.core.v3.Locality;
 import java.util.Collection;

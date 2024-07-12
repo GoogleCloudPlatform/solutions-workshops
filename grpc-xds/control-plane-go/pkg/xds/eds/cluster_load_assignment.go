@@ -25,11 +25,7 @@ import (
 // CreateClusterLoadAssignment for EDS.
 // `edsServiceName` must match the `ServiceName` in the `EDSClusterConfig` in the CDS Cluster resource.
 // [gRFC A27]: https://github.com/grpc/proposal/blob/972b69ab1f0f7f6079af81a8c2b8a01a15ce3bec/A27-xds-global-load-balancing.md#clusterloadassignment-proto
-func CreateClusterLoadAssignment(edsServiceName string, port uint32, nodeHash string, localityPriorityMapper LocalityPriorityMapper, endpoints []applications.ApplicationEndpoints) *endpointv3.ClusterLoadAssignment {
-	// addressesByZone := map[string][]string{}
-	// for _, endpoint := range endpoints {
-	//	addressesByZone[endpoint.Zone] = append(addressesByZone[endpoint.Zone], endpoint.Addresses...)
-	// }
+func CreateClusterLoadAssignment(edsServiceName string, servingPort uint32, nodeHash string, localityPriorityMapper LocalityPriorityMapper, endpoints []applications.ApplicationEndpoints) *endpointv3.ClusterLoadAssignment {
 	endpointsByZone := map[string][]applications.ApplicationEndpoints{}
 	for _, endpoint := range endpoints {
 		endpointsByZone[endpoint.Zone] = append(endpointsByZone[endpoint.Zone], endpoint)
@@ -44,18 +40,29 @@ func CreateClusterLoadAssignment(edsServiceName string, port uint32, nodeHash st
 	cla := &endpointv3.ClusterLoadAssignment{
 		ClusterName: edsServiceName,
 		Endpoints:   []*endpointv3.LocalityLbEndpoints{},
+		// gRPC doesn't use the overprovisioning factor (effectively treats it as 100%), while the Envoy
+		// default is 140%. See
+		// https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/upstream/load_balancing/priority
+		// and
+		// https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/upstream/load_balancing/locality_weight
+		Policy: &endpointv3.ClusterLoadAssignment_Policy{
+			OverprovisioningFactor: wrapperspb.UInt32(100),
+		},
 	}
 	for zone, endpoints := range endpointsByZone {
 		localityLbEndpoints := &endpointv3.LocalityLbEndpoints{
 			// LbEndpoints is mandatory.
 			LbEndpoints: []*endpointv3.LbEndpoint{},
 			// Weight is effectively mandatory, read the javadoc carefully :-)
-			LoadBalancingWeight: wrapperspb.UInt32(100000),
+			// Use number of endpoints in locality as weight, so assume all endpoints can handle
+			// the same load.
+			LoadBalancingWeight: wrapperspb.UInt32(uint32(len(endpoints))),
 			// Locality must be unique for a given priority.
 			Locality: &corev3.Locality{
 				Zone: zone,
 			},
-			// Priority is optional. If provided, must start from 0 and have no gaps.
+			// Priority is optional and defaults to 0. If provided, must start from 0 and have no gaps.
+			// Priority 0 is the highest priority.
 			Priority: zonePriorities[zone],
 		}
 		for _, endpoint := range endpoints {
@@ -73,7 +80,7 @@ func CreateClusterLoadAssignment(edsServiceName string, port uint32, nodeHash st
 											Protocol: corev3.SocketAddress_TCP,
 											Address:  address, // mandatory, IPv4 or IPv6
 											PortSpecifier: &corev3.SocketAddress_PortValue{
-												PortValue: port, // mandatory
+												PortValue: servingPort, // mandatory
 											},
 										},
 									},

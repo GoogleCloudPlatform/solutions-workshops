@@ -21,18 +21,19 @@ import (
 )
 
 const (
-	envoyGRPCListenerNamePrefix             = "envoy-grpc-listener"
-	EnvoyGRPCListenerRouteConfigurationName = "envoy-grpc-route-configuration"
+	envoyGRPCListenerNamePrefix             = "envoy-listener"
+	EnvoyGRPCListenerRouteConfigurationName = "envoy-route-configuration"
+	envoyListenerSocketAddress              = "0.0.0.0"
 )
 
 // CreateEnvoyGRPCListener returns a GRPC listener for Envoy front proxies.
 func CreateEnvoyGRPCListener(port uint32, enableTLS bool) (*listenerv3.Listener, error) {
-	httpConnectionManager, err := createDownstreamHTTPConnectionManager(EnvoyGRPCListenerRouteConfigurationName, "envoy", false)
+	listenerName := fmt.Sprintf("%s-%d", envoyGRPCListenerNamePrefix, port)
+	httpConnectionManager, err := createHTTPConnectionManagerForSocketListener(EnvoyGRPCListenerRouteConfigurationName, listenerName, false)
 	if err != nil {
 		return nil, fmt.Errorf("could not create HttpConnectionManager for Envoy gRPC LDS Listener: %w", err)
 	}
-	listenerName := fmt.Sprintf("%s-%d", envoyGRPCListenerNamePrefix, port)
-	envoyGRPCListener, err := createServerListener(listenerName, "0.0.0.0", port, httpConnectionManager, enableTLS, false)
+	envoyGRPCListener, err := createSocketListener(listenerName, envoyListenerSocketAddress, port, httpConnectionManager, enableTLS, false)
 	if err != nil {
 		return nil, fmt.Errorf("could not create LDS Listener for Envoy proxy: %w", err)
 	}

@@ -12,14 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package com.google.examples.xds.controlplane.xds;
+package com.google.examples.xds.controlplane.applications;
 
 import io.envoyproxy.envoy.config.core.v3.HealthStatus;
 import io.kubernetes.client.openapi.models.V1EndpointConditions;
 import javax.annotation.Nullable;
 import org.jetbrains.annotations.NotNull;
 
-/** Represents the serving status of an endpoint. */
+/**
+ * Represents the serving status of an endpoint.
+ *
+ * <p>Translates from Kubernetes EndpointSlice conditions to xDS HealthStatus as used in EDS
+ * ClusterLoadAssignment resources.
+ */
 public enum EndpointStatus {
   HEALTHY(HealthStatus.HEALTHY),
   UNHEALTHY(HealthStatus.UNHEALTHY),

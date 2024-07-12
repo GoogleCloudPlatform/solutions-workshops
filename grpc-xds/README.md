@@ -432,7 +432,7 @@ Some troubleshooting commands:
 - [On the state of Envoy Proxy control planes](https://mattklein123.dev/2020/03/15/2020-03-14-on-the-state-of-envoy-proxy-control-planes/)
 - [xDS API Overview](https://www.envoyproxy.io/docs/envoy/latest/configuration/overview/overview)
 - [xDS REST and gRPC protocol](https://www.envoyproxy.io/docs/envoy/latest/api-docs/xds_protocol)
-- [xDS Features in gRPC](https://github.com/grpc/grpc/blob/1b31c6e0ba711787c05e8e78719896a682fca102/doc/grpc_xds_features.md)
+- [xDS Features in gRPC](https://github.com/grpc/grpc/blob/master/doc/grpc_xds_features.md)
 - [Aggregated Discovery Service (ADS)](https://www.envoyproxy.io/docs/envoy/latest/configuration/overview/xds_api#aggregated-discovery-service)
 - [Load Reporting Service (LRS)](https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/load_stats/v3/lrs.proto)
 - [Open Request Cost Aggregation (ORCA)](https://github.com/envoyproxy/envoy/issues/6614)

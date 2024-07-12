@@ -29,6 +29,7 @@ linters:
   - decorder
   - dupword
   - durationcheck
+  - err113
   - errcheck
   - errchkjson
   - errname
@@ -42,7 +43,6 @@ linters:
   - gocritic
   - gocyclo
   - godot
-  - goerr113
   - gofmt
   - gofumpt
   - goimports

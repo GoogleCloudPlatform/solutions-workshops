@@ -29,12 +29,13 @@ import (
 
 const (
 	EnvoyFilterHTTPRBACName   = "envoy.filters.http.rbac"
-	EnvoyFilterHTTPRouterName = "envoy.filters.http.router"
+	envoyFilterHTTPFaultName  = "envoy.filters.http.fault"
+	envoyFilterHTTPRouterName = "envoy.filters.http.router"
 )
 
-// createDownstreamHTTPConnectionManager returns a HttpConnectionManager to be
+// createHTTPConnectionManagerForSocketListener returns a HttpConnectionManager to be
 // used with LDS Listeners for gRPC servers and Envoy proxy instances.
-func createDownstreamHTTPConnectionManager(routeConfigurationName string, statPrefix string, enableRBAC bool) (*http_connection_managerv3.HttpConnectionManager, error) {
+func createHTTPConnectionManagerForSocketListener(routeConfigurationName string, statPrefix string, enableRBAC bool) (*http_connection_managerv3.HttpConnectionManager, error) {
 	routerFilterConfig, err := anypb.New(&routerv3.Router{})
 	if err != nil {
 		return nil, fmt.Errorf("could not marshall Router HTTP filter into Any instance: %w", err)
@@ -45,7 +46,7 @@ func createDownstreamHTTPConnectionManager(routeConfigurationName string, statPr
 		HttpFilters: []*http_connection_managerv3.HttpFilter{
 			{
 				// Router must be the last HTTP filter.
-				Name: EnvoyFilterHTTPRouterName,
+				Name: envoyFilterHTTPRouterName,
 				ConfigType: &http_connection_managerv3.HttpFilter_TypedConfig{
 					TypedConfig: routerFilterConfig,
 				},
@@ -96,9 +97,9 @@ func createDownstreamHTTPConnectionManager(routeConfigurationName string, statPr
 	return &httpConnectionManager, nil
 }
 
-// createUpstreamHTTPConnectionManager returns a HttpConnectionManager to be
+// createHTTPConnectionManagerForAPIListener returns a HttpConnectionManager to be
 // used with LDS API Listeners for gRPC clients.
-func createUpstreamHTTPConnectionManager(routeConfigurationName string, statPrefix string) (*http_connection_managerv3.HttpConnectionManager, error) {
+func createHTTPConnectionManagerForAPIListener(routeConfigurationName string, statPrefix string) (*http_connection_managerv3.HttpConnectionManager, error) {
 	httpFaultFilterConfig, err := anypb.New(&faultv3.HTTPFault{})
 	if err != nil {
 		return nil, fmt.Errorf("could not marshall HTTPFault HTTP filter into Any instance: %w", err)
@@ -120,7 +121,7 @@ func createUpstreamHTTPConnectionManager(routeConfigurationName string, statPref
 			},
 			{
 				// Router must be the last HTTP filter.
-				Name: EnvoyFilterHTTPRouterName,
+				Name: envoyFilterHTTPRouterName,
 				ConfigType: &http_connection_managerv3.HttpFilter_TypedConfig{
 					TypedConfig: routerFilterConfig,
 				},

@@ -22,7 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import org.jetbrains.annotations.NotNull;
 
-class ServerListenerCache<T> {
+class GrpcServerListenerCache<T> {
 
   private final ConcurrentMap<T, Set<EndpointAddress>> cache = new ConcurrentHashMap<>();
 

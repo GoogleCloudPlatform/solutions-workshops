@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package com.google.examples.xds.controlplane.xds;
+package com.google.examples.xds.controlplane.applications;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -24,26 +24,29 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-class GrpcApplicationCache {
+/**
+ * Stores information about applications discovered from EndpointSlices, by kubecontext and
+ * namespace.
+ */
+public class ApplicationCache {
 
-  private final ConcurrentMap<ContextNamespace, Set<GrpcApplication>> cache =
-      new ConcurrentHashMap<>();
+  private final ConcurrentMap<ContextNamespace, Set<Application>> cache = new ConcurrentHashMap<>();
   private final ReadWriteLock mux = new ReentrantReadWriteLock();
 
   /**
-   * Replaces the contents of the gRPC application configuration cache with the provided new
-   * application configuration.
+   * Replaces the contents of the application configuration cache with the provided new application
+   * configuration.
    *
-   * @param apps the new gRPC application configuration.
+   * @param apps the new application configuration.
    * @return true if the application configuration cache changed as a result of this operation.
    */
-  boolean set(
-      @NotNull String kubecontext, @NotNull String namespace, @Nullable Set<GrpcApplication> apps) {
+  public boolean set(
+      @NotNull String kubecontext, @NotNull String namespace, @Nullable Set<Application> apps) {
     if (apps == null) {
       apps = Collections.emptySet();
     }
     var key = key(kubecontext, namespace);
-    Set<GrpcApplication> oldApps;
+    Set<Application> oldApps;
     mux.writeLock().lock();
     try {
       oldApps = cache.put(key, apps);
@@ -53,9 +56,10 @@ class GrpcApplicationCache {
     return !apps.equals(oldApps);
   }
 
+  /** Get the known applications for the provided kubecontext and namespace. */
   @SuppressWarnings("unused")
   @NotNull
-  Set<GrpcApplication> get(@NotNull String kubecontext, @NotNull String namespace) {
+  public Set<Application> get(@NotNull String kubecontext, @NotNull String namespace) {
     mux.readLock().lock();
     try {
       return cache.get(key(kubecontext, namespace));
@@ -64,12 +68,13 @@ class GrpcApplicationCache {
     }
   }
 
+  /** Get all known applications. */
   @NotNull
-  Set<GrpcApplication> getAll() {
-    var result = new HashSet<GrpcApplication>();
+  public Set<Application> getAll() {
+    var result = new HashSet<Application>();
     mux.readLock().lock();
     try {
-      for (Set<GrpcApplication> apps : cache.values()) {
+      for (Set<Application> apps : cache.values()) {
         result.addAll(apps);
       }
     } finally {
@@ -83,6 +88,6 @@ class GrpcApplicationCache {
     return new ContextNamespace(kubecontext, namespace);
   }
 
-  /** ContextNamespace is the key in the {@link GrpcApplicationCache}. */
+  /** ContextNamespace is the key in the {@link ApplicationCache}. */
   record ContextNamespace(@NotNull String kubecontext, @NotNull String namespace) {}
 }

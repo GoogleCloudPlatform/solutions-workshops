@@ -311,7 +311,7 @@ an IAM service account without storing long-lived credentials.
     EOF
     ```
 
-5.  Apply the Kubernetes `endpointslices-reader` ClusterRole and
+6.  Apply the Kubernetes `endpointslices-reader` ClusterRole and
     `control-plane-endpointslices-reader-gcp` ClusterRoleBinding to the GKE
     clusters:
 
@@ -387,8 +387,8 @@ follow the steps in the section titled
 to set up certificate authorities in CA Service to issue workload TLS
 certificates to pods on the GKE clusters.
 
-Create the `WorkloadCertificateConfig` and `TrustConfig` resources in all of
-the GKE clusters.
+Create the `WorkloadCertificateConfig` and `TrustConfig` resources in all
+GKE clusters.
 
 Create the root CA:
 
@@ -475,7 +475,7 @@ done
 
 ## Clean up
 
-0. Set up environment variables:
+1.  Set up environment variables:
 
     ```shell
     PROJECT_ID="$(gcloud config get project 2> /dev/null)"
@@ -484,7 +484,7 @@ done
     CAS_ROOT_LOCATION="${REGIONS[@]:0:1}"
     ```
 
-1.  Delete the GKE clusters:
+2.  Delete the GKE clusters:
 
     ```shell
     for region in "${REGIONS[@]}"; do
@@ -493,20 +493,20 @@ done
     done
     ```
 
-2.  Delete the IAM service account:
+3.  Delete the IAM service account:
 
     ```shell
     gcloud iam service-accounts delete "${GSA}@${PROJECT_ID}.iam.gserviceaccount.com"
     ```
 
-3.  Delete the container image repository in Artifact Registry:
+4.  Delete the container image repository in Artifact Registry:
 
     ```shell
     gcloud artifacts repositories delete grpc-xds \
       --location "$AR_LOCATION" --async --quiet
     ```
 
-4.  Delete the CA Service resources:
+5.  Delete the CA Service resources:
 
     ```shell
     for region in "${REGIONS[@]}"; do
@@ -532,7 +532,7 @@ done
       --location "$CAS_ROOT_LOCATION" --quiet
     ```
 
-5.  Delete the Cloud NAT resources:
+6.  Delete the Cloud NAT resources:
 
     ```shell
     for region in "${REGIONS[@]}"; do

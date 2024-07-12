@@ -16,25 +16,54 @@ package cds
 
 import (
 	"fmt"
+	"strings"
+	"time"
+
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	clusterv3 "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	tlsv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	httpv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/upstreams/http/v3"
-	matcherv3 "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
 
-	"github.com/googlecloudplatform/solutions-workshops/grpc-xds/control-plane-go/pkg/xds/lds"
+	"github.com/googlecloudplatform/solutions-workshops/grpc-xds/control-plane-go/pkg/xds/tls"
 )
 
 const (
-	envoyExtensionsUpstreamsHTTPv3HTTPProtocolOptions = "envoy.extensions.upstreams.http.v3.HttpProtocolOptions"
+	envoyExtensionsUpstreamsHTTPProtocolOptions = "envoy.extensions.upstreams.http.v3.HttpProtocolOptions"
 )
 
-// CreateCluster definition for CDS.
-// [gRFC A27]: https://github.com/grpc/proposal/blob/972b69ab1f0f7f6079af81a8c2b8a01a15ce3bec/A27-xds-global-load-balancing.md#cluster-proto
-func CreateCluster(name string, edsServiceName string, namespace string, serviceAccountName string, enableTLS bool, requireClientCerts bool) (*clusterv3.Cluster, error) {
+var (
+	// TODO: Make these configurable.
+	healthCheckInterval = durationpb.New(30 * time.Second)
+	healthCheckTimeout  = durationpb.New(1 * time.Second)
+)
+
+// CreateCluster returns a CDS Cluster.
+//
+// `edsServiceName` is the resource name to request from EDS (for Clusters that use EDS).
+// Typically, this is just the CDS Cluster name, but it must be a different name if the CDS
+// Cluster name uses the `xdstp://` scheme for xDS federation.
+//
+// To enable client-side active health checking, provide a `healthCheckProtocol` value of one of
+// `grpc`, `http`, or `tcp`. If the health check port is different to the serving port, provide
+// the health check port number too.
+//
+// If the health check port is the same as the serving port, you can provide `0` as the value of
+// `healthCheckPort`.
+//
+// `pathOrGRPCService` is the URL path for HTTP health checks, or the gRPC service name for gRPC
+// health checks. It is ignored for TCP health checks.
+//
+// To disable client-side health checking, set `healthCheckProtocol` to an empty string.
+//
+// Client-side active health checks are supported by Envoy proxy, but not by gRPC clients.
+// See https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/upstream/service_discovery#on-eventually-consistent-service-discovery
+// and https://github.com/grpc/grpc/issues/34581
+//
+// TODO: Clean up too many parameters.
+func CreateCluster(name string, edsServiceName string, namespace string, serviceAccountName string, healthCheckPort uint32, healthCheckProtocol string, healthCheckPathOrGRPCService string, enableTLS bool, requireClientCerts bool) (*clusterv3.Cluster, error) {
 	anyWrappedHTTPProtocolOptions, err := anypb.New(&httpv3.HttpProtocolOptions{
 		UpstreamProtocolOptions: &httpv3.HttpProtocolOptions_ExplicitHttpConfig_{
 			ExplicitHttpConfig: &httpv3.HttpProtocolOptions_ExplicitHttpConfig{
@@ -64,89 +93,61 @@ func CreateCluster(name string, edsServiceName string, namespace string, service
 		ConnectTimeout: &durationpb.Duration{
 			Seconds: 3, // default is 5s
 		},
+		// See https://github.com/envoyproxy/envoy/issues/11527
+		// IgnoreHealthOnHostRemoval: true,
 		TypedExtensionProtocolOptions: map[string]*anypb.Any{
-			envoyExtensionsUpstreamsHTTPv3HTTPProtocolOptions: anyWrappedHTTPProtocolOptions,
+			envoyExtensionsUpstreamsHTTPProtocolOptions: anyWrappedHTTPProtocolOptions,
 		},
-		LbPolicy: clusterv3.Cluster_ROUND_ROBIN,
+		// See https://github.com/envoyproxy/envoy/issues/11527
+		IgnoreHealthOnHostRemoval: true,
+		LbPolicy:                  clusterv3.Cluster_ROUND_ROBIN,
+	}
+
+	// Client-side active health checks. Implemented by Envoy, but not by gRPC clients.
+	if healthCheckProtocol != "" {
+		cluster.HealthChecks = []*corev3.HealthCheck{createHealthCheck(healthCheckProtocol, healthCheckPort, healthCheckPathOrGRPCService)}
+		if healthCheckPort != 0 {
+			cluster.HealthChecks[0].AltPort = wrapperspb.UInt32(healthCheckPort)
+		}
 	}
 
 	if enableTLS {
-		upstreamTLSContext := createUpstreamTLSContext(namespace, serviceAccountName, requireClientCerts)
-		anyWrappedUpstreamTLSContext, err := anypb.New(upstreamTLSContext)
+		upstreamTLSContext := tls.CreateUpstreamTLSContext(namespace, serviceAccountName, requireClientCerts)
+		transportSocket, err := tls.CreateTransportSocket(upstreamTLSContext)
 		if err != nil {
-			return nil, fmt.Errorf("could not marshall UpstreamTlsContext +%v into Any instance: %w", upstreamTLSContext, err)
+			return nil, err
 		}
-		cluster.TransportSocket = &corev3.TransportSocket{
-			Name: lds.EnvoyTransportSocketsTLSName,
-			ConfigType: &corev3.TransportSocket_TypedConfig{
-				TypedConfig: anyWrappedUpstreamTLSContext,
-			},
-		}
+		cluster.TransportSocket = transportSocket
 	}
 
 	return &cluster, nil
 }
 
-// createUpstreamTLSContext configures:
-// 1. gRPC client TLS certificate provider
-// 2. Envoy static secret name for TLS certificates and private keys
-// 3. Certificate authorities (CAs) to validate gRPC server certificates, including server authorization.
-// Important: Assumes that the client application k8s Service account name matches the application name!
-func createUpstreamTLSContext(namespace string, serviceAccountName string, requireClientCerts bool) *tlsv3.UpstreamTlsContext {
-	//goland:noinspection ALL
-	upstreamTLSContext := tlsv3.UpstreamTlsContext{
-		CommonTlsContext: &tlsv3.CommonTlsContext{
-			// AlpnProtocols is set by Traffic Director, but ignored by gRPC xDS according to gRFC A29.
-			AlpnProtocols: []string{"h2"},
-			// Validate gRPC server certificates:
-			ValidationContextType: &tlsv3.CommonTlsContext_CombinedValidationContext{
-				CombinedValidationContext: &tlsv3.CommonTlsContext_CombinedCertificateValidationContext{
-					// Validate gRPC server certificates for gRPC clients:
-					DefaultValidationContext: &tlsv3.CertificateValidationContext{
-						CaCertificateProviderInstance: &tlsv3.CertificateProviderPluginInstance{
-							InstanceName: lds.TLSCertificateProviderInstanceName,
-							// Using the same certificate name value as Traffic Director,
-							// but the certificate name is ignored by gRPC, see gRFC A29.
-							CertificateName: "ROOTCA",
-						},
-						// Server authorization (SAN checks):
-						// gRPC-Java as of v1.64.0 does not work correctly with
-						// `match_typed_subject_alt_names`, using deprecated
-						// `match_subject_alt_names` instead, for now.
-						MatchSubjectAltNames: []*matcherv3.StringMatcher{
-							{
-								MatchPattern: &matcherv3.StringMatcher_SafeRegex{
-									SafeRegex: &matcherv3.RegexMatcher{
-										Regex: fmt.Sprintf("spiffe://[^/]+/ns/%s/sa/%s", namespace, serviceAccountName),
-									},
-								},
-							},
-						},
-					},
-					// Validate server certificates for Envoy proxy clients:
-					ValidationContextSdsSecretConfig: &tlsv3.SdsSecretConfig{
-						Name: "upstream_validation", // Match the name in Envoy static_resources.secrets
-					},
-				},
-			},
-		},
+func createHealthCheck(protocol string, port uint32, pathOrGRPCService string) *corev3.HealthCheck {
+	healthCheck := &corev3.HealthCheck{
+		AltPort:            wrapperspb.UInt32(port),
+		HealthyThreshold:   wrapperspb.UInt32(1),
+		Interval:           healthCheckInterval,
+		Timeout:            healthCheckTimeout,
+		UnhealthyThreshold: wrapperspb.UInt32(1),
 	}
-
-	if requireClientCerts {
-		// Send client certificate in TLS handshake for gRPC clients:
-		upstreamTLSContext.CommonTlsContext.TlsCertificateProviderInstance = &tlsv3.CertificateProviderPluginInstance{
-			InstanceName: lds.TLSCertificateProviderInstanceName,
-			// Using the same certificate name value as Traffic Director, but the
-			// certificate name is ignored by gRPC according to gRFC A29.
-			CertificateName: "DEFAULT",
-		}
-		// Send client certificate in TLS handshake for Envoy proxy clients:
-		upstreamTLSContext.CommonTlsContext.TlsCertificateSdsSecretConfigs = []*tlsv3.SdsSecretConfig{
-			{
-				Name: "upstream_cert", // Match the name in Envoy static_resources.secrets
+	if strings.EqualFold(protocol, "grpc") {
+		healthCheck.HealthChecker = &corev3.HealthCheck_GrpcHealthCheck_{
+			GrpcHealthCheck: &corev3.HealthCheck_GrpcHealthCheck{
+				ServiceName: pathOrGRPCService,
 			},
 		}
+	} else if strings.EqualFold(protocol, "http") {
+		healthCheck.HealthChecker = &corev3.HealthCheck_HttpHealthCheck_{
+			HttpHealthCheck: &corev3.HealthCheck_HttpHealthCheck{
+				Path: pathOrGRPCService,
+			},
+		}
+	} else {
+		// TCP fallback
+		healthCheck.HealthChecker = &corev3.HealthCheck_TcpHealthCheck_{
+			TcpHealthCheck: &corev3.HealthCheck_TcpHealthCheck{},
+		}
 	}
-
-	return &upstreamTLSContext
+	return healthCheck
 }

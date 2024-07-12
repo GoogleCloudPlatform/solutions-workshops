@@ -23,7 +23,8 @@ import (
 	"strings"
 
 	cachev3 "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
-	"github.com/envoyproxy/go-control-plane/pkg/server/stream/v3"
+	resourcev3 "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
+	streamv3 "github.com/envoyproxy/go-control-plane/pkg/server/stream/v3"
 	"github.com/go-logr/logr"
 
 	"github.com/googlecloudplatform/solutions-workshops/grpc-xds/control-plane-go/pkg/applications"
@@ -86,7 +87,8 @@ func NewSnapshotCache(ctx context.Context, allowPartialRequests bool, hash cache
 	}
 }
 
-// CreateWatch intercepts stream creation before delegating, and if it is a new Listener stream, does the following:
+// CreateWatch intercepts stream creation before delegating, and if it is a request for Listener
+// (LDS) resources stream, does the following:
 //
 //   - Extracts addresses and ports of any server listeners in the request and adds them to the
 //     set of known server listener socket addresses for the node hash.
@@ -94,11 +96,16 @@ func NewSnapshotCache(ctx context.Context, allowPartialRequests bool, hash cache
 //     server listener addresses the node hash, creates a new snapshot for that node hash,
 //     with the server listeners and associated route configuration.
 //
-// This solves (in a slightly hacky way) bootstrapping of xDS-enabled gRPC servers and Envoy proxy
-// instances that fetch configuration dynamically using ADS.
-func (c *SnapshotCache) CreateWatch(request *cachev3.Request, state stream.StreamState, responses chan cachev3.Response) (cancel func()) {
-	if request != nil && (len(request.ResourceNames) > 0 || request.Node.UserAgentName == "envoy") && request.GetTypeUrl() == "type.googleapis.com/envoy.config.listener.v3.Listener" {
-		c.logger.Info("CreateWatch", "typeUrl", request.TypeUrl, "resourceNames", request.ResourceNames, "node.cluster", request.Node.Cluster, "node.user_agent_name", request.Node.UserAgentName, "node.id", request.Node.Id)
+// This solves bootstrapping of xDS resources snapshots for xDS-enabled gRPC servers and
+// Envoy proxy instances that fetch configuration dynamically using ADS.
+func (c *SnapshotCache) CreateWatch(request *cachev3.Request, state streamv3.StreamState, responses chan cachev3.Response) (cancel func()) {
+	if isListenerRequest(request) {
+		c.logger.Info("CreateWatch",
+			"typeUrl", request.TypeUrl,
+			"resourceNames", request.ResourceNames,
+			"node.cluster", request.Node.Cluster,
+			"node.user_agent_name", request.Node.UserAgentName,
+			"node.id", request.Node.Id)
 		nodeHash := c.hash.ID(request.GetNode())
 		addressesFromRequest, err := findServerListenerAddresses(request.ResourceNames)
 		if err != nil {
@@ -160,6 +167,13 @@ func (c *SnapshotCache) createNewSnapshot(nodeHash string, apps []applications.A
 	return nil
 }
 
+// isListenerRequest determines if the request is a request for Listener (LDS) resources.
+func isListenerRequest(request *cachev3.Request) bool {
+	return request != nil &&
+		(len(request.ResourceNames) > 0 || request.Node.UserAgentName == "envoy") &&
+		request.GetTypeUrl() == resourcev3.ListenerType
+}
+
 // findServerListenerAddresses looks for server Listener names in the provided
 // slice and extracts the address and port for each server Listener found.
 // TODO: Handle xDS federation server Listener names using `xdstp://` names,
@@ -188,7 +202,7 @@ func findServerListenerAddresses(names []string) ([]EndpointAddress, error) {
 
 // CreateDeltaWatch just delegates, since gRPC does not support delta/incremental xDS currently.
 // TODO: Handle request for gRPC server Listeners once gRPC implementation support delta/incremental xDS.
-func (c *SnapshotCache) CreateDeltaWatch(request *cachev3.DeltaRequest, state stream.StreamState, responses chan cachev3.DeltaResponse) (cancel func()) {
+func (c *SnapshotCache) CreateDeltaWatch(request *cachev3.DeltaRequest, state streamv3.StreamState, responses chan cachev3.DeltaResponse) (cancel func()) {
 	return c.delegate.CreateDeltaWatch(request, state, responses)
 }
 

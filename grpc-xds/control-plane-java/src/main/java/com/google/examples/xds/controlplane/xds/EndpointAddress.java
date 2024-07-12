@@ -16,5 +16,7 @@ package com.google.examples.xds.controlplane.xds;
 
 import org.jetbrains.annotations.NotNull;
 
-/** Represents a socket ipAddress, with an IP address (e.g., "0.0.0.0" or "[::]") and a port. */
+/**
+ * Represents a socket ipAddress, with an IP address (e.g., "0.0.0.0" or "[::]") and a servingPort.
+ */
 public record EndpointAddress(@NotNull String ipAddress, int port) {}

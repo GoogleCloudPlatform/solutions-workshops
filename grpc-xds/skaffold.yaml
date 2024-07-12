@@ -51,42 +51,6 @@ requires:
 apiVersion: skaffold/v3
 kind: Config
 metadata:
-  name: go-java
-  annotations:
-    config.kubernetes.io/local-config: "true"
-profiles:
-- name: tls-cert-manager
-  activation:
-  - kubeContext: kind.*
-- name: tls-gke-workload-certs
-  activation:
-  - kubeContext: gke.*
-requires:
-- path: control-plane-go
-- path: greeter-java
-- path: k8s/envoy
----
-apiVersion: skaffold/v3
-kind: Config
-metadata:
-  name: java-go
-  annotations:
-    config.kubernetes.io/local-config: "true"
-profiles:
-- name: tls-cert-manager
-  activation:
-  - kubeContext: kind.*
-- name: tls-gke-workload-certs
-  activation:
-  - kubeContext: gke.*
-requires:
-- path: control-plane-java
-- path: greeter-go
-- path: k8s/envoy
----
-apiVersion: skaffold/v3
-kind: Config
-metadata:
   name: go-td
   annotations:
     config.kubernetes.io/local-config: "true"

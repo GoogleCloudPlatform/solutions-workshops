@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//	http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -72,9 +72,14 @@ func CreateRouteConfigurationForGRPCServerListener(enableRBAC bool) (*routev3.Ro
 }
 
 // createRBACPerRouteConfig returns an RBACPerRoute config with a single policy called
-// `greeter-clients`. The policy applies to all URL paths, and it permits workloads with a
-// X.509 SVID for any Kubernetes ServiceAccount in all the specified Kubernetes Namespaces.
+// `greeter-clients`. The policy applies to the base URL path of the `helloworld.Greeter` gRPC
+// service, and it permits workloads with an X.509 SVID for any Kubernetes ServiceAccount in the
+// specified Kubernetes Namespaces. If no allowed Namespaces are provided, this function defaults
+// to allowing all ServiceAccounts in all Namespaces.
 func createRBACPerRouteConfig(allowNamespaces ...string) (*anypb.Any, error) {
+	if len(allowNamespaces) == 0 {
+		allowNamespaces = []string{".+"}
+	}
 	pipedNamespaces := strings.Join(allowNamespaces, "|")
 	return anypb.New(&rbacfilterv3.RBACPerRoute{
 		Rbac: &rbacfilterv3.RBAC{

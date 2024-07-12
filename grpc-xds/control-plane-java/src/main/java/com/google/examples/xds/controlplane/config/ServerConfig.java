@@ -42,11 +42,15 @@ public class ServerConfig {
 
   private static final Logger LOG = LoggerFactory.getLogger(ServerConfig.class);
 
-  /** Default management server port. Override with the <code>PORT</code> environment variable. */
+  /**
+   * Default management server servingPort. Override with the <code>PORT</code> environment
+   * variable.
+   */
   private static final int DEFAULT_SERVING_PORT = 50051;
 
   /**
-   * Default health checking port. Override with the <code>HEALTH_PORT</code> environment variable.
+   * Default health checking servingPort. Override with the <code>HEALTH_PORT</code> environment
+   * variable.
    */
   private static final int DEFAULT_HEALTH_PORT = 50052;
 
@@ -74,7 +78,9 @@ public class ServerConfig {
   /** Reference to the Kubernetes API server. */
   private static final String KUBERNETES_SERVICE = "kubernetes.default.svc";
 
-  /** Returns the port number that the management server should listen on for xDS requests. */
+  /**
+   * Returns the servingPort number that the management server should listen on for xDS requests.
+   */
   public int servingPort() {
     String portEnv = System.getenv("PORT");
     if (portEnv != null && !portEnv.isBlank()) {
@@ -87,7 +93,9 @@ public class ServerConfig {
     return DEFAULT_SERVING_PORT;
   }
 
-  /** Returns the port number that the management server should listen on for health requests. */
+  /**
+   * Returns the servingPort number that the management server should listen on for health requests.
+   */
   public int healthPort() {
     String portEnv = System.getenv("HEALTH_PORT");
     if (portEnv != null && !portEnv.isBlank()) {

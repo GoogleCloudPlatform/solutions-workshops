@@ -21,16 +21,12 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
-const (
-	envoyFilterHTTPFaultName = "envoy.filters.http.fault"
-)
-
 // CreateAPIListener returns an LDS API listener
 //
 // [gRFC A27]: https://github.com/grpc/proposal/blob/master/A27-xds-global-load-balancing.md#listener-proto
 // [Reference]: https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/listener/v3/api_listener.proto
 func CreateAPIListener(name string, routeConfigurationName string) (*listenerv3.Listener, error) {
-	httpConnectionManager, err := createUpstreamHTTPConnectionManager(routeConfigurationName, name)
+	httpConnectionManager, err := createHTTPConnectionManagerForAPIListener(routeConfigurationName, name)
 	if err != nil {
 		return nil, fmt.Errorf("could not create HttpConnectionManager for LDS API Listener: %w", err)
 	}
