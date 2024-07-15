@@ -43,12 +43,11 @@ func Run(ctx context.Context, flagset *flag.FlagSet, args []string) error {
 		return fmt.Errorf("could not configure management server health check port: %w", err)
 	}
 	serverConfig := server.Config{
-		ServingPort:       servingPort,
-		HealthPort:        healthPort,
-		GreeterName:       config.GreeterName(ctx),
-		NextHop:           config.NextHop(),
-		UseXDS:            config.UseXDS(),
-		UseXDSCredentials: config.UseXDSCredentials(ctx),
+		ServingPort: servingPort,
+		HealthPort:  healthPort,
+		GreeterName: config.GreeterName(ctx),
+		NextHop:     config.NextHop(),
+		UseXDS:      config.UseXDS(),
 	}
 	return server.Run(ctx, serverConfig)
 }

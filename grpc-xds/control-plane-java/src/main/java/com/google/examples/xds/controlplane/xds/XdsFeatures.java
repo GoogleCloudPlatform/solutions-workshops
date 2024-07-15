@@ -17,35 +17,29 @@ package com.google.examples.xds.controlplane.xds;
 import java.util.Map;
 import java.util.Objects;
 import org.jetbrains.annotations.NotNull;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /** Contains flags to enable and disable xDS features. */
 public record XdsFeatures(
-    boolean serverListenerUsesRds,
     boolean enableControlPlaneTls,
     boolean requireControlPlaneClientCerts,
     boolean enableDataPlaneTls,
     boolean requireDataPlaneClientCerts,
+    boolean enableRbac,
     boolean enableFederation) {
-
-  private static final Logger LOG = LoggerFactory.getLogger(XdsFeatures.class);
 
   /** Canonical constructor. */
   public XdsFeatures {
-    if (!enableControlPlaneTls && requireControlPlaneClientCerts) {
+    if (requireControlPlaneClientCerts && !enableControlPlaneTls) {
       throw new IllegalArgumentException(
-          "xDS feature flags: enableControlPlaneTls=true is required when"
-              + " requireControlPlaneClientCerts=true");
+          "requireControlPlaneClientCerts=true requires enableControlPlaneTls=true");
     }
-    if (!enableDataPlaneTls && requireDataPlaneClientCerts) {
+    if (requireDataPlaneClientCerts && !enableDataPlaneTls) {
       throw new IllegalArgumentException(
-          "xDS feature flags: enableDataPlaneTls=true is required when"
-              + " requireDataPlaneClientCerts=true");
+          "requireDataPlaneClientCerts=true requires enableDataPlaneTls=true");
     }
-    if (serverListenerUsesRds) {
-      LOG.warn(
-          "xDS clients implemented using Go must use gRPC-Go v1.61.0 or later for dynamic RouteConfiguration via RDS for server Listeners, see https://github.com/grpc/grpc-go/issues/6788");
+    if (enableRbac && (!enableDataPlaneTls || !requireDataPlaneClientCerts)) {
+      throw new IllegalArgumentException(
+          "enableRbac=true requires enableDataPlaneTls=true and requireDataPlaneClientCerts=true");
     }
   }
 
@@ -60,11 +54,11 @@ public record XdsFeatures(
    */
   public XdsFeatures(@NotNull Map<String, Boolean> features) {
     this(
-        Objects.requireNonNullElse(features.get("serverListenerUsesRds"), Boolean.FALSE),
         Objects.requireNonNullElse(features.get("enableControlPlaneTls"), Boolean.FALSE),
         Objects.requireNonNullElse(features.get("requireControlPlaneClientCerts"), Boolean.FALSE),
         Objects.requireNonNullElse(features.get("enableDataPlaneTls"), Boolean.FALSE),
         Objects.requireNonNullElse(features.get("requireDataPlaneClientCerts"), Boolean.FALSE),
+        Objects.requireNonNullElse(features.get("enableRbac"), Boolean.FALSE),
         Objects.requireNonNullElse(features.get("enableFederation"), Boolean.FALSE));
   }
 }

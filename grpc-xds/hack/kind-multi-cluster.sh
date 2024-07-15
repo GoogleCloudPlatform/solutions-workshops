@@ -72,7 +72,7 @@ for node in $(kind get nodes --name=grpc-xds) ; do
   kubectl --context=kind-grpc-xds-2 get nodes --output=jsonpath='{range .items[*]}{"ip route replace "}{.spec.podCIDR}{" via "}{.status.addresses[?(@.type=="InternalIP")].address}{"\n"}{end}' \
     | xargs -L1 docker exec "$node"
   # Add a static route to the service subnet in the other cluster, pointing at the control-plane node (could be any node).
-  cluster2_service_cidr="10.220.0.0/16" # Match networking.serviceSubnet from `kind-cluster-config-2.yaml`
+  cluster2_service_cidr="$(yq -r '.networking.serviceSubnet' hack/kind-cluster-config-2.yaml)"
   cluster2_control_plane_node_ip=$(kubectl --context=kind-grpc-xds-2 get nodes --selector=node-role.kubernetes.io/control-plane --output=jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
   docker exec "$node" ip route replace "$cluster2_service_cidr" via "$cluster2_control_plane_node_ip"
 done
@@ -84,7 +84,7 @@ for node in $(kind get nodes --name=grpc-xds-2) ; do
   kubectl --context=kind-grpc-xds get nodes --output=jsonpath='{range .items[*]}{"ip route replace "}{.spec.podCIDR}{" via "}{.status.addresses[?(@.type=="InternalIP")].address}{"\n"}{end}' \
     | xargs -L1 docker exec "$node"
   # Add a static route to the service subnet in the other cluster, pointing at the control-plane node (could be any node).
-  cluster1_service_cidr="10.110.0.0/16" # Match networking.serviceSubnet from `kind-cluster-config.yaml`
+  cluster1_service_cidr="$(yq -r '.networking.serviceSubnet' hack/kind-cluster-config.yaml)"
   cluster1_control_plane_node_ip=$(kubectl --context=kind-grpc-xds get nodes --selector=node-role.kubernetes.io/control-plane --output=jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
   docker exec "$node" ip route replace "$cluster1_service_cidr" via "$cluster1_control_plane_node_ip"
 done

@@ -16,8 +16,6 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: nodes-reader
-  labels:
-    app.kubernetes.io/component: greeter
 rules:
 - apiGroups:
   - ""

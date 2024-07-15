@@ -16,10 +16,10 @@ package xds
 
 // Features of the xDS control plane that can be enabled and disabled via a config file.
 type Features struct {
-	ServerListenerUsesRDS          bool `yaml:"serverListenerUsesRds"`
 	EnableControlPlaneTLS          bool `yaml:"enableControlPlaneTls"`
 	RequireControlPlaneClientCerts bool `yaml:"requireControlPlaneClientCerts"`
 	EnableDataPlaneTLS             bool `yaml:"enableDataPlaneTls"`
 	RequireDataPlaneClientCerts    bool `yaml:"requireDataPlaneClientCerts"`
+	EnableRBAC                     bool `yaml:"enableRbac"`
 	EnableFederation               bool `yaml:"enableFederation"`
 }

@@ -1,0 +1,52 @@
+# Copyright 2024 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Ref: https://cert-manager.io/docs/reference/api-docs/#cert-manager.io/v1.Certificate
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: envoy-client
+  namespace: xds # kpt-set: ${envoy-namespace}
+  labels:
+    app.kubernetes.io/component: front-proxy
+spec:
+  commonName: envoy
+  duration: 24h
+  renewBefore: 8h
+  dnsNames:
+  - envoy
+  - envoy.xds # kpt-set: control-plane.${envoy-namespace}
+  - envoy.xds.svc.cluster.example.com # kpt-set: control-plane.${envoy-namespace}.svc.cluster.example.com
+  uris:
+  - spiffe://grpc-xds.example.com/ns/xds/sa/envoy # kpt-set: spiffe://${project-id}.svc.id.goog/ns/${envoy-namespace}/sa/envoy
+  secretName: envoy-client-certs
+  issuerRef:
+    name: root-ca
+    kind: ClusterIssuer
+    group: cert-manager.io
+  isCA: false
+  usages:
+  # https://cert-manager.io/docs/reference/api-docs/#cert-manager.io/v1.KeyUsage
+  - digital signature
+  - key encipherment
+  - key agreement
+  # https://cert-manager.io/docs/usage/certificate/#x509-key-usages-and-extended-key-usages
+  - client auth
+  - server auth
+  privateKey:
+    algorithm: ECDSA
+    encoding: PKCS8
+    rotationPolicy: Always
+    size: 256

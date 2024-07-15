@@ -1,0 +1,156 @@
+# Copyright 2023 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Patch to add an init container that creates an Envoy proxy config file,
+# configuring Envoy to fetch dynamic configuration from an xDS control plane
+# management server.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: envoy
+spec:
+  template:
+    spec:
+      containers:
+      - name: app
+        volumeMounts:
+        - name: envoy-conf
+          mountPath: /etc/envoy
+          readOnly: true
+        - name: nodeinfo
+          mountPath: /etc/nodeinfo
+          readOnly: true
+        - name: podinfo
+          mountPath: /etc/podinfo
+          readOnly: true
+      initContainers:
+      - name: envoy-conf-init
+        image: busybox
+        command:
+        - /bin/sh
+        - -c
+        - |
+          #
+          # Create the Envoy proxy configuration file and populate it
+          # with values from the Pod environment and the GKE metadata server:
+          #
+          cat << EOF > /etc/envoy/envoy.yaml
+          node:
+            cluster: $(cat /etc/podinfo/label-app-name)
+            id: $(cat /proc/sys/kernel/random/uuid)~$(hostname -i)
+            locality:
+              zone: $(wget --header Metadata-Flavor:Google -qO- http://metadata.google.internal/computeMetadata/v1/instance/zone 2> /dev/null | cut -d/ -f4)
+            metadata:
+              INSTANCE_IP: $(hostname -i)
+              K8S_NAMESPACE: $(cat /etc/podinfo/namespace)
+              K8S_POD: $(hostname -s)
+              XDS_STREAM_TYPE: ADS
+          dynamic_resources:
+            ads_config:
+              api_type: GRPC
+              transport_api_version: V3
+              grpc_services:
+              - envoy_grpc:
+                  cluster_name: xds_cluster
+            cds_config:
+              resource_api_version: V3
+              ads: {}
+            lds_config:
+              resource_api_version: V3
+              ads: {}
+          static_resources:
+            clusters:
+            - name: xds_cluster
+              type: STRICT_DNS
+              typed_extension_protocol_options:
+                envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+                  "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+                  explicit_http_config:
+                    http2_protocol_options: {}              
+              connect_timeout: 10s
+              load_assignment:
+                cluster_name: xds_cluster
+                endpoints:
+                - lb_endpoints:
+                  - endpoint:
+                      address:
+                        socket_address:
+                          address: control-plane.xds.svc.cluster.example.com
+                          port_value: 50051
+            secrets:
+            - name: upstream_cert
+              tls_certificate:
+                certificate_chain:
+                  filename: /var/run/secrets/workload-spiffe-credentials/certificates.pem
+                private_key:
+                  filename: /var/run/secrets/workload-spiffe-credentials/private_key.pem
+            - name: upstream_validation
+              validation_context:
+                trusted_ca:
+                  filename: /var/run/secrets/workload-spiffe-credentials/ca_certificates.pem
+            - name: downstream_cert
+              tls_certificate:
+                certificate_chain:
+                  filename: /etc/envoy-ssl/certificates.pem
+                private_key:
+                  filename: /etc/envoy-ssl/private_key.pem
+            - name: downstream_validation
+              validation_context:
+                trusted_ca:
+                  filename: /etc/envoy-ssl/ca_certificates.pem
+          admin:
+            address:
+              socket_address:
+                address: 0.0.0.0
+                port_value: 19000
+          EOF
+          #
+          # Set `node.locality.zone` from a file if the GKE metadata server is unavailable,
+          # e.g., when running on a local kind cluster. Also handle the special cases of
+          # Cloud Workstations (https://cloud.google.com/workstations/docs) and
+          # gLinux Rodete (https://cloud.google.com/blog/topics/developers-practitioners/how-google-got-to-rolling-linux-releases-for-desktops).
+          #
+          wget --header Metadata-Flavor:Google --spider -q http://metadata.google.internal/computeMetadata/v1/instance/zone 2> /dev/null \
+            && ( ! wget --header Metadata-Flavor:Google -qO- http://metadata.google.internal/computeMetadata/v1/instance/tags 2> /dev/null | grep '"cloud-workstations-instance"' > /dev/null ) \
+            && grep -v rodete <(uname -r) > /dev/null \
+            || sed -i "s/zone: .*$/zone: $(cat /etc/nodeinfo/zone)/" /etc/envoy/envoy.yaml
+        resources:
+          requests:
+            cpu: 10m
+            memory: 100Mi
+        volumeMounts:
+        - name: envoy-conf
+          mountPath: /etc/envoy
+        - name: nodeinfo
+          mountPath: /etc/nodeinfo
+          readOnly: true
+        - name: podinfo
+          mountPath: /etc/podinfo
+          readOnly: true
+      volumes:
+      - name: envoy-conf
+        emptyDir: {}
+      - name: nodeinfo
+        emptyDir: {}
+      - name: podinfo
+        downwardAPI:
+          # Used when creating the Envoy proxy configuration file.
+          items:
+          - path: label-app-name
+            fieldRef:
+              fieldPath: metadata.labels['app.kubernetes.io/name']
+          - path: namespace
+            fieldRef:
+              fieldPath: metadata.namespace

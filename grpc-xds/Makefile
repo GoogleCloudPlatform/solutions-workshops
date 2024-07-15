@@ -205,10 +205,35 @@ xds-status-leaf: check-grpcdebug
 xds-config-intermediary: check-grpcdebug check-yq
 	grpcdebug localhost:50055 xds config | yq --input-format=json --prettyPrint
 
+# xds-config-intermediary-lds dumps the current LDS configuration of greeter-intermediary
+.PHONY: xds-config-intermediary-lds
+xds-config-intermediary-lds: check-grpcdebug check-yq
+	grpcdebug localhost:50055 xds config --type=LDS | yq --input-format=json --prettyPrint
+
 # xds-config-leaf dumps the current xDS configuration of greeter-leaf
 .PHONY: xds-config-leaf
 xds-config-leaf: check-grpcdebug check-yq
 	grpcdebug localhost:50057 xds config | yq --input-format=json --prettyPrint
+
+# xds-config-leaf-lds-rds dumps the current LDS and RDS configuration of greeter-leaf
+.PHONY: xds-config-leaf-lds-rds
+xds-config-leaf-lds-rds: check-grpcdebug check-yq
+	grpcdebug localhost:50057 xds config --type=LDS,RDS | yq --input-format=json --prettyPrint
+
+# envoy-config dumps the current configuration of the Envoy proxy
+.PHONY: envoy-config
+envoy-config: check-yq
+	curl -sL localhost:19000/config_dump?include_eds | yq --input-format=json --prettyPrint
+
+# envoy-config-xds dumps the current LDS, RDS, CDS, and EDS configuration of the Envoy proxy
+.PHONY: envoy-config-xds
+envoy-config-xds: check-jq check-yq
+	curl -sL localhost:19000/config_dump?include_eds | jq '.configs[] | select(."@type" == "type.googleapis.com/envoy.admin.v3.ListenersConfigDump" or ."@type" == "type.googleapis.com/envoy.admin.v3.RoutesConfigDump" or ."@type" == "type.googleapis.com/envoy.admin.v3.ClustersConfigDump" or ."@type" == "type.googleapis.com/envoy.admin.v3.EndpointsConfigDump")' | yq --input-format=json --prettyPrint
+
+# envoy-config-lds dumps the current LDS configuration of the Envoy proxy
+.PHONY: envoy-config-lds
+envoy-config-lds: check-yq
+	curl -sL localhost:19000/config_dump?include_eds | yq --input-format=json --prettyPrint '.configs[] | select(.@type == "type.googleapis.com/envoy.admin.v3.ListenersConfigDump")'
 
 # cert-manager deploys cert-manager and its custom resource definitions (CRDs) to the Kubernetes cluster.
 .PHONY: cert-manager
@@ -219,7 +244,7 @@ cert-manager: check-skaffold
 # run-bastion deploys a bastion Pod with troubleshooting tools.
 .PHONY: run-bastion
 run-bastion: check-skaffold
-	skaffold run --module=troubleshoot
+	skaffold run --filename=k8s/troubleshoot/skaffold.yaml
 
 # troubleshoot executes a shell in the bastion Pod, in raw terminal mode.
 .PHONY: troubleshoot
@@ -250,12 +275,13 @@ delete: delete-control-plane delete-greeter
 delete-apps: check-kubectl
 	./hack/delete-apps.sh
 
-# clean removes running instances of control-plane-[go|java], greeter-[go|java], and bastion.
+# clean removes running instances of control-plane-[go|java], greeter-[go|java], Envoy front proxy, and bastion.
 .PHONY: clean
 clean: check-skaffold
 	skaffold delete --module=go
 	skaffold delete --module=java
-	skaffold delete --module=troubleshoot
+	skaffold delete --filename=k8s/envoy/skaffold.yaml
+	skaffold delete --filename=k8s/troubleshoot/skaffold.yaml
 
 .PHONY: check-go
 check-go:
@@ -282,6 +308,13 @@ check-grpcurl:
 check-javac:
 	@if ! which javac > /dev/null; then \
 		echo "error: javac is not installed: https://adoptium.net/" >&2; \
+		exit 1; \
+	fi
+
+.PHONY: check-jq
+check-jq:
+	@if ! which jq > /dev/null; then \
+		echo "error: jq is not installed: https://jqlang.github.io/jq/download/" >&2; \
 		exit 1; \
 	fi
 

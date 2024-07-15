@@ -44,9 +44,9 @@ type Client struct {
 	client  helloworldpb.GreeterClient
 }
 
-func NewClient(ctx context.Context, nextHop string, useXDSCredentials bool) (*Client, error) {
+func NewClient(ctx context.Context, nextHop string) (*Client, error) {
 	logger := logging.FromContext(ctx)
-	dialOpts, err := dialOptions(logger, useXDSCredentials)
+	dialOpts, err := dialOptions(logger)
 	if err != nil {
 		return nil, fmt.Errorf("could not configure greeter client connection dial options: %w", err)
 	}
@@ -73,14 +73,11 @@ func (c *Client) SayHello(requestCtx context.Context, name string) (string, erro
 }
 
 // dialOptions sets parameters for client connection establishment.
-func dialOptions(logger logr.Logger, useXDSCredentials bool) ([]grpc.DialOption, error) {
-	clientCredentials := insecure.NewCredentials()
-	if useXDSCredentials {
-		logger.V(1).Info("Using xDS client-side credentials, with insecure as fallback")
-		var err error
-		if clientCredentials, err = xdscredentials.NewClientCredentials(xdscredentials.ClientOptions{FallbackCreds: insecure.NewCredentials()}); err != nil {
-			return nil, fmt.Errorf("could not create client-side transport credentials for xDS: %w", err)
-		}
+func dialOptions(logger logr.Logger) ([]grpc.DialOption, error) {
+	logger.V(1).Info("Using xDS client-side credentials, with insecure as fallback")
+	clientCredentials, err := xdscredentials.NewClientCredentials(xdscredentials.ClientOptions{FallbackCreds: insecure.NewCredentials()})
+	if err != nil {
+		return nil, fmt.Errorf("could not create client-side transport credentials for xDS: %w", err)
 	}
 	return []grpc.DialOption{
 		grpc.WithChainStreamInterceptor(interceptors.StreamClientLogging(logger)),

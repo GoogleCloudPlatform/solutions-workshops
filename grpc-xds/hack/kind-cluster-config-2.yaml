@@ -32,9 +32,11 @@ nodes:
     kind: ClusterConfiguration
     networking:
       dnsDomain: cluster2.example.com
+  labels:
+    topology.kubernetes.io/zone: us-central1-c
 - role: worker
   labels:
-    topology.kubernetes.io/zone: us-west1-a
+    topology.kubernetes.io/zone: us-central1-a
 - role: worker
   labels:
-    topology.kubernetes.io/zone: us-west1-b
+    topology.kubernetes.io/zone: us-central1-b

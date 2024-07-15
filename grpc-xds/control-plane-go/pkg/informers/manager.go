@@ -30,6 +30,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	informercache "k8s.io/client-go/tools/cache"
 
+	"github.com/googlecloudplatform/solutions-workshops/grpc-xds/control-plane-go/pkg/applications"
 	"github.com/googlecloudplatform/solutions-workshops/grpc-xds/control-plane-go/pkg/xds"
 )
 
@@ -39,6 +40,13 @@ var (
 	errNilEndpointSlice       = errors.New("nil EndpointSlice")
 	errNoPortsInEndpointSlice = errors.New("no ports in EndpointSlice")
 	errUnexpectedType         = errors.New("unexpected type")
+	// Kubernetes Service ports with one of these names will be considered health check ports (case-sensitive match). This is a port naming convention invented in this sample xDS control plane implementation.
+	healthCheckPortNames = map[string]bool{
+		"health":      true,
+		"healthz":     true,
+		"healthCheck": true,
+		"healthcheck": true,
+	}
 )
 
 // Manager manages a collection of informers.
@@ -125,7 +133,7 @@ func logEndpointSlice(logger logr.Logger, obj interface{}) {
 	}
 }
 
-func (m *Manager) handleEndpointSliceEvent(ctx context.Context, logger logr.Logger, namespace string, apps []xds.GRPCApplication) {
+func (m *Manager) handleEndpointSliceEvent(ctx context.Context, logger logr.Logger, namespace string, apps []applications.Application) {
 	logger.V(2).Info("Informer resource update", "apps", apps)
 	if err := m.xdsCache.UpdateResources(ctx, logger, m.kubecontext, namespace, apps); err != nil {
 		// Can't propagate this error, and we probably shouldn't end the goroutine anyway.
@@ -133,8 +141,8 @@ func (m *Manager) handleEndpointSliceEvent(ctx context.Context, logger logr.Logg
 	}
 }
 
-func getAppsForInformer(logger logr.Logger, informer informercache.SharedIndexInformer) []xds.GRPCApplication {
-	var apps []xds.GRPCApplication
+func getAppsForInformer(logger logr.Logger, informer informercache.SharedIndexInformer) []applications.Application {
+	var apps []applications.Application
 	for _, eps := range informer.GetIndexer().List() {
 		endpointSlice, err := validateEndpointSlice(eps)
 		if err != nil {
@@ -143,18 +151,62 @@ func getAppsForInformer(logger logr.Logger, informer informercache.SharedIndexIn
 		}
 		k8sServiceName := endpointSlice.GetObjectMeta().GetLabels()[discoveryv1.LabelServiceName]
 		namespace := endpointSlice.GetObjectMeta().GetNamespace()
-		// TODO: Handle more than one port?
-		port := uint32(*endpointSlice.Ports[0].Port)
+		servingPort := findServingPort(endpointSlice)
+		healthCheckPort, exists := findHealthCheckPort(endpointSlice)
+		if !exists {
+			// Default to using the serving port for health checks.
+			healthCheckPort = servingPort
+		}
+		servingProtocol := findProtocol(servingPort)
+		healthCheckProtocol := findProtocol(healthCheckPort)
 		appEndpoints := getApplicationEndpoints(endpointSlice)
-		app := xds.NewGRPCApplication(namespace, k8sServiceName, port, appEndpoints)
+		app := applications.NewApplication(namespace, k8sServiceName, uint32(*servingPort.Port), servingProtocol, uint32(*healthCheckPort.Port), healthCheckProtocol, appEndpoints)
 		apps = append(apps, app)
 	}
 	return apps
 }
 
+// getProtocol returns the protocol of the provided port, in all lowercase, by considering the following:
+//
+// 1.  The [appProtocol](https://kubernetes.io/docs/concepts/services-networking/service/#application-protocol), if set.
+// 2.  The [protocol](https://kubernetes.io/docs/reference/networking/service-protocols/#protocol-support), if set.
+// 3.  The default value of `tcp`.
+func findProtocol(port discoveryv1.EndpointPort) string {
+	if port.AppProtocol != nil {
+		return strings.ToLower(*port.AppProtocol)
+	}
+	if port.Protocol != nil {
+		return strings.ToLower(string(*port.Protocol))
+	}
+	return "tcp"
+}
+
+// findServingPort returns the first port that isn't named to identify as a health check port.
+// If there is only port on the EndpointSlice, return it regardless of name.
+func findServingPort(endpointSlice *discoveryv1.EndpointSlice) discoveryv1.EndpointPort {
+	for _, endpointPort := range endpointSlice.Ports {
+		if endpointPort.Port != nil && (endpointPort.Name == nil || !healthCheckPortNames[*endpointPort.Name]) {
+			return endpointPort
+		}
+	}
+	// If all ports are named as health check ports, use the first one, regardless of name.
+	return endpointSlice.Ports[0]
+}
+
+// findHealthCheckPort returns the first port that is named to identify as a health check port.
+// Returns `false` as the second return value if no ports are named to identify as health check ports.
+func findHealthCheckPort(endpointSlice *discoveryv1.EndpointSlice) (discoveryv1.EndpointPort, bool) {
+	for _, endpointPort := range endpointSlice.Ports {
+		if endpointPort.Name != nil && healthCheckPortNames[*endpointPort.Name] {
+			return endpointPort, true
+		}
+	}
+	return discoveryv1.EndpointPort{}, false
+}
+
 // getApplicationEndpoints returns the endpoints as `GRPCApplicationEndpoints`.
-func getApplicationEndpoints(endpointSlice *discoveryv1.EndpointSlice) []xds.GRPCApplicationEndpoints {
-	var appEndpoints []xds.GRPCApplicationEndpoints
+func getApplicationEndpoints(endpointSlice *discoveryv1.EndpointSlice) []applications.ApplicationEndpoints {
+	var appEndpoints []applications.ApplicationEndpoints
 	for _, endpoint := range endpointSlice.Endpoints {
 		if endpoint.Conditions.Ready != nil && *endpoint.Conditions.Ready {
 			var k8sNode, zone string
@@ -164,7 +216,7 @@ func getApplicationEndpoints(endpointSlice *discoveryv1.EndpointSlice) []xds.GRP
 			if endpoint.Zone != nil {
 				zone = *endpoint.Zone
 			}
-			appEndpoints = append(appEndpoints, xds.NewGRPCApplicationEndpoints(k8sNode, zone, endpoint.Addresses, xds.EndpointStatusFromConditions(endpoint.Conditions)))
+			appEndpoints = append(appEndpoints, applications.NewApplicationEndpoints(k8sNode, zone, endpoint.Addresses, applications.EndpointStatusFromConditions(endpoint.Conditions)))
 		}
 	}
 	return appEndpoints
@@ -189,6 +241,15 @@ func validateEndpointSlice(eps interface{}) (*discoveryv1.EndpointSlice, error) 
 		return nil, fmt.Errorf("%w from EndpointSlice %+v", errMissingLabel, endpointSlice)
 	}
 	if len(endpointSlice.Ports) == 0 {
+		return nil, fmt.Errorf("%w: %+v", errNoPortsInEndpointSlice, endpointSlice)
+	}
+	nonNilPortNumberExists := false
+	for _, endpointPort := range endpointSlice.Ports {
+		if endpointPort.Port != nil {
+			nonNilPortNumberExists = true
+		}
+	}
+	if !nonNilPortNumberExists {
 		return nil, fmt.Errorf("%w: %+v", errNoPortsInEndpointSlice, endpointSlice)
 	}
 	return endpointSlice, nil

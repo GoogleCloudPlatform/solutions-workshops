@@ -28,6 +28,7 @@ profiles:
 requires:
 - path: control-plane-go
 - path: greeter-go
+- path: k8s/envoy
 ---
 apiVersion: skaffold/v3
 kind: Config
@@ -45,40 +46,7 @@ profiles:
 requires:
 - path: control-plane-java
 - path: greeter-java
----
-apiVersion: skaffold/v3
-kind: Config
-metadata:
-  name: go-java
-  annotations:
-    config.kubernetes.io/local-config: "true"
-profiles:
-- name: tls-cert-manager
-  activation:
-  - kubeContext: kind.*
-- name: tls-gke-workload-certs
-  activation:
-  - kubeContext: gke.*
-requires:
-- path: control-plane-go
-- path: greeter-java
----
-apiVersion: skaffold/v3
-kind: Config
-metadata:
-  name: java-go
-  annotations:
-    config.kubernetes.io/local-config: "true"
-profiles:
-- name: tls-cert-manager
-  activation:
-  - kubeContext: kind.*
-- name: tls-gke-workload-certs
-  activation:
-  - kubeContext: gke.*
-requires:
-- path: control-plane-java
-- path: greeter-go
+- path: k8s/envoy
 ---
 apiVersion: skaffold/v3
 kind: Config
@@ -90,6 +58,7 @@ profiles:
 - name: traffic-director
 requires:
 - path: greeter-go
+- path: k8s/envoy
 ---
 apiVersion: skaffold/v3
 kind: Config
@@ -101,37 +70,4 @@ profiles:
 - name: traffic-director
 requires:
 - path: greeter-java
----
-apiVersion: skaffold/v3
-kind: Config
-metadata:
-  name: troubleshoot
-  annotations:
-    config.kubernetes.io/local-config: "true"
-build: {} # No images to build.
-deploy:
-  kubectl: {}
-manifests:
-  kustomize:
-    buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
-    paths: ["k8s/troubleshoot/base"]
-profiles:
-- name: tls-cert-manager
-  activation:
-  - kubeContext: kind.*
-  manifests:
-    kustomize:
-      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
-      paths: ["k8s/troubleshoot/overlays/tls-cert-manager"]
-- name: tls-gke-workload-certs
-  activation:
-  - kubeContext: gke.*
-  manifests:
-    kustomize:
-      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
-      paths: ["k8s/troubleshoot/overlays/tls-gke-workload-certs"]
-- name: traffic-director
-  manifests:
-    kustomize:
-      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
-      paths: ["k8s/troubleshoot/overlays/traffic-director"]
+- path: k8s/envoy

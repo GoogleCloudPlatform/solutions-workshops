@@ -14,9 +14,10 @@
 
 package com.google.examples.xds.controlplane.informers;
 
-import com.google.examples.xds.controlplane.xds.EndpointStatus;
-import com.google.examples.xds.controlplane.xds.GrpcApplication;
-import com.google.examples.xds.controlplane.xds.GrpcApplicationEndpoint;
+import com.google.common.base.Splitter;
+import com.google.examples.xds.controlplane.applications.Application;
+import com.google.examples.xds.controlplane.applications.ApplicationEndpoint;
+import com.google.examples.xds.controlplane.applications.EndpointStatus;
 import com.google.examples.xds.controlplane.xds.XdsSnapshotCache;
 import io.kubernetes.client.informer.ResourceEventHandler;
 import io.kubernetes.client.informer.SharedIndexInformer;
@@ -24,6 +25,7 @@ import io.kubernetes.client.informer.SharedInformer;
 import io.kubernetes.client.informer.SharedInformerFactory;
 import io.kubernetes.client.openapi.ApiClient;
 import io.kubernetes.client.openapi.apis.DiscoveryV1Api;
+import io.kubernetes.client.openapi.models.DiscoveryV1EndpointPort;
 import io.kubernetes.client.openapi.models.V1EndpointSlice;
 import io.kubernetes.client.openapi.models.V1EndpointSliceList;
 import io.kubernetes.client.util.Config;
@@ -37,7 +39,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import okhttp3.OkHttpClient;
@@ -59,6 +63,14 @@ public class InformerManager<T> {
 
   /** Label used to filter which EndpointSlices to watch. */
   private static final String LABEL_SERVICE_NAME = "kubernetes.io/service-name";
+
+  /**
+   * Kubernetes Service ports with one of these names will be considered health check ports
+   * (case-sensitive match). This is a port naming convention invented in this sample xDS control plane
+   * implementation.
+   */
+  private static final List<String> HEALTH_CHECK_PORT_NAMES =
+      List.of("health", "healthz", "healthCheck", "healthcheck");
 
   /** Kubernetes API client. */
   private final ApiClient client;
@@ -164,7 +176,7 @@ public class InformerManager<T> {
     var appsForInformer =
         informer.getIndexer().list().stream()
             .filter(this::isValid)
-            .map(this::toGrpcApplication)
+            .map(this::toApplication)
             .collect(Collectors.toSet());
     cache.updateResources(kubecontext, namespace, appsForInformer);
   }
@@ -172,35 +184,120 @@ public class InformerManager<T> {
   @SuppressWarnings({"null", "DataFlowIssue"})
   // https://github.com/redhat-developer/vscode-java/issues/3124
   @NotNull
-  private GrpcApplication toGrpcApplication(@NotNull V1EndpointSlice endpointSlice) {
-    List<GrpcApplicationEndpoint> applicationEndpoints = toGrpcApplicationEndpoints(endpointSlice);
+  private Application toApplication(@NotNull V1EndpointSlice endpointSlice) {
+    List<ApplicationEndpoint> applicationEndpoints = toGrpcApplicationEndpoints(endpointSlice);
     String namespace = endpointSlice.getMetadata().getNamespace();
     String endpointSliceName = endpointSlice.getMetadata().getName();
     String k8sServiceName = endpointSlice.getMetadata().getLabels().get(LABEL_SERVICE_NAME);
-    // TODO: Handle more than one port?
-    int port = endpointSlice.getPorts().get(0).getPort();
-    // Assume that the k8s ServiceAccount name matches the k8s Service name!
-    GrpcApplication app =
-        new GrpcApplication(namespace, k8sServiceName, port, applicationEndpoints);
+    DiscoveryV1EndpointPort servingPort = findServingPort(endpointSlice);
+    String servingProtocol = findProtocol(servingPort);
+    // Default to using serving port for health checks, if no health check port defined on Service.
+    DiscoveryV1EndpointPort healthCheckPort =
+        Optional.of(findHealthCheckPort(endpointSlice)).get().orElse(servingPort);
+    String healthCheckProtocol = findProtocol(healthCheckPort);
+    // NOTE: Assume that the k8s ServiceAccount name matches the k8s Service name, for workload
+    // identity.
+    Application app =
+        new Application(
+            namespace,
+            k8sServiceName,
+            servingPort.getPort(),
+            servingProtocol,
+            healthCheckPort.getPort(),
+            healthCheckProtocol,
+            applicationEndpoints);
     LOG.debug(
-        "kubecontext={} namespace={} endpointSlice={} service={} port={} endpoints={}",
+        "kubecontext={} namespace={} endpointSlice={} service={} "
+            + "servingPort={}({}) healthCheckPort={}({}) endpoints={}",
         kubecontext,
         namespace,
         endpointSliceName,
         k8sServiceName,
-        port,
+        servingPort,
+        servingProtocol,
+        healthCheckPort,
+        healthCheckProtocol,
         applicationEndpoints);
     return app;
   }
 
+  /**
+   * Find the protocol of the provided port, in all lowercase, by considering the following:
+   *
+   * <ol>
+   *   <li>The <a
+   *       href="https://kubernetes.io/docs/concepts/services-networking/service/#application-protocol">appProtocol</a>,
+   *       if set.
+   *   <li>The <a
+   *       href="https://kubernetes.io/docs/reference/networking/service-protocols/#protocol-support">protocol</a>,
+   *       if set.
+   *   <li>The default value of <code>&quot;tcp&quot;</code>.
+   * </ol>
+   */
   @NotNull
-  private List<GrpcApplicationEndpoint> toGrpcApplicationEndpoints(
+  private static String findProtocol(@NotNull DiscoveryV1EndpointPort port) {
+    String appProtocol = port.getAppProtocol();
+    if (appProtocol != null) {
+      return appProtocol.toLowerCase(Locale.ROOT);
+    }
+    String protocol = port.getProtocol();
+    if (protocol != null) {
+      return protocol.toLowerCase(Locale.ROOT);
+    }
+    return "tcp";
+  }
+
+  /**
+   * Find the first port that isn't named to identify as a health check port.
+   * 
+   * <p>If there is only port on the EndpointSlice, return it regardless of name.
+   */
+  @NotNull
+  private DiscoveryV1EndpointPort findServingPort(@NotNull V1EndpointSlice endpointSlice) {
+    if (endpointSlice.getPorts() == null || endpointSlice.getPorts().isEmpty()) {
+      throw new IllegalArgumentException("endpointSlice ports must be non-null and non-empty");
+    }
+    return endpointSlice.getPorts().stream()
+        .filter(
+            port ->
+                port.getPort() != null
+                    && (port.getName() == null
+                        || !HEALTH_CHECK_PORT_NAMES.contains(port.getName())))
+        .findFirst()
+        .orElse(
+            endpointSlice
+                .getPorts()
+                .get(0)); // if there is only one port, use it regardless of name
+  }
+
+  /**
+   * Find the first port that is named to identify as a health check port.
+   * 
+   * <p>Returns an empty Optional if no ports are named to identify as health check ports.
+   */
+  @NotNull
+  private Optional<DiscoveryV1EndpointPort> findHealthCheckPort(
+      @NotNull V1EndpointSlice endpointSlice) {
+    if (endpointSlice.getPorts() == null || endpointSlice.getPorts().isEmpty()) {
+      throw new IllegalArgumentException("endpointSlice ports must be non-null and non-empty");
+    }
+    return endpointSlice.getPorts().stream()
+        .filter(
+            port ->
+                port.getPort() != null
+                    && port.getName() != null
+                    && HEALTH_CHECK_PORT_NAMES.contains(port.getName()))
+        .findFirst();
+  }
+
+  @NotNull
+  private List<ApplicationEndpoint> toGrpcApplicationEndpoints(
       @NotNull V1EndpointSlice endpointSlice) {
     return endpointSlice.getEndpoints().stream()
         .map(
             // https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/#topology
             endpoint ->
-                new GrpcApplicationEndpoint(
+                new ApplicationEndpoint(
                     Objects.requireNonNullElse(endpoint.getNodeName(), ""),
                     Objects.requireNonNullElse(endpoint.getZone(), ""),
                     endpoint.getAddresses(),
@@ -227,7 +324,7 @@ public class InformerManager<T> {
       return false;
     }
     if (endpointSlice.getPorts() == null || endpointSlice.getPorts().isEmpty()) {
-      LOG.error("Skipping EndpointSlice due to missing port: {}", endpointSlice);
+      LOG.error("Skipping EndpointSlice due to missing servingPort: {}", endpointSlice);
       return false;
     }
     return true;
@@ -260,9 +357,9 @@ public class InformerManager<T> {
             "Could not create Kubernetes client using in-cluster config", e);
       }
     }
-    String[] filePaths = kubeConfigEnv.split(File.pathSeparator);
-    String kubeConfigPath = filePaths[0];
-    if (filePaths.length > 1) {
+    List<String> filePaths = Splitter.onPattern(File.pathSeparator).splitToList(kubeConfigEnv);
+    String kubeConfigPath = filePaths.get(0);
+    if (filePaths.size() > 1) {
       LOG.warn(
           "Found multiple kubeconfig files, using first file only, KUBECONFIG={}", kubeConfigEnv);
     }
@@ -276,7 +373,7 @@ public class InformerManager<T> {
         LOG.info("Using kubeconfig context={}", kubecontext);
         config.setContext(kubecontext);
       } else {
-        LOG.info("Using current kubeconfig context=" + config.getCurrentContext());
+        LOG.info("Using current kubeconfig context={}", config.getCurrentContext());
       }
       return Config.fromConfig(config);
     } catch (IOException e) {
