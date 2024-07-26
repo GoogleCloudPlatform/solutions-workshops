@@ -50,9 +50,7 @@ func NewClient(ctx context.Context, nextHop string) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("could not configure greeter client connection dial options: %w", err)
 	}
-	dialCtx, dialCancel := context.WithTimeout(ctx, grpcClientDialTimeout)
-	defer dialCancel()
-	clientConn, err := grpc.DialContext(dialCtx, nextHop, dialOpts...)
+	clientConn, err := grpc.NewClient(nextHop, dialOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("could not create a virtual connection to target=%s: %w", nextHop, err)
 	}
@@ -82,12 +80,12 @@ func dialOptions(logger logr.Logger) ([]grpc.DialOption, error) {
 	return []grpc.DialOption{
 		grpc.WithChainStreamInterceptor(interceptors.StreamClientLogging(logger)),
 		grpc.WithChainUnaryInterceptor(interceptors.UnaryClientLogging(logger)),
+		grpc.WithIdleTimeout(time.Duration(grpcClientIdleTimeout)),
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
 			Time:                grpcClientKeepaliveTime,
 			Timeout:             grpcClientKeepaliveTimeout,
 			PermitWithoutStream: true,
 		}),
-		grpc.WithIdleTimeout(time.Duration(grpcClientIdleTimeout)),
 		grpc.WithTransportCredentials(clientCredentials),
 	}, nil
 }

@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Paths in this file assume that Skaffold is run from the `grpc-xds` directory.
+
 apiVersion: skaffold/v3
 kind: Config
 metadata:
@@ -24,7 +26,7 @@ deploy:
 manifests:
   kustomize:
     buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
-    paths: ["base"]
+    paths: ["k8s/troubleshoot/base"]
 profiles:
 - name: tls-cert-manager
   activation:
@@ -32,16 +34,21 @@ profiles:
   manifests:
     kustomize:
       buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
-      paths: ["overlays/tls-cert-manager"]
+      paths: ["k8s/troubleshoot/overlays/tls-cert-manager"]
 - name: tls-gke-workload-certs
   activation:
   - kubeContext: gke.*
   manifests:
     kustomize:
       buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
-      paths: ["overlays/tls-gke-workload-certs"]
+      paths: ["k8s/troubleshoot/overlays/tls-gke-workload-certs"]
 - name: traffic-director
   manifests:
     kustomize:
       buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
-      paths: ["overlays/traffic-director"]
+      paths: ["k8s/troubleshoot/overlays/traffic-director"]
+- name: traffic-director-off-gcp
+  manifests:
+    kustomize:
+      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+      paths: ["k8s/troubleshoot/overlays/traffic-director-off-gcp"]

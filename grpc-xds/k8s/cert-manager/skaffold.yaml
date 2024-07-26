@@ -32,6 +32,8 @@ deploy:
       - host:
           command: ["kubectl", "wait", "--for=condition=established", "--timeout=30s", "crd", "certificates.cert-manager.io"]
       - host:
+          command: ["kubectl", "rollout", "status", "--namespace=cert-manager", "deployment", "cert-manager"]
+      - host:
           command: ["kubectl", "rollout", "status", "--namespace=cert-manager", "deployment", "cert-manager-webhook"]
 manifests:
   rawYaml:
@@ -77,3 +79,36 @@ manifests:
   kustomize:
     buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
     paths: ["k8s/cert-manager/root-ca-external"]
+---
+apiVersion: skaffold/v3
+kind: Config
+metadata:
+  name: ca-service-issuer-controller
+  annotations:
+    config.kubernetes.io/local-config: "true"
+build: {}
+deploy:
+  kubectl:
+    defaultNamespace: cert-manager
+    hooks:
+      after:
+      - host:
+          command: ["kubectl", "wait", "--for=condition=established", "--timeout=30s", "crd", "googlecasclusterissuers.cas-issuer.jetstack.io"]
+      - host:
+          command: ["kubectl", "rollout", "status", "--namespace=cert-manager", "deployment", "cert-manager-google-cas-issuer"]
+manifests:
+  kustomize:
+    buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+    paths: ["k8s/cert-manager/ca-service-issuer-controller"]
+---
+apiVersion: skaffold/v3
+kind: Config
+metadata:
+  name: ca-service-cluster-issuer
+  annotations:
+    config.kubernetes.io/local-config: "true"
+build: {}
+manifests:
+  kustomize:
+    buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+    paths: ["k8s/cert-manager/ca-service-cluster-issuer"]

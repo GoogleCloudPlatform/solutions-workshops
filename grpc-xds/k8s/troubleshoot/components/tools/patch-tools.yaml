@@ -61,7 +61,7 @@ spec:
           #
           # Download the `helloworld.Greeter` gRPC service proto definition to /opt/protos/helloworld/greeter.proto:
           mkdir -p /opt/protos/helloworld
-          curl -sSLo /opt/protos/helloworld/greeter.proto https://raw.githubusercontent.com/grpc/grpc/v1.60.0/examples/protos/helloworld.proto
+          curl -sSLo /opt/protos/helloworld/greeter.proto https://raw.githubusercontent.com/grpc/grpc/v1.65.0/examples/protos/helloworld.proto
         env:
         - name: DEBIAN_FRONTEND
           value: noninteractive
