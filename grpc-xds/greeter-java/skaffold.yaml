@@ -114,3 +114,9 @@ profiles:
     kustomize:
       buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
       paths: ["k8s/overlays/traffic-director"]
+# Deploy to a non-GKE cluster and use Traffic Director as the xDS control plane.
+- name: traffic-director-off-gcp
+  manifests:
+    kustomize:
+      buildArgs: ["--load-restrictor=LoadRestrictionsNone"]
+      paths: ["k8s/overlays/traffic-director-off-gcp"]

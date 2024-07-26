@@ -65,6 +65,18 @@ run-go-federation: check-skaffold check-go
 run-go: check-skaffold check-go
 	skaffold run --module=go --port-forward=user
 
+# run-go-td builds and deploys greeter-go for use with Traffic Director/Cloud Service Mesh
+# on a GKE cluster.
+.PHONY: run-go-td
+run-go-td: check-skaffold check-go
+	skaffold run --module=go-td --port-forward=user --profile=traffic-director
+
+# run-go-td-off-gcp builds and deploys greeter-go for use with Traffic Director/Cloud Service Mesh
+# on a non-GKE Kubernetes cluster.
+.PHONY: run-go-td-off-gcp
+run-go-td-off-gcp: check-skaffold check-go
+	skaffold run --module=go-td --port-forward=user --profile=traffic-director-off-gcp
+
 # run-java-multi-cluster builds and deploys control-plane-java and greeter-java to one cluster,
 # and greeter-java to the other cluster.
 .PHONY: run-java-multi-cluster
@@ -81,6 +93,18 @@ run-java-federation: check-skaffold check-javac
 .PHONY: run-java
 run-java: check-skaffold check-javac
 	skaffold run --module=java --port-forward=user
+
+# run-java-td builds and deploys greeter-java for use with Traffic Director/Cloud Service Mesh
+# on a GKE cluster.
+.PHONY: run-java-td
+run-java-td: check-skaffold check-javac
+	skaffold run --module=java-td --port-forward=user --profile=traffic-director
+
+# run-java-td-off-gcp builds and deploys greeter-java for use with
+# Traffic Director/Cloud Service Mesh on a non-GKE Kubernetes cluster.
+.PHONY: run-java-td-off-gcp
+run-java-td-off-gcp: check-skaffold check-javac
+	skaffold run --module=java-td --port-forward=user --profile=traffic-director-off-gcp
 
 # run-go-tls-cert-manager builds and deploys control-plane-go and greeter-go,
 # with workload TLS certificates from CA managed by cert-manager,
@@ -139,7 +163,7 @@ copy-bastion-certs: check-kubectl
 # Port forwarding must be running. Verify that the port in the command below matches the local forwarded port.
 .PHONY: request
 request: check-grpcurl
-	grpcurl -proto ./greeter-java/third_party/src/main/proto/helloworld/helloworld.proto -plaintext -d '{"name": "World"}' dns:///localhost:50055 helloworld.Greeter/SayHello
+	grpcurl -max-time 10 -proto ./greeter-java/third_party/src/main/proto/helloworld/helloworld.proto -plaintext -d '{"name": "World"}' dns:///localhost:50055 helloworld.Greeter/SayHello
 
 # request-leaf sends a plaintext request to the greeter-leaf server using the DNS resolver.
 # Port forwarding must be running. Verify that the port in the command below matches the local forwarded port.
@@ -235,16 +259,41 @@ envoy-config-xds: check-jq check-yq
 envoy-config-lds: check-yq
 	curl -sL localhost:19000/config_dump?include_eds | yq --input-format=json --prettyPrint '.configs[] | select(.@type == "type.googleapis.com/envoy.admin.v3.ListenersConfigDump")'
 
-# cert-manager deploys cert-manager and its custom resource definitions (CRDs) to the Kubernetes cluster.
+# cert-manager deploys cert-manager and its custom resource definitions (CRDs) to the Kubernetes cluster,
+# and creates a root CA with a cluster issuer.
 .PHONY: cert-manager
 cert-manager: check-skaffold
 	skaffold run --filename=k8s/cert-manager/skaffold.yaml --module=cert-manager
 	skaffold run --filename=k8s/cert-manager/skaffold.yaml --module=root-ca
 
-# run-bastion deploys a bastion Pod with troubleshooting tools.
+# cert-manager-cas deploys cert-manager and its custom resource definitions (CRDs) to a GKE
+# cluster, as well as the cert-manager issuer controller for CA Service from Google Cloud.
+# It also creates a cluster issuer that references a certificate authority from CA Service.
+# This target depends on a Kubernetes manifest that is created by following the Cloud Service Mesh
+# setup instructions.
+.PHONY: cert-manager-cas
+cert-manager-cas: check-skaffold k8s/cert-manager/ca-service-cluster-issuer/ca-service-cluster-issuer.yaml
+	skaffold run --filename=k8s/cert-manager/skaffold.yaml --module=cert-manager
+	skaffold run --filename=k8s/cert-manager/skaffold.yaml --module=ca-service-issuer-controller
+	skaffold run --filename=k8s/cert-manager/skaffold.yaml --module=ca-service-cluster-issuer
+
+# run-bastion deploys a bastion Pod with troubleshooting tools for use with the sample xDS control
+# plane implementations in this repository.
 .PHONY: run-bastion
 run-bastion: check-skaffold
 	skaffold run --filename=k8s/troubleshoot/skaffold.yaml
+
+# run-bastion-td deploys a bastion Pod with troubleshooting tools for use with
+# Traffic Director/Cloud Service Mesh on a GKE cluster.
+.PHONY: run-bastion-td
+run-bastion-td: check-skaffold
+	skaffold run --filename=k8s/troubleshoot/skaffold.yaml --profile=traffic-director
+
+# run-bastion-td-off-gcp deploys a bastion Pod with troubleshooting tools for use with
+# Traffic Director/Cloud Service Mesh on a non-GKE Kubernetes cluster.
+.PHONY: run-bastion-td-off-gcp
+run-bastion-td-off-gcp: check-skaffold
+	skaffold run --filename=k8s/troubleshoot/skaffold.yaml --profile=traffic-director-off-gcp
 
 # troubleshoot executes a shell in the bastion Pod, in raw terminal mode.
 .PHONY: troubleshoot

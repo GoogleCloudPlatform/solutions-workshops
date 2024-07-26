@@ -35,16 +35,12 @@ spec:
       - name: grpc-xds-init
         image: td-grpc-bootstrap
         args:
-        - -node-metadata
-        - K8S_NAMESPACE=$(cat /etc/podinfo/namespace)
-        - -node-metadata
-        - K8S_POD=$(hostname -s)
-        - -node-metadata
-        - XDS_STREAM_TYPE=ADS
-        - -output
-        - /etc/grpc-xds/bootstrap.json
-        - -vpc-network-name
-        - default # kpt-set: ${vpc-network-name}
+        # The value of the `-config-mesh` flag must match the name provided to
+        # the `gcloud network-services meshes import` command:
+        - -config-mesh=grpc-mesh
+        - -include-deployment-info-experimental=true # not essential, delete this line if the flag is removed
+        - -output=/etc/grpc-xds/bootstrap.json
+        - -vpc-network-name=default # kpt-set: -vpc-network-name=${vpc-network-name}
         resources:
           requests:
             cpu: 10m
@@ -52,19 +48,6 @@ spec:
         volumeMounts:
         - name: grpc-xds-conf
           mountPath: /etc/grpc-xds
-        - name: podinfo
-          mountPath: /etc/podinfo
-          readOnly: true
       volumes:
       - name: grpc-xds-conf
         emptyDir: {}
-      - name: podinfo
-        downwardAPI:
-          # Used when creating the xDS bootstrap file.
-          items:
-          - path: label-app-name
-            fieldRef:
-              fieldPath: metadata.labels['app.kubernetes.io/name']
-          - path: namespace
-            fieldRef:
-              fieldPath: metadata.namespace

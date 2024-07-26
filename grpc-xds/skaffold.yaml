@@ -56,9 +56,9 @@ metadata:
     config.kubernetes.io/local-config: "true"
 profiles:
 - name: traffic-director
+- name: traffic-director-off-gcp
 requires:
 - path: greeter-go
-- path: k8s/envoy
 ---
 apiVersion: skaffold/v3
 kind: Config
@@ -68,6 +68,6 @@ metadata:
     config.kubernetes.io/local-config: "true"
 profiles:
 - name: traffic-director
+- name: traffic-director-off-gcp
 requires:
 - path: greeter-java
-- path: k8s/envoy

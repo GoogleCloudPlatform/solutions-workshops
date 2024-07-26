@@ -29,6 +29,7 @@ metadata:
     config.kubernetes.io/local-config: "true"
 components:
 - ../../../greeter/components/bootstrap-td
+- ../../../greeter/components/td-client
 - ../../../greeter/components/tls-gke-workload-certs
 resources:
 - ../../base

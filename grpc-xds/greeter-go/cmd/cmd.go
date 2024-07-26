@@ -36,18 +36,23 @@ func Run(ctx context.Context, flagset *flag.FlagSet, args []string) error {
 	ctx = logging.NewContext(ctx, logger)
 	servingPort, err := config.ServingPort()
 	if err != nil {
-		return fmt.Errorf("could not configure management server listening port: %w", err)
+		return fmt.Errorf("could not configure greeter server listening port: %w", err)
 	}
 	healthPort, err := config.HealthPort()
 	if err != nil {
-		return fmt.Errorf("could not configure management server health check port: %w", err)
+		return fmt.Errorf("could not configure greeter server gRPC health check port: %w", err)
+	}
+	httpHealthPort, err := config.HTTPHealthPort()
+	if err != nil {
+		return fmt.Errorf("could not configure greeter server HTTP health check port: %w", err)
 	}
 	serverConfig := server.Config{
-		ServingPort: servingPort,
-		HealthPort:  healthPort,
-		GreeterName: config.GreeterName(ctx),
-		NextHop:     config.NextHop(),
-		UseXDS:      config.UseXDS(),
+		ServingPort:    servingPort,
+		HealthPort:     healthPort,
+		HTTPHealthPort: httpHealthPort,
+		GreeterName:    config.GreeterName(ctx),
+		NextHop:        config.NextHop(),
+		UseXDS:         config.UseXDS(),
 	}
 	return server.Run(ctx, serverConfig)
 }

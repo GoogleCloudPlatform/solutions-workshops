@@ -94,6 +94,8 @@ public class Server {
           ChannelzService.newInstance(DEFAULT_CHANNELZ_MAX_PAGE_SIZE).bindService());
     }
 
+    new HttpHealthServer(config.httpHealthPort(), "/healthz", healthStatusManager).start();
+
     String greeterName = config.greeterName();
     ServerServiceDefinition greeterServiceDefinition; // Naming is hard!
     String nextHop = config.nextHop();
@@ -188,18 +190,15 @@ public class Server {
     @Override
     public void onServing() {
       // Make k8s readiness probes pass.
-      LOG.info("[" + service + "] Connected to the xDS control plane management server.");
+      LOG.info("[{}] Connected to the xDS control plane management server.", service);
       healthStatusManager.setStatus(service, ServingStatus.SERVING);
     }
 
     @Override
     public void onNotServing(Throwable throwable) {
       LOG.error(
-          "["
-              + service
-              + "] Lost connection to the xDS control plane management server,"
-              + " using cached configuration. Cause:",
-          throwable);
+          "[{}] Lost connection to the xDS control plane management server, using cached configuration. Cause:",
+          service, throwable);
     }
   }
 }

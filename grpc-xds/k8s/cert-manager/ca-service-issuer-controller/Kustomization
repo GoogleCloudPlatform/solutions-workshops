@@ -14,19 +14,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-apiVersion: kustomize.config.k8s.io/v1alpha1
-kind: Component
+# Controller for issuing certificates from CA Service.
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
 metadata:
-  name: troubleshoot-tools
+  name: cert-manager-ca-service-issuer-controller
   annotations:
     config.kubernetes.io/local-config: "true"
-images:
-- name: golang
-  newName: docker.io/library/golang:1.22
+# namespace: cert-manager
 patches:
-- path: patch-tools.yaml
+# patch-bind-gsa-ksa.yaml is created by the Traffic Director/CSM setup steps.
+- path: patch-bind-gsa-ksa.yaml
   target:
-    group: apps
     version: v1
-    kind: Deployment
-    name: bastion
+    kind: ServiceAccount
+    name: cert-manager-google-cas-issuer
+resources:
+- https://github.com/jetstack/google-cas-issuer/releases/download/v0.8.0/google-cas-issuer-v0.8.0.yaml # kpt-set: https://github.com/jetstack/google-cas-issuer/releases/download/${ca-service-issuer-version}/google-cas-issuer-${ca-service-issuer-version}.yaml

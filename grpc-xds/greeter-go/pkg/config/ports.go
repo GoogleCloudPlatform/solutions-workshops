@@ -21,10 +21,12 @@ import (
 )
 
 const (
-	defaultServingPort = 50051
-	defaultHealthPort  = 50052
-	servingPortEnvVar  = "PORT"
-	healthPortEnvVar   = "HEALTH_PORT"
+	defaultServingPort    = 50051
+	defaultHealthPort     = 50052
+	defaultHTTPHealthPort = 50053
+	servingPortEnvVar     = "PORT"
+	healthPortEnvVar      = "HEALTH_PORT"
+	httpHealthPortEnvVar  = "HTTP_HEALTH_PORT"
 )
 
 func ServingPort() (int, error) {
@@ -46,6 +48,18 @@ func HealthPort() (int, error) {
 		port, err = strconv.Atoi(portEnv)
 		if err != nil {
 			return 0, fmt.Errorf("could not convert environment variable value %s=%s to integer: %w", healthPortEnvVar, portEnv, err)
+		}
+	}
+	return port, nil
+}
+
+func HTTPHealthPort() (int, error) {
+	port := defaultHTTPHealthPort
+	if portEnv, exists := os.LookupEnv(httpHealthPortEnvVar); exists {
+		var err error
+		port, err = strconv.Atoi(portEnv)
+		if err != nil {
+			return 0, fmt.Errorf("could not convert environment variable value %s=%s to integer: %w", httpHealthPortEnvVar, portEnv, err)
 		}
 	}
 	return port, nil

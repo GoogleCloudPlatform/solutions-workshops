@@ -26,18 +26,14 @@ spec:
         env:
         - name: GRPC_LOG_XDS_NODE_ID # Why do we even have this lever?
           value: "true"
-        # Selectively enable and disable experiments, only for gRPC-Java unless noted.
+        # Selectively enable and disable experiments, only for gRPC-Java unless otherwise noted.
         - name: GRPC_EXPERIMENTAL_AUTOFLOWCONTROL
           value: "true"
         - name: GRPC_EXPERIMENTAL_ENABLE_LEAST_REQUEST # affects both gRPC-Go and gRPC-Java
           value: "false"
-        - name: GRPC_EXPERIMENTAL_PICKFIRST_LB_CONFIG
-          value: "true"
         - name: GRPC_EXPERIMENTAL_XDS_FEDERATION
           value: "true"
         - name: GRPC_EXPERIMENTAL_XDS_RLS_LB
-          value: "true"
-        - name: GRPC_EXPERIMENTAL_XDS_WRR_LB
           value: "true"
         - name: GRPC_XDS_EXPERIMENTAL_CIRCUIT_BREAKING
           value: "true"

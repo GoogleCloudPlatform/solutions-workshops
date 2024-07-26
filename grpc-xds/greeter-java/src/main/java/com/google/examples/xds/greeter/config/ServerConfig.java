@@ -41,17 +41,24 @@ public class ServerConfig {
   private static final Logger LOG = LoggerFactory.getLogger(ServerConfig.class);
   private static final String DEFAULT_SERVING_PORT = "50051";
   private static final String DEFAULT_HEALTH_PORT = "50052";
+  private static final String DEFAULT_HTTP_HEALTH_PORT = "50053";
 
   /**
-   * Returns the port number that the gRPC server should listen on for serving the greeter service.
+   * Returns the port number that the server should listen on for serving the Greeter gRPC service.
    */
   public int servingPort() {
     return Integer.parseInt(System.getenv().getOrDefault("PORT", DEFAULT_SERVING_PORT));
   }
 
-  /** Returns the port number that the gRPC server should listen on for health checks. */
+  /** Returns the port number that the server should listen on for gRPC health checks. */
   public int healthPort() {
     return Integer.parseInt(System.getenv().getOrDefault("HEALTH_PORT", DEFAULT_HEALTH_PORT));
+  }
+
+  /** Returns the port number that the server should listen on for HTTP health checks. */
+  public int httpHealthPort() {
+    return Integer.parseInt(
+        System.getenv().getOrDefault("HTTP_HEALTH_PORT", DEFAULT_HTTP_HEALTH_PORT));
   }
 
   /**
