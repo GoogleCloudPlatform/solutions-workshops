@@ -44,8 +44,12 @@ out/
 *.pem
 /certs/
 
+# Environment setup
+.env
+
 # GKE workload certificate configuration
 TrustConfig*.yaml
 trust-config*.yaml
 WorkloadCertificateConfig*.yaml
 workload-certificate-config*.yaml
+
