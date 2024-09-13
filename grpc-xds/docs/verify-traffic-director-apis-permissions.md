@@ -198,20 +198,20 @@ permissions.
       API, and it is the IAM service account assigned to the GKE cluster nodes
       by default.
 
-    - [Service Account User (`roles/iam.serviceAccountUser`)] either on the
-      project, or on the IAM service account that you assign to GKE cluster
-      nodes.
+    - [Service Account User (`roles/iam.serviceAccountUser`)](https://cloud.google.com/iam/docs/understanding-roles#iam.serviceAccountUser)
+      either on the project, or on the IAM service account that you assign
+      to GKE cluster nodes.
 
     To set up Traffic Director, you need the following roles:
 
     - [Service Usage Admin (`roles/serviceusage.serviceUsageAdmin`)](https://cloud.google.com/iam/docs/understanding-roles#service-usage-roles)
       is required to enable the `trafficdirector.googleapis.com` API.
 
-    - [Service Account User (`roles/iam.serviceAccountUser`)] either on the
-      project, or on the IAM service account that you assign to workloads in
-      the GKE cluster.
+    - [Service Account User (`roles/iam.serviceAccountUser`)](https://cloud.google.com/iam/docs/understanding-roles#iam.serviceAccountUser)
+      either on the project, or on the IAM service account that you assign
+      to workloads in the GKE cluster.
 
-    - [Traffic Director Client (`roles/trafficdirector.client`)](Traffic Director Client)
+    - [Traffic Director Client (`roles/trafficdirector.client`)](https://cloud.google.com/iam/docs/understanding-roles#trafficdirector.client)
       is required so that you can assign that role to the IAM service accounts
       that you create for the GKE cluster workloads. The role provides access
       to fetch xDS resources from the Traffic Director xDS control plane.
