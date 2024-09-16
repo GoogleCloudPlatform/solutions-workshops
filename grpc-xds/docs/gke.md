@@ -36,13 +36,14 @@ information, see [Clean up](#clean-up).
     that has
     [billing enabled](https://cloud.google.com/billing/docs/how-to/verify-billing-enabled).
 
-3.  Install the `gke-gcloud-auth-plugin` plugin for `kubectl`. This plugin
-    enables `kubectl` to authenticate to GKE clusters using credentials
-    obtained using `gcloud`:
+3.  Install `kubectl`, and authentication plugins for `kubectl`:
 
     ```shell
-    gcloud components install gke-gcloud-auth-plugin
+    gcloud components install kubectl gke-gcloud-auth-plugin kubectl-oidc
     ```
+
+    The `gke-gcloud-auth-plugin` plugin enables `kubectl` to authenticate to
+    GKE clusters using credentials obtained using `gcloud`.
 
 4.  Install additional tools that you will use to deploy the xDS control plane
     management service, and the sample gRPC application:
@@ -73,10 +74,20 @@ information, see [Clean up](#clean-up).
       privateca.googleapis.com
     ```
 
+## VPC network
+
+If you don't have a VPC network called `default`, create a new VPC network.
+
+1.  Create a VPC network called `default`, with subnet mode `AUTO`:
+
+    ```shell
+    gcloud compute networks create default --subnet-mode AUTO
+    ```
+
 ## Firewall rules
 
-1.  Create a firewall rule that allows all TCP, UDP, and ICMP traffic within
-    your VPC network
+1.  Create a firewall rule in the `default` VPC network that allows all TCP,
+    UDP, and ICMP traffic within your VPC network:
 
     ```shell
     gcloud compute firewall-rules create allow-internal \
@@ -183,16 +194,26 @@ GKE cluster nodes and pods, even if the nodes do not have public IP addresses.
 
 ## Creating the Google Kubernetes Engine (GKE) cluster
 
-1.  Define an environment variable that you use when creating the GKE clusters:
+1.  Grant the
+    [Editor role (`roles/editor`)](https://cloud.google.com/iam/docs/roles-overview)
+    on the project to the
+    [Compute Engine default service account](https://cloud.google.com/compute/docs/access/service-accounts#default_service_account):
 
     ```shell
-    PROJECT_ID="$(gcloud config get project 2> /dev/null)"
+    gcloud projects add-iam-policy-binding $PROJECT_ID \
+      --member "serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+      --role roles/editor
     ```
+    
+    This policy binding may already be in place for your project, depending on
+    the organization policies in place, specifically the
+    [`iam.automaticIamGrantsForDefaultServiceAccounts`](https://cloud.google.com/resource-manager/docs/organization-policy/restricting-service-accounts#disable_service_account_default_grants)
+    boolean constraint.
 
-    `PROJECT_ID` is the project ID of your
-    [Google Cloud project](https://cloud.google.com/resource-manager/docs/creating-managing-projects).
+    **TODO:** Assign an IAM service account with minimal permissions to the
+    GKE cluster nodes.
 
-2.  Create GKE clusters:
+2. Create GKE clusters:
 
     ```shell
     iter=1
@@ -208,7 +229,6 @@ GKE cluster nodes and pods, even if the nodes do not have public IP addresses.
         --enable-mesh-certificates \
         --enable-private-nodes \
         --location "$region" \
-        --master-ipv4-cidr "172.16.${iter}.64/28" \
         --network default \
         --release-channel rapid \
         --subnetwork default \
@@ -225,12 +245,17 @@ GKE cluster nodes and pods, even if the nodes do not have public IP addresses.
     done
     kubectl config use-context "gke_${PROJECT_ID}_${REGIONS[@]:0:1}_grpc-xds"
     ```
+   
+    Some of the flags used to create the GKE clusters are not required to run
+    the applications in this repository, e.g., `--enable-l4-ilb-subsetting`.
+    They're included here because they're often used when creating GKE
+    clusters.
 
-3.  Allows access to the cluster API servers from your current public IP
-    address and private IP addresses in your VPC network:
+3.  Allow access to the cluster API servers from your current public IP
+    address and from private IP addresses in your VPC network:
 
     ```shell
-    public_ip="$(dig TXT +short o-o.myaddr.l.google.com @ns1.google.com | sed 's/"//g')"
+    public_ip="$(dig -4 TXT +short o-o.myaddr.l.google.com @ns1.google.com | sed 's/"//g')"
     for region in "${REGIONS[@]}"; do
       gcloud container clusters update grpc-xds \
         --enable-master-authorized-networks \
@@ -335,9 +360,6 @@ resource that contains a
 for each cluster:
 
 ```shell
-REGIONS=(us-central1 us-west1)
-PROJECT_ID="$(gcloud config get project 2> /dev/null)"
-
 kubeconfig_dir=k8s/control-plane/components/kubeconfig
 kubeconfig_file="${kubeconfig_dir}/kubeconfig.yaml"
 rm -f "$kubeconfig_file"
@@ -394,9 +416,6 @@ Create the root CA:
 
 ```shell
 CAS_ROOT_LOCATION="${REGIONS[@]:0:1}"
-PROJECT_ID="$(gcloud config get project 2> /dev/null)"
-PROJECT_NUMBER="$(gcloud projects describe $PROJECT_ID --format 'value(projectNumber)')"
-
 gcloud privateca pools create grpc-xds-root \
   --location "$CAS_ROOT_LOCATION" \
   --tier enterprise
