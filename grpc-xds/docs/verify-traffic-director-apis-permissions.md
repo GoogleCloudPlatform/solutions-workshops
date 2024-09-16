@@ -4,7 +4,7 @@ This document describes steps that you can take to verify that you can set up
 a GKE cluster and a Traffic Director service mesh in a Google Cloud
 [project](https://cloud.google.com/resource-manager/docs/creating-managing-projects).
 
-You run commands to verify that billing is setup, the necessary Google Cloud
+You run commands to verify that billing is enabled, the necessary Google Cloud
 APIs are enabled, and that you have the necessary IAM
 [permissions](https://cloud.google.com/iam/docs/overview#permissions) and
 [roles](https://cloud.google.com/iam/docs/overview#roles) to create the
@@ -101,7 +101,6 @@ required resources in the project.
     networkconnectivity.googleapis.com   Network Connectivity API
     networksecurity.googleapis.com       Network Security API
     networkservices.googleapis.com       Network Services API
-    osconfig.googleapis.com              OS Config API
     oslogin.googleapis.com               Cloud OS Login API
     privateca.googleapis.com             Certificate Authority API
     serviceusage.googleapis.com          Service Usage API
@@ -121,6 +120,20 @@ required resources in the project.
 
     Replace `API` with the name of the API you want to enable, e.g.,
     `container` to enable the Kubernetes Engine API.
+
+    Enable all required APIs:
+ 
+    ```shell
+    gcloud services enable \
+      cloudresourcemanager.googleapis.com \
+      container.googleapis.com \
+      logging.googleapis.com \
+      networksecurity.googleapis.com \
+      networkservices.googleapis.com \
+      privateca.googleapis.com \
+      serviceusage.googleapis.com \
+      trafficdirector.googleapis.com
+    ```
 
     You need the permissions of the
     [Service Usage Admin role (`roles/serviceusage.serviceUsageAdmin`)](https://cloud.google.com/iam/docs/understanding-roles#service-usage-roles)
@@ -179,6 +192,11 @@ permissions.
     - [Compute Security Admin (`roles/compute.securityAdmin`)](https://cloud.google.com/compute/docs/access/iam#compute.securityAdmin)
       to add and remove firewall rules.
 
+    To create a container image repository in Artifact Registry, you need the
+    following role:
+
+    - [Artifact Registry Administrator (`roles/artifactregistry.admin`)](https://cloud.google.com/compute/docs/access/iam#artifactregistry.admin).
+
     To create a GKE cluster, you need the following roles:
 
     - [Compute Instance Admin (`roles/compute.instanceAdmin`)](https://cloud.google.com/compute/docs/access/iam#compute.instanceAdmin)
@@ -188,15 +206,18 @@ permissions.
       to create and access GKE clusters and their Kubernetes API objects.
 
     - [Service Account Admin (`roles/iam.serviceAccountAdmin`)](https://cloud.google.com/iam/docs/understanding-roles#iam.serviceAccountAdmin)
-      to create and set IAM policies for IAM service accounts. You use this to
-      create an IAM service account with minimum permissions required for GKE
-      cluster nodes.
+      to create IAM service accounts. You use this to create an IAM service
+      account with minimum permissions required for GKE cluster nodes.
       
       Alternatively, the GKE cluster nodes can use the
       [Compute Engine default service account](https://cloud.google.com/compute/docs/access/service-accounts#default_service_account).
       This IAM service account is created when you enable the Compute Engine
       API, and it is the IAM service account assigned to the GKE cluster nodes
       by default.
+
+    - [Project IAM Admin role (`roles/resourcemanager.projectIamAdmin`)](https://cloud.google.com/iam/docs/understanding-roles#resourcemanager.projectIamAdmin)
+      to grant roles on the project to the IAM service account used by the GKE
+      cluster nodes.
 
     - [Service Account User (`roles/iam.serviceAccountUser`)](https://cloud.google.com/iam/docs/understanding-roles#iam.serviceAccountUser)
       either on the project, or on the IAM service account that you assign
@@ -236,9 +257,32 @@ permissions.
     Replace `ROLE` with the role you want to grant, e.g.,
     `roles/compute.instanceAdmin` for the Compute Instance Admin role.
 
+    Grant all the roles required to your Google Account on the project:
+
+    ```shell
+    for role in \
+      roles/artifactregistry.admin \
+      roles/compute.instanceAdmin \
+      roles/compute.networkAdmin \
+      roles/compute.securityAdmin \
+      roles/container.admin \
+      roles/iam.serviceAccountAdmin \
+      roles/iam.serviceAccountUser \
+      roles/privateca.admin \
+      roles/resourcemanager.projectIamAdmin \
+      roles/serviceusage.serviceUsageAdmin
+    do
+      gcloud projects add-iam-policy-binding $PROJECT_ID \
+        --member user:$(gcloud config get account) \
+        --role $role
+    done
+    ```
+
     You need the permissions of the
     [Project IAM Admin role (`roles/resourcemanager.projectIamAdmin`)](https://cloud.google.com/iam/docs/understanding-roles#resourcemanager.projectIamAdmin)
     on the project to grant roles on the project.
+
+    It can take a minute or two for policy bindings to become active.
 
     If you want to see how a change to an IAM policy binding might impact
     access before making the change, you can use the
