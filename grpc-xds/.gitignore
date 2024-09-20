@@ -53,3 +53,5 @@ trust-config*.yaml
 WorkloadCertificateConfig*.yaml
 workload-certificate-config*.yaml
 
+# Network Services API resources
+mesh-*.yaml

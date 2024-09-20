@@ -146,7 +146,7 @@ dev-java: check-skaffold check-javac
 # 3. deletes the temporary pod and associated k8s resources
 .PHONY: host-certs
 host-certs: check-skaffold
-	skaffold run --filename=k8s/host-certs/skaffold.yaml
+	skaffold run --filename=k8s/host-certs/skaffold.yaml --tail=false
 	skaffold delete --filename=k8s/host-certs/skaffold.yaml
 	@echo "*************************************************"
 	@echo " Certificate Validity :"
@@ -281,13 +281,13 @@ cert-manager-cas: check-skaffold k8s/cert-manager/ca-service-cluster-issuer/ca-s
 # plane implementations in this repository.
 .PHONY: run-bastion
 run-bastion: check-skaffold
-	skaffold run --filename=k8s/troubleshoot/skaffold.yaml
+	skaffold run --filename=k8s/troubleshoot/skaffold.yaml --tail=false
 
 # run-bastion-td deploys a bastion Pod with troubleshooting tools for use with
 # Traffic Director/Cloud Service Mesh on a GKE cluster.
 .PHONY: run-bastion-td
 run-bastion-td: check-skaffold
-	skaffold run --filename=k8s/troubleshoot/skaffold.yaml --profile=traffic-director
+	skaffold run --filename=k8s/troubleshoot/skaffold.yaml --profile=traffic-director --tail=false
 
 # run-bastion-td-off-gcp deploys a bastion Pod with troubleshooting tools for use with
 # Traffic Director/Cloud Service Mesh on a non-GKE Kubernetes cluster.

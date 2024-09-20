@@ -26,14 +26,8 @@ labels:
   includeSelectors: false
   includeTemplates: true
 patches:
-# Patch files are created by the Traffic Director/CSM setup steps.
-- path: patch-standalone-neg-intermediary.yaml
+- path: patch-standalone-neg.yaml
   target:
     version: v1
     kind: Service
-    name: greeter-intermediary
-- path: patch-standalone-neg-leaf.yaml
-  target:
-    version: v1
-    kind: Service
-    name: greeter-leaf
+    name: greeter-.*
