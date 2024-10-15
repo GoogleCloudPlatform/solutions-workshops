@@ -1,6 +1,0 @@
-apiVersion: v1
-kind: Service
-metadata:
-  name: greeter-intermediary
-  annotations:
-    cloud.google.com/neg: '{"exposed_ports": {"50051":{"name": "k8s-xds-greeter-intermediary-50051-30649"}}}'

@@ -29,6 +29,5 @@ metadata:
     config.kubernetes.io/local-config: "true"
 components:
 - ../../components/bootstrap-td
-- ../../components/standalone-neg
-#- ../../components/td-client
+- ../../components/neg-standalone
 - ../../components/tls-gke-workload-certs

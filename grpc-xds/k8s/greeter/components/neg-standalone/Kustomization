@@ -17,7 +17,7 @@
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
 metadata:
-  name: greeter-standalone-neg
+  name: greeter-neg-standalone
   annotations:
     config.kubernetes.io/local-config: "true"
 labels:
@@ -26,8 +26,13 @@ labels:
   includeSelectors: false
   includeTemplates: true
 patches:
-- path: patch-standalone-neg.yaml
+- path: patch-neg-standalone-greeter-intermediary.yaml
   target:
     version: v1
     kind: Service
-    name: greeter-.*
+    name: greeter-intermediary
+- path: patch-neg-standalone-greeter-leaf.yaml
+  target:
+    version: v1
+    kind: Service
+    name: greeter-leaf
