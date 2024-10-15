@@ -53,3 +53,16 @@ trust-config*.yaml
 WorkloadCertificateConfig*.yaml
 workload-certificate-config*.yaml
 
+# Network Services API resources
+/endpoint-policy-*.yaml
+/gateway-*.yaml
+/grpc-route-*.yaml
+/http-route-*.yaml
+/mesh-*.yaml
+/tcp-route-*.yaml
+/tls-route-*.yaml
+
+# Network Security API resources
+/authorization-policy-*.yaml
+/policy-client-*.yaml
+/policy-server-*.yaml

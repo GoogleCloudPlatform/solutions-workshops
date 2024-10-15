@@ -1,4 +1,4 @@
-# Copyright 2023 Google LLC
+# Copyright 2024 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,6 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Used when running the `apply-setters` KRM function.
+# Patch to create zonal network endpoint groups (NEGs) of type
+# `GCP_VM_IP_PORT` for the Service port `50051`.
 
-patch-*
+apiVersion: v1
+kind: Service
+metadata:
+  name: greeter-intermediary
+  annotations:
+    cloud.google.com/neg: '{"exposed_ports": {"50051":{}}}'

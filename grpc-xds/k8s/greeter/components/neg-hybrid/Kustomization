@@ -1,3 +1,5 @@
+# vi: set ft=yaml :
+#
 # Copyright 2024 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,6 +14,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Used when running the `apply-setters` KRM function.
-
-patch-*
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+metadata:
+  name: greeter-neg-hybrid
+  annotations:
+    config.kubernetes.io/local-config: "true"
+labels:
+- pairs:
+    app.kubernetes.io/part-of: grpc-xds
+  includeSelectors: false
+  includeTemplates: true
+patches:
+- path: patch-neg-hybrid-greeter-intermediary.yaml
+  target:
+    version: v1
+    kind: Service
+    name: greeter-intermediary
+- path: patch-neg-hybrid-greeter-leaf.yaml
+  target:
+    version: v1
+    kind: Service
+    name: greeter-leaf

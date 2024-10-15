@@ -123,7 +123,7 @@ to issue workload TLS certificates.
     to point to your container image registry:
 
     ```shell
-    export SKAFFOLD_DEFAULT_REPO=$AR_LOCATION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY
+    export SKAFFOLD_DEFAULT_REPO=$AR_LOCATION-docker.pkg.dev/$PROJECT_ID/$AR_REPOSITORY
     ```
 
     Replace the following:
@@ -133,7 +133,7 @@ to issue workload TLS certificates.
       of your Artifact Registry container image repository, e.g., `us-central1` or `us`.
     - `$PROJECT_ID`: your Google Cloud
       [project ID](https://cloud.google.com/resource-manager/docs/creating-managing-projects).
-    - `$REPOSITORY`: the name of your Artifact Registry
+    - `$AR_REPOSITORY`: the name of your Artifact Registry
       [container image repository](https://cloud.google.com/artifact-registry/docs/docker),
       e.g., `grpc-xds`.
 
@@ -464,6 +464,13 @@ Some troubleshooting commands:
 - [gRFC A65: mTLS Credentials in xDS Bootstrap File](https://github.com/grpc/proposal/blob/e027a56d7d900b47948602e6d72413b5cba80d54/A65-xds-mtls-creds-in-bootstrap.md)
 - [xRFC TP1: `xdstp://` structured resource naming, caching and federation support](https://github.com/cncf/xds/blob/70da609f752ed4544772f144411161d41798f07e/proposals/TP1-xds-transport-next.md)
 - [xRFC TP2: Dynamically Generated Cacheable xDS Resources](https://github.com/cncf/xds/blob/70da609f752ed4544772f144411161d41798f07e/proposals/TP2-dynamically-generated-cacheable-xds-resources.md)
+
+## Google Cloud API references
+
+- [Compute Engine API](https://cloud.google.com/compute/docs/reference/rest/v1)
+- [Network Services API (a.k.a. Service Routing API)](https://cloud.google.com/service-mesh/docs/reference/network-services/rest)
+- [Network Security API](https://cloud.google.com/service-mesh/docs/reference/network-security/rest)
+- [Common Expression Language (CEL) matcher language reference](https://cloud.google.com/service-extensions/docs/cel-matcher-language-reference)
 
 ## Disclaimer
 

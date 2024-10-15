@@ -37,8 +37,10 @@ spec:
         args:
         # The value of the `-config-mesh` flag must match the name provided to
         # the `gcloud network-services meshes import` command:
-        - -config-mesh=grpc-mesh
+        - -config-mesh=grpc-xds
         - -include-deployment-info-experimental=true # not essential, delete this line if the flag is removed
+        - -include-xdstp-name-in-lds-experimental=false # became `true` by default in bootstrap generator v0.17.0
+        - -node-metadata=component=greeter # used in the endpoint policy for attaching a server TLS policy and a workload authorization policy
         - -output=/etc/grpc-xds/bootstrap.json
         - -vpc-network-name=default # kpt-set: -vpc-network-name=${vpc-network-name}
         resources:

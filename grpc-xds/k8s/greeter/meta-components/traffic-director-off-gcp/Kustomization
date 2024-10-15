@@ -29,7 +29,5 @@ metadata:
     config.kubernetes.io/local-config: "true"
 components:
 - ../../components/bootstrap-td
-# - ../../components/hybrid-neg
-# - ../../components/standalone-neg
-- ../../components/td-client
+- ../../components/neg-hybrid
 - ../../components/tls-ca-service-issuer

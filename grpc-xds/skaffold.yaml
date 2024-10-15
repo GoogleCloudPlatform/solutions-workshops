@@ -56,7 +56,6 @@ metadata:
     config.kubernetes.io/local-config: "true"
 profiles:
 - name: traffic-director
-- name: traffic-director-off-gcp
 requires:
 - path: greeter-go
 ---
@@ -68,6 +67,5 @@ metadata:
     config.kubernetes.io/local-config: "true"
 profiles:
 - name: traffic-director
-- name: traffic-director-off-gcp
 requires:
 - path: greeter-java

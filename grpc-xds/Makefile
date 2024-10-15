@@ -146,7 +146,7 @@ dev-java: check-skaffold check-javac
 # 3. deletes the temporary pod and associated k8s resources
 .PHONY: host-certs
 host-certs: check-skaffold
-	skaffold run --filename=k8s/host-certs/skaffold.yaml
+	skaffold run --filename=k8s/host-certs/skaffold.yaml --tail=false
 	skaffold delete --filename=k8s/host-certs/skaffold.yaml
 	@echo "*************************************************"
 	@echo " Certificate Validity :"
@@ -163,25 +163,25 @@ copy-bastion-certs: check-kubectl
 # Port forwarding must be running. Verify that the port in the command below matches the local forwarded port.
 .PHONY: request
 request: check-grpcurl
-	grpcurl -max-time 10 -proto ./greeter-java/third_party/src/main/proto/helloworld/helloworld.proto -plaintext -d '{"name": "World"}' dns:///localhost:50055 helloworld.Greeter/SayHello
+	grpcurl -proto ./greeter-java/third_party/src/main/proto/helloworld/helloworld.proto -plaintext -authority greeter-intermediary -max-time 10 -d '{"name": "World"}' dns:///localhost:50055 helloworld.Greeter/SayHello
 
 # request-leaf sends a plaintext request to the greeter-leaf server using the DNS resolver.
 # Port forwarding must be running. Verify that the port in the command below matches the local forwarded port.
 .PHONY: request-leaf
 request-leaf: check-grpcurl
-	grpcurl -proto ./greeter-java/third_party/src/main/proto/helloworld/helloworld.proto -plaintext -d '{"name": "World"}' dns:///localhost:50057 helloworld.Greeter/SayHello
+	grpcurl -proto ./greeter-java/third_party/src/main/proto/helloworld/helloworld.proto -plaintext -authority greeter-leaf -max-time 10 -d '{"name": "World"}' dns:///localhost:50057 helloworld.Greeter/SayHello
 
 # request-mtls sends an mTLS request to the greeter-intermediary server using the DNS resolver.
 # Port forwarding must be running. Verify that the port in the command below matches the local forwarded port.
 .PHONY: request-mtls
 request-mtls: check-grpcurl certs/ca_certificates.pem
-	grpcurl -proto ./greeter-java/third_party/src/main/proto/helloworld/helloworld.proto -authority greeter-intermediary -cacert ./certs/ca_certificates.pem -cert ./certs/certificates.pem -key ./certs/private_key.pem -d '{"name": "World"}' dns:///localhost:50055 helloworld.Greeter/SayHello
+	grpcurl -proto ./greeter-java/third_party/src/main/proto/helloworld/helloworld.proto -authority greeter-intermediary -cacert ./certs/ca_certificates.pem -cert ./certs/certificates.pem -key ./certs/private_key.pem -max-time 10 -d '{"name": "World"}' dns:///localhost:50055 helloworld.Greeter/SayHello
 
 # request-leaf-mtls sends an mTLS request to the greeter-leaf server using the DNS resolver.
 # Port forwarding must be running. Verify that the port in the command below matches the local forwarded port.
 .PHONY: request-leaf-mtls
 request-leaf-mtls: check-grpcurl certs/ca_certificates.pem
-	grpcurl -proto ./greeter-java/third_party/src/main/proto/helloworld/helloworld.proto -authority greeter-leaf -cacert ./certs/ca_certificates.pem -cert ./certs/certificates.pem -key ./certs/private_key.pem -d '{"name": "World"}' dns:///localhost:50057 helloworld.Greeter/SayHello
+	grpcurl -proto ./greeter-java/third_party/src/main/proto/helloworld/helloworld.proto -authority greeter-leaf -cacert ./certs/ca_certificates.pem -cert ./certs/certificates.pem -key ./certs/private_key.pem -max-time 10 -d '{"name": "World"}' dns:///localhost:50057 helloworld.Greeter/SayHello
 
 # request-mtls-noverify sends an mTLS request to the greeter-intermediary server using the DNS resolver,
 # with certificate validation turned off. Use this target with GKE workload TLS certificates,
@@ -189,7 +189,7 @@ request-leaf-mtls: check-grpcurl certs/ca_certificates.pem
 # Port forwarding must be running. Verify that the port in the command below matches the local forwarded port.
 .PHONY: request-mtls-noverify
 request-mtls-noverify: check-grpcurl certs/ca_certificates.pem
-	grpcurl -proto ./greeter-java/third_party/src/main/proto/helloworld/helloworld.proto -insecure -cacert ./certs/ca_certificates.pem -cert ./certs/certificates.pem -key ./certs/private_key.pem -d '{"name": "World"}' dns:///localhost:50055 helloworld.Greeter/SayHello
+	grpcurl -proto ./greeter-java/third_party/src/main/proto/helloworld/helloworld.proto -authority greeter-intermediary -cacert ./certs/ca_certificates.pem -cert ./certs/certificates.pem -key ./certs/private_key.pem -insecure -max-time 10 -d '{"name": "World"}' dns:///localhost:50055 helloworld.Greeter/SayHello
 
 # request-leaf-mtls-noverify sends an mTLS request to the greeter-leaf server using the DNS resolver,
 # with certificate validation turned off. Use this target with GKE workload TLS certificates,
@@ -197,7 +197,7 @@ request-mtls-noverify: check-grpcurl certs/ca_certificates.pem
 # Port forwarding must be running. Verify that the port in the command below matches the local forwarded port.
 .PHONY: request-leaf-mtls-noverify
 request-leaf-mtls-noverify: check-grpcurl certs/ca_certificates.pem
-	grpcurl -proto ./greeter-java/third_party/src/main/proto/helloworld/helloworld.proto -insecure -cacert ./certs/ca_certificates.pem -cert ./certs/certificates.pem -key ./certs/private_key.pem -d '{"name": "World"}' dns:///localhost:50057 helloworld.Greeter/SayHello
+	grpcurl -proto ./greeter-java/third_party/src/main/proto/helloworld/helloworld.proto -authority greeter-leaf -cacert ./certs/ca_certificates.pem -cert ./certs/certificates.pem -key ./certs/private_key.pem -insecure -max-time 10 -d '{"name": "World"}' dns:///localhost:50057 helloworld.Greeter/SayHello
 
 # tail-control-plane tails the control-plane logs
 .PHONY: tail-control-plane
@@ -281,13 +281,13 @@ cert-manager-cas: check-skaffold k8s/cert-manager/ca-service-cluster-issuer/ca-s
 # plane implementations in this repository.
 .PHONY: run-bastion
 run-bastion: check-skaffold
-	skaffold run --filename=k8s/troubleshoot/skaffold.yaml
+	skaffold run --filename=k8s/troubleshoot/skaffold.yaml --tail=false
 
 # run-bastion-td deploys a bastion Pod with troubleshooting tools for use with
 # Traffic Director/Cloud Service Mesh on a GKE cluster.
 .PHONY: run-bastion-td
 run-bastion-td: check-skaffold
-	skaffold run --filename=k8s/troubleshoot/skaffold.yaml --profile=traffic-director
+	skaffold run --filename=k8s/troubleshoot/skaffold.yaml --profile=traffic-director --tail=false
 
 # run-bastion-td-off-gcp deploys a bastion Pod with troubleshooting tools for use with
 # Traffic Director/Cloud Service Mesh on a non-GKE Kubernetes cluster.
