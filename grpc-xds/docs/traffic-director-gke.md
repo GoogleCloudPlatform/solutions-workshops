@@ -691,6 +691,7 @@ xDS control plane.
 
     ```shell
     for app in intermediary leaf ; do
+      gcloud network-services grpc-routes delete greeter-$app --location global
       gcloud compute backend-services delete greeter-$app --global --quiet
       gcloud compute health-checks delete greeter-$app --quiet
       for region in "${REGIONS[@]}"; do
