@@ -76,7 +76,7 @@ If you want to build and deploy the Java implementation of the xDS control
 plane and sample gRPC application, you need [Java 17](https://adoptium.net/).
 
 If you want to build and deploy the Go implementation of the xDS control plane
-and sample gRPC applications, you need [Go 1.22](https://go.dev/doc/install)
+and sample gRPC applications, you need [Go 1.23](https://go.dev/doc/install)
 or later.
 
 You also need the following tools:

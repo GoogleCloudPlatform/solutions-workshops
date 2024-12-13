@@ -31,8 +31,8 @@ images:
 - name: busybox
   newName: docker.io/library/busybox:stable-glibc
 - name: envoy
-  newName: docker.io/envoyproxy/envoy:v1.30-latest
-  # newName: docker.io/envoyproxy/envoy:distroless-v1.30-latest
+  newName: docker.io/envoyproxy/envoy:v1.32-latest
+  # newName: docker.io/envoyproxy/envoy:distroless-v1.32-latest
 patches:
 - path: patch-config.yaml
   target:

@@ -22,7 +22,7 @@ metadata:
     config.kubernetes.io/local-config: "true"
 images:
 - name: golang
-  newName: docker.io/library/golang:1.22
+  newName: docker.io/library/golang:1.23
 patches:
 - path: patch-tools.yaml
   target:

@@ -33,7 +33,7 @@ plugins {
     id 'com.github.sherter.google-java-format' version '0.9'
     id 'com.google.cloud.tools.jib' version '3.4.2' // do not use v3.4.3
     id 'com.google.protobuf' version '0.9.4'
-    id 'net.ltgt.errorprone' version '4.0.1'
+    id 'net.ltgt.errorprone' version '4.1.0'
 }
 
 repositories {
@@ -74,17 +74,17 @@ tasks.withType(Checkstyle) {
 }
 
 def googleOAuthClientVersion = '1.36.0'
-def grpcVersion = '1.65.1'
-def errorProneCoreVersion = '2.28.0'
-def javaControlPlaneVersion = '1.0.45'
-def jetbrainsAnnotationsVersion = '24.1.0'
-def junitJupiterVersion = '5.10.3'
+def grpcVersion = '1.69.0'
+def errorProneCoreVersion = '2.36.0'
+def javaControlPlaneVersion = '1.0.46'
+def jetbrainsAnnotationsVersion = '26.0.1'
+def junitJupiterVersion = '5.11.3'
 def junitVersion = '4.13.2'
 def kubernetesClientJavaVersion = '20.0.1' // v21.0.0 requires the non-backwards compatible protobuf v4.27.1
-def log4jVersion = '2.23.1'
-def protobufVersion = '3.25.3' // v4.x is currently not backwards compatible and breaks gRPC
-def slf4jVersion = '2.0.13'
-def snakeyamlEngineVersion = '2.7'
+def log4jVersion = '2.24.2'
+def protobufVersion = '3.25.5' // v4.x is currently not backwards compatible and breaks gRPC
+def slf4jVersion = '2.0.16'
+def snakeyamlEngineVersion = '2.8'
 def tomcatAnnotationsApiVersion = '6.0.53'
 
 dependencies {
