@@ -24,6 +24,34 @@ If you want a production-ready xDS control plane, we recommend
 [Cloud Service Mesh](https://cloud.google.com/service-mesh/docs/service-routing/proxyless-overview)
 from Google Cloud.
 
+## Features and branches
+
+The following branches incrementally add features to the control plane
+implementations:
+
+- [`grpc-xds/v0.1.x`](https://github.com/GoogleCloudPlatform/solutions-workshops/tree/grpc-xds/v0.1.x):
+  Basic control plane implementations, with all clients receiving the same
+  xDS resource snapshot.
+- [`grpc-xds/v0.2.x`](https://github.com/GoogleCloudPlatform/solutions-workshops/tree/grpc-xds/v0.2.x):
+  Adds data plane mTLS support, based on
+  [gRFC A29: xDS-Based Security for gRPC Clients and Servers](https://github.com/grpc/proposal/blob/deaf1bcf248d1e48e83c470b00930cbd363fab6d/A29-xds-tls-security.md).
+- [`grpc-xds/v0.3.x`](https://github.com/GoogleCloudPlatform/solutions-workshops/tree/grpc-xds/v0.3.x):
+  Adds support for
+  [locality-weighted load balancing](https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/upstream/load_balancing/locality_weight)
+  across workloads running on multiple Kubernetes clusters in different regions.
+- [`grpc-xds/v0.4.x`](https://github.com/GoogleCloudPlatform/solutions-workshops/tree/grpc-xds/v0.4.x):
+  Adds workload identity based on
+  [SPIFFE](https://spiffe.io/docs/latest/spiffe-about/overview/),
+  client authorization based on
+  [gRFC A41: xDS RBAC Support](https://github.com/grpc/proposal/blob/c83f0cb8ed534c4192e0e5d7a4550a1f5a76ef65/A41-xds-rbac.md),
+  and server authorization based on
+  [gRFC A29: xDS-Based Security for gRPC Clients and Servers](https://github.com/grpc/proposal/blob/deaf1bcf248d1e48e83c470b00930cbd363fab6d/A29-xds-tls-security.md)
+- [`grpc-xds/v0.5.x`](https://github.com/GoogleCloudPlatform/solutions-workshops/tree/grpc-xds/v0.5.x):
+  Adds support for running Envoy instances as gateway proxies for traffic
+  entering the mesh (north-south traffic), and documents
+  [Traffic Director](https://cloud.google.com/blog/topics/developers-practitioners/traffic-director-explained)
+  configuration and deployment.
+
 ## Directory structure
 
 The  [`control-plane-go`](control-plane-go) and
