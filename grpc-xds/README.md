@@ -1,6 +1,6 @@
 # grpc-xds
 
-This directory contains sample Go and Java implementations of
+This directory contains Go and Java implementations of
 [xDS](https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/operations/dynamic_configuration)
 control planes for gRPC services running on Kubernetes.
 
@@ -15,12 +15,12 @@ Go and Java. The sample applications implement the
 gRPC service.
 
 The scripts and manifests in this directory enable running the xDS control
-plane and the sample gRPC application on either
+planes and the sample gRPC applications on either
 [Google Kubernetes Engine (GKE)](https://cloud.google.com/kubernetes-engine/docs)
 clusters, or on local [kind](https://kind.sigs.k8s.io/) Kubernetes clusters.
 
-The code in this repository in not recommended for production environments.
-If you want a production-ready xDS control plane, we recommend
+If you want a production-ready xDS control plane for your production
+environments, we recommend
 [Cloud Service Mesh](https://cloud.google.com/service-mesh/docs/service-routing/proxyless-overview)
 from Google Cloud.
 
