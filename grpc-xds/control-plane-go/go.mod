@@ -22,7 +22,7 @@ require (
 	github.com/envoyproxy/go-control-plane v0.13.1
 	github.com/go-logr/logr v1.4.2
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.2.0
-	golang.org/x/oauth2 v0.24.0
+	golang.org/x/oauth2 v0.27.0
 	google.golang.org/grpc v1.69.0
 	google.golang.org/grpc/security/advancedtls v1.0.0
 	google.golang.org/protobuf v1.35.2
